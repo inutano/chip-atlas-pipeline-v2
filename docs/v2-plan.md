@@ -1,9 +1,55 @@
 # ChIP-Atlas Pipeline v2: Upgrade Plan
 
+## Design Philosophy
+
+The original ChIP-Atlas pipeline was intentionally minimal: because each sample has a different experimental setup (antibody, cell type, protocol, sequencing depth), per-sample optimization is impractical at scale. The v1 pipeline applies the same basic processing to all samples uniformly — this simplicity is a feature, not a limitation.
+
+For v2, we propose **two pipeline options** to evaluate the tradeoff between speed and modernization:
+
+### Option A: "Fast Classic" — Same steps, faster tools
+
+Preserve the v1 processing logic exactly (same steps, same parameters where possible), but replace each tool with its modern equivalent for speed. No new steps added.
+
+**Pros:**
+- Results most comparable to v1 — easier to validate continuity
+- Minimal risk of introducing new biases
+- Respects the original design rationale (uniform basic processing)
+- Simpler to implement and maintain
+
+**Cons:**
+- Misses potential quality improvements (e.g., adapter trimming)
+- Does not leverage experiment-type-specific best practices
+- Some quality issues in v1 data will persist
+
+### Option B: "Modern" — Updated steps and best practices
+
+Modernize the full pipeline: add QC/trimming, use experiment-type-specific peak callers, and apply current best practices.
+
+**Pros:**
+- Higher quality results per sample
+- Experiment-type-aware processing (ChIP-seq vs ATAC-seq vs CUT&Tag)
+- Aligns with current community standards
+- Better for new experiment types like CUT&Tag
+
+**Cons:**
+- Results will differ more from v1 — harder to validate continuity
+- Added complexity in workflow branching per experiment type
+- Risk of introducing biases that affect cross-sample comparisons
+- More parameters to tune and maintain
+
+### Evaluation Strategy
+
+1. Implement both Option A and Option B as separate CWL workflows
+2. Run both on the same representative sample set
+3. Compare results: A vs v1, B vs v1, and A vs B
+4. Decide which to adopt for production (or run both for different use cases)
+
+---
+
 ## Goals
 
 1. **Dramatically reduce processing time** (currently ~1 day/sample)
-2. **Modernize all tools** — replace decade-old versions with current best-in-class
+2. **Modernize tools** — replace decade-old versions
 3. **GPU acceleration** where beneficial
 4. **CWL-based orchestration** — portable, reproducible, runner-agnostic
 5. **Custom CWL runner** — minimal, fastest, flexible for any infrastructure
@@ -45,24 +91,26 @@ Metrics to compare:
 - Mapping rate vs. Bowtie2 v1 baseline
 - Downstream peak call consistency
 
-### 1.3 Tool Upgrades (all steps)
+### 1.3 Tool Mapping: Option A vs Option B
 
-| Step | v1 Tool | v2 Candidates | Notes |
-|------|---------|---------------|-------|
-| SRA download | SRA Toolkit 2.3.2-4 | SRA Toolkit latest (fasterq-dump), aria2 for parallel download | fasterq-dump is multithreaded; aria2 for HTTP/FTP fallback |
-| FASTQ QC | (none) | FastQC + MultiQC, fastp | Add QC step that v1 lacks |
-| Trimming | (none) | fastp | Fast, handles adapter trimming + QC in one pass |
-| Alignment | Bowtie2 2.2.2 | bwa-mem2 / minimap2 / Parabricks | Benchmark all three |
-| BAM processing | SAMtools 0.1.19 | SAMtools latest (1.20+) | Massive performance improvements over 0.1.x |
-| Duplicate removal | samtools rmdup | samtools markdup / Picard MarkDuplicates / Parabricks | samtools rmdup is deprecated |
-| Coverage tracks | bedtools 2.17.0 + bedGraphToBigWig | deeptools bamCoverage / bedtools latest | deeptools does BAM→BigWig directly with normalization options |
-| Peak calling | MACS2 2.1.0 | MACS3 / HMMRATAC (for ATAC-seq) | MACS3 is actively maintained, Python 3 native |
-| Format conversion | UCSC bedToBigBed | UCSC tools latest | Minimal change needed |
+| Step | v1 Tool | Option A (Fast Classic) | Option B (Modern) |
+|------|---------|------------------------|-------------------|
+| SRA download | SRA Toolkit 2.3.2-4 | SRA Toolkit latest (fasterq-dump) | Same as A |
+| FASTQ QC | (none) | (none) | fastp (QC + trimming in one pass) |
+| Trimming | (none) | (none) | fastp |
+| Alignment | Bowtie2 2.2.2 | bwa-mem2 / minimap2 / Parabricks | Same as A |
+| BAM processing | SAMtools 0.1.19 | SAMtools latest (1.20+) | Same as A |
+| Duplicate removal | samtools rmdup | samtools markdup | Same as A |
+| Coverage tracks | bedtools 2.17.0 + bedGraphToBigWig | bedtools latest + bedGraphToBigWig | deeptools bamCoverage (BAM→BigWig direct) |
+| Peak calling | MACS2 2.1.0 (all types) | MACS3 (all types) | MACS3 (ChIP-seq), HMMRATAC (ATAC-seq), SEACR (CUT&Tag) |
+| Format conversion | UCSC bedToBigBed | UCSC tools latest | Same as A |
 
-### 1.4 CUT&Tag Considerations
+**Key difference**: Option A keeps the same steps as v1 (no QC, no trimming, single peak caller for all types). Option B adds QC/trimming and uses experiment-type-specific peak callers.
+
+### 1.4 CUT&Tag Considerations (Option B only)
 
 - CUT&Tag has lower background than ChIP-seq — SEACR is the recommended peak caller
-- May need separate peak-calling branch in the CWL workflow
+- Separate peak-calling branch in the CWL workflow
 - Alignment parameters may differ (e.g., fragment size expectations)
 
 ## Phase 2: CWL Workflow Development
@@ -72,18 +120,21 @@ Metrics to compare:
 ```
 chip-atlas-pipeline-v2/
 ├── cwl/
-│   ├── tools/               # CWL CommandLineTool definitions (one per tool)
+│   ├── tools/                        # CWL CommandLineTool definitions (one per tool)
 │   │   ├── fasterq-dump.cwl
-│   │   ├── fastp.cwl
 │   │   ├── bwa-mem2.cwl
+│   │   ├── fastp.cwl                 # Option B only
 │   │   ├── samtools-sort.cwl
 │   │   ├── samtools-markdup.cwl
-│   │   ├── deeptools-bamcoverage.cwl
 │   │   ├── macs3-callpeak.cwl
+│   │   ├── deeptools-bamcoverage.cwl  # Option B only
+│   │   ├── bedtools-genomecov.cwl     # Option A only
+│   │   ├── bedgraphtobigwig.cwl
 │   │   ├── bedtobigbed.cwl
 │   │   └── ...
 │   ├── workflows/
-│   │   ├── primary-processing.cwl    # Steps 1-7: SRA → BigWig + BigBed
+│   │   ├── option-a.cwl              # Fast Classic: same steps as v1, modern tools
+│   │   ├── option-b.cwl              # Modern: QC + trimming + type-specific callers
 │   │   ├── target-genes.cwl          # Secondary: peak-TSS overlap
 │   │   ├── colocalization.cwl        # Secondary: co-binding analysis
 │   │   ├── enrichment.cwl            # Secondary: in silico ChIP
@@ -93,9 +144,9 @@ chip-atlas-pipeline-v2/
 │       ├── mm10.yml
 │       └── ...
 ├── containers/
-│   ├── Singularity.fastp
 │   ├── Singularity.bwa-mem2
 │   ├── Singularity.macs3
+│   ├── Singularity.fastp
 │   └── ...
 ├── scripts/
 │   ├── batch-submit.sh               # Submit multiple samples
@@ -118,6 +169,7 @@ chip-atlas-pipeline-v2/
 - All tools wrapped in Singularity containers
 - Input/output types strictly defined for validation
 - Test with **cwltool** initially
+- Option A and Option B share the same tool definitions, differ only at workflow level
 
 ### 2.3 Custom CWL Runner (sub-project)
 
@@ -159,27 +211,41 @@ chip-atlas-pipeline-v2/
 - Include both high-quality and borderline samples
 - Include various antigen classes (histone marks, TFs, chromatin regulators)
 
-### 4.2 Comparison Metrics
+### 4.2 Three-Way Comparison
 
-- **Peak count**: number of peaks called at each q-value threshold
-- **Peak overlap**: Jaccard index and overlap coefficient between v1 and v2 peak sets
+| Comparison | Purpose |
+|------------|---------|
+| Option A vs v1 | Validate that tool upgrades alone don't break results |
+| Option B vs v1 | Understand impact of added QC/trimming/type-specific callers |
+| Option A vs Option B | Isolate the effect of modernization steps |
+
+Metrics:
+- **Peak count**: number of peaks at each q-value threshold
+- **Peak overlap**: Jaccard index and overlap coefficient
 - **Exploratory**: visualize differences before setting pass/fail thresholds
 - Optionally: BigWig signal correlation (Pearson/Spearman) at later stage
 
 ### 4.3 Validation Tooling
 
-- `validate-vs-v1.py`: takes v1 BED + v2 BED, reports peak count, overlap stats, generates comparison plots
+- `validate-vs-v1.py`: takes two BED files, reports peak count, overlap stats, generates comparison plots
 - Run as part of the test suite
 
 ## Phase 5: Production Deployment & Migration
 
-### 5.1 Incremental Rollout
+### 5.1 Decision Point
 
-1. Process the 10K+ remaining unprocessed samples with v2
+After Phase 4 validation, decide:
+- **Adopt Option A** if consistency with v1 is paramount
+- **Adopt Option B** if quality improvements justify the differences
+- **Run both** if different use cases need different tradeoffs
+
+### 5.2 Incremental Rollout
+
+1. Process the 10K+ remaining unprocessed samples with chosen option
 2. Reprocess a subset of existing 400K samples for validation
 3. Full reprocessing if results are satisfactory
 
-### 5.2 Update Infrastructure
+### 5.3 Update Infrastructure
 
 - Metadata filtering: rewrite in Python (replace shell scripts)
 - Incremental update logic: detect new SRA accessions, queue for processing
@@ -188,11 +254,11 @@ chip-atlas-pipeline-v2/
 ## Timeline (rough phases, not time estimates)
 
 1. **Benchmarking** — profile v1, evaluate aligners and tool candidates
-2. **CWL development** — build tool definitions and workflows
+2. **CWL development** — build Option A and Option B workflows
 3. **Custom runner** — develop minimal CWL runner (can parallel with #2)
 4. **Secondary analyses** — rewrite in Python + CWL
-5. **Validation** — compare v2 vs v1 results
-6. **Production** — process remaining samples, begin reprocessing
+5. **Validation** — three-way comparison (A vs v1, B vs v1, A vs B)
+6. **Decision & Production** — choose option, process remaining samples
 
 ## Open Questions
 
