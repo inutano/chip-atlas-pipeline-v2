@@ -13,7 +13,7 @@ requirements:
 
 hints:
   DockerRequirement:
-    dockerPull: "quay.io/biocontainers/ucsc-bedgraphtobigwig:447--h2a80c09_1"
+    dockerPull: "quay.io/biocontainers/ucsc-bedgraphtobigwig:482--hdc0a859_0"
 
 baseCommand: [bedGraphToBigWig]
 

@@ -1,1 +1,9 @@
 data/experimentList.tab
+
+# Test run data (large files)
+test-run/*/*.fastq
+test-run/*/*.bam
+test-run/*/*.bam.bai
+test-run/*/*.fa
+test-run/*/*.fa.*
+test-run/*/output/

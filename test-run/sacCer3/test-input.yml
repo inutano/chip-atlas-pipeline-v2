@@ -1,0 +1,32 @@
+sample_id: SRX22049197
+
+fastq_fwd:
+  class: File
+  path: SRR26341472_1.fastq
+
+fastq_rev:
+  class: File
+  path: SRR26341472_2.fastq
+
+genome_fasta:
+  class: File
+  path: sacCer3.fa
+  secondaryFiles:
+    - class: File
+      path: sacCer3.fa.0123
+    - class: File
+      path: sacCer3.fa.amb
+    - class: File
+      path: sacCer3.fa.ann
+    - class: File
+      path: sacCer3.fa.bwt.2bit.64
+    - class: File
+      path: sacCer3.fa.pac
+
+chrom_sizes:
+  class: File
+  path: chrom.sizes
+
+genome_size: "1.2e7"
+
+format: BAMPE

@@ -14,7 +14,7 @@ requirements:
 
 hints:
   DockerRequirement:
-    dockerPull: "quay.io/biocontainers/ucsc-bedtobigbed:447--h2a80c09_1"
+    dockerPull: "quay.io/biocontainers/ucsc-bedtobigbed:482--hdc0a859_0"
 
 baseCommand: []
 

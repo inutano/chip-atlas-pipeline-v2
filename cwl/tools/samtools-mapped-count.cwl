@@ -13,7 +13,7 @@ requirements:
 
 hints:
   DockerRequirement:
-    dockerPull: "quay.io/biocontainers/samtools:1.21--h50ea8bc_1"
+    dockerPull: "quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1"
 
 baseCommand: [samtools, view]
 

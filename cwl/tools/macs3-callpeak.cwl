@@ -16,7 +16,7 @@ requirements:
 
 hints:
   DockerRequirement:
-    dockerPull: "quay.io/biocontainers/macs3:3.0.2--py312hcba1217_1"
+    dockerPull: "quay.io/biocontainers/macs3:3.0.4--py312h71493bf_0"
 
 baseCommand: [macs3, callpeak]
 
@@ -40,10 +40,10 @@ inputs:
     doc: "Effective genome size (hs, mm, ce, dm, or number)"
 
   qvalue:
-    type: float
+    type: string
     inputBinding:
       prefix: -q
-    doc: "Minimum FDR (q-value) cutoff (e.g. 0.00001, 0.0000000001, 0.00000000000000000001)"
+    doc: "Minimum FDR (q-value) cutoff as string (e.g. '1e-05', '1e-10', '1e-20')"
 
   format:
     type: string?

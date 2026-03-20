@@ -2,16 +2,19 @@
 cwlVersion: v1.2
 class: Workflow
 
-label: "ChIP-Atlas Option A - Fast Classic"
+label: "ChIP-Atlas Option A - Parabricks GPU-Accelerated"
 doc: |
-  ChIP-Atlas v2 primary processing pipeline (Option A: Fast Classic).
-  Same steps as v1 with modern tool replacements for speed.
-  No QC, no trimming, single peak caller for all experiment types.
+  ChIP-Atlas v2 primary processing pipeline (Option A: Parabricks GPU variant).
+  Uses NVIDIA Parabricks fq2bam for GPU-accelerated alignment, sorting, and
+  duplicate marking in a single step, replacing bwa-mem2 + samtools sort + markdup.
   Peaks called WITHOUT background/input control (ChIP-Atlas policy).
 
-  Steps: SRA download → BWA-MEM2 align → name-sort → fixmate → coord-sort
-         → markdup → bedtools genomecov → bedGraphToBigWig
-         → MACS3 callpeak (×3 thresholds) → bedToBigBed
+  Steps: SRA download → Parabricks fq2bam (align+sort+dedup)
+         → bedtools genomecov → bedGraphToBigWig → MACS3 callpeak (×3 thresholds)
+         → bedToBigBed
+
+$namespaces:
+  cwltool: "http://commonwl.org/cwltool#"
 
 requirements:
   SubworkflowFeatureRequirement: {}
@@ -35,12 +38,13 @@ inputs:
   genome_fasta:
     type: File
     secondaryFiles:
-      - pattern: ".0123"
-      - pattern: .amb
-      - pattern: .ann
-      - pattern: .bwt.2bit.64
-      - pattern: .pac
-    doc: "Reference genome FASTA with BWA-MEM2 index"
+      - .fai
+      - .amb
+      - .ann
+      - .bwt
+      - .pac
+      - .sa
+    doc: "Reference genome FASTA with BWA index (standard BWA, not BWA-MEM2)"
 
   chrom_sizes:
     type: File
@@ -55,85 +59,47 @@ inputs:
     default: "BAM"
     doc: "MACS3 input format (BAM for single-end, BAMPE for paired-end)"
 
+  num_gpus:
+    type: int?
+    default: 1
+    doc: "Number of GPUs to use for Parabricks fq2bam"
+
 steps:
   # =====================
-  # Step 1: Alignment
+  # Step 1: GPU-accelerated alignment + sort + dedup (Parabricks fq2bam)
   # =====================
-  align:
-    run: ../tools/bwa-mem2-align.cwl
+  fq2bam:
+    run: ../tools/parabricks-fq2bam.cwl
     in:
       genome_fasta: genome_fasta
       fastq_fwd: fastq_fwd
       fastq_rev: fastq_rev
       sample_id: sample_id
-    out: [aligned_sam]
+      num_gpus: num_gpus
+    out: [dedup_bam, duplicate_metrics]
 
   # =====================
-  # Step 2: Name-sort for fixmate
-  # =====================
-  name_sort:
-    run: ../tools/samtools-sort.cwl
-    in:
-      input_file: align/aligned_sam
-      sample_id: sample_id
-      by_name:
-        default: true
-    out: [sorted_bam]
-
-  # =====================
-  # Step 3: Add mate score tags
-  # =====================
-  fixmate:
-    run: ../tools/samtools-fixmate.cwl
-    in:
-      bam: name_sort/sorted_bam
-      sample_id: sample_id
-    out: [fixmate_bam]
-
-  # =====================
-  # Step 4: Coordinate-sort and index
-  # =====================
-  coord_sort:
-    run: ../tools/samtools-sort.cwl
-    in:
-      input_file: fixmate/fixmate_bam
-      sample_id: sample_id
-      by_name:
-        default: false
-    out: [sorted_bam]
-
-  # =====================
-  # Step 5: Remove duplicates
-  # =====================
-  markdup:
-    run: ../tools/samtools-markdup.cwl
-    in:
-      sorted_bam: coord_sort/sorted_bam
-      sample_id: sample_id
-    out: [dedup_bam]
-
-  # =====================
-  # Step 4: Count mapped reads (for RPM normalization)
+  # Step 2: Count mapped reads (for RPM normalization)
   # =====================
   count_reads:
     run: ../tools/samtools-mapped-count.cwl
     in:
-      bam: markdup/dedup_bam
+      bam: fq2bam/dedup_bam
     out: [count]
 
   # =====================
-  # Step 5: Generate BedGraph coverage (RPM-normalized)
+  # Step 3: Generate BedGraph coverage (RPM-normalized)
   # =====================
   genomecov:
     run: ../tools/bedtools-genomecov.cwl
     in:
-      bam: markdup/dedup_bam
+      bam: fq2bam/dedup_bam
       sample_id: sample_id
       mapped_read_count: count_reads/count
     out: [bedgraph]
 
   # =====================
-  # Step 6: Convert BedGraph to BigWig
+  # Step 4: Convert BedGraph to BigWig
   # =====================
   bigwig:
     run: ../tools/bedgraphtobigwig.cwl
@@ -144,55 +110,55 @@ steps:
     out: [bigwig]
 
   # =====================
-  # Step 7a: Peak calling (q-value 1e-05)
+  # Step 5a: Peak calling (q-value 1e-05)
   # =====================
   macs3_q05:
     run: ../tools/macs3-callpeak.cwl
     in:
-      treatment_bam: markdup/dedup_bam
+      treatment_bam: fq2bam/dedup_bam
       sample_id:
         source: sample_id
         valueFrom: $(self).05
       genome_size: genome_size
       qvalue:
-        default: "1e-05"
+        default: 0.00001
       format: format
     out: [narrow_peaks, summits, xls]
 
   # =====================
-  # Step 7b: Peak calling (q-value 1e-10)
+  # Step 5b: Peak calling (q-value 1e-10)
   # =====================
   macs3_q10:
     run: ../tools/macs3-callpeak.cwl
     in:
-      treatment_bam: markdup/dedup_bam
+      treatment_bam: fq2bam/dedup_bam
       sample_id:
         source: sample_id
         valueFrom: $(self).10
       genome_size: genome_size
       qvalue:
-        default: "1e-10"
+        default: 0.0000000001
       format: format
     out: [narrow_peaks, summits, xls]
 
   # =====================
-  # Step 7c: Peak calling (q-value 1e-20)
+  # Step 5c: Peak calling (q-value 1e-20)
   # =====================
   macs3_q20:
     run: ../tools/macs3-callpeak.cwl
     in:
-      treatment_bam: markdup/dedup_bam
+      treatment_bam: fq2bam/dedup_bam
       sample_id:
         source: sample_id
         valueFrom: $(self).20
       genome_size: genome_size
       qvalue:
-        default: "1e-20"
+        default: 0.00000000000000000001
       format: format
     out: [narrow_peaks, summits, xls]
 
   # =====================
-  # Step 8a: BED to BigBed (q05)
+  # Step 6a: BED to BigBed (q05)
   # =====================
   bigbed_q05:
     run: ../tools/bedtobigbed.cwl
@@ -206,7 +172,7 @@ steps:
     out: [bigbed]
 
   # =====================
-  # Step 8b: BED to BigBed (q10)
+  # Step 6b: BED to BigBed (q10)
   # =====================
   bigbed_q10:
     run: ../tools/bedtobigbed.cwl
@@ -220,7 +186,7 @@ steps:
     out: [bigbed]
 
   # =====================
-  # Step 8c: BED to BigBed (q20)
+  # Step 6c: BED to BigBed (q20)
   # =====================
   bigbed_q20:
     run: ../tools/bedtobigbed.cwl
@@ -271,8 +237,13 @@ outputs:
 
   dedup_bam:
     type: File
-    outputSource: markdup/dedup_bam
+    outputSource: fq2bam/dedup_bam
     doc: "Deduplicated BAM file"
+
+  duplicate_metrics:
+    type: File
+    outputSource: fq2bam/duplicate_metrics
+    doc: "Parabricks duplicate marking statistics"
 
   peaks_xls_q05:
     type: File
