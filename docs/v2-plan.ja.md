@@ -219,10 +219,33 @@ chip-atlas-pipeline-v2/
 
 ### 4.1 サンプル選定
 
-- 代表的なサブセットを選定: ゲノムあたり10〜20サンプル
-- 異なる実験タイプをカバー（ChIP-seq、DNase-seq、ATAC-seq）
-- 高品質サンプルとボーダーラインのサンプルの両方を含める
-- 様々な抗原クラスを含める（ヒストンマーク、転写因子、クロマチン制御因子）
+データソース: `https://chip-atlas.dbcls.jp/data/metadata/experimentList.tab`
+
+#### 層別化の次元
+
+1. **ゲノム**（現行の6アセンブリ、レガシーアセンブリはスキップ）:
+   - hg38, mm10, rn6, dm6, ce11, sacCer3
+
+2. **実験タイプ**（6種類）:
+   - Histone, TFs and others, ATAC-Seq, DNase-seq, RNA polymerase, Bisulfite-Seq
+   - スキップ: Input control, Unclassified, No description, Annotation tracks
+
+3. **リード数階層**（カラム8の最初のカンマ区切り値に基づく）:
+   - Low: 1000万リード未満
+   - Medium: 1000万〜5000万リード
+   - High: 5000万リード超
+
+#### 選定方法
+
+- **ゲノム × 実験タイプ × リード数階層**の各組み合わせについて:
+  - アクセッション番号の降順でソート（新しい実験を優先 — 最新のシーケンス機器にバイアス）
+  - 上位から**3サンプル**を選定
+- 生物種ごとに複数サンプルを確保し、ゲノム構造に起因するマッパー/ピークコーラーの挙動の違いを捕捉
+- **想定サイズ**: 最大約270サンプル（6ゲノム × 6タイプ × 3階層 × 3サンプル）、組み合わせが少ない箇所ではそれより少なくなる
+
+#### 選定スクリプト
+
+`scripts/select-validation-samples.py` — experimentList.tabを読み込み、フィルタリングと層別化を適用し、選定サンプルリストを`data/validation-samples.tsv`に出力
 
 ### 4.2 三者間比較
 

@@ -219,10 +219,33 @@ chip-atlas-pipeline-v2/
 
 ### 4.1 Sample Selection
 
-- Pick representative subset: ~10–20 samples per genome
-- Cover different experiment types (ChIP-seq, DNase-seq, ATAC-seq)
-- Include both high-quality and borderline samples
-- Include various antigen classes (histone marks, TFs, chromatin regulators)
+Source: `https://chip-atlas.dbcls.jp/data/metadata/experimentList.tab`
+
+#### Stratification Dimensions
+
+1. **Genome** (6 current assemblies, legacy assemblies skipped):
+   - hg38, mm10, rn6, dm6, ce11, sacCer3
+
+2. **Experiment type** (6 types):
+   - Histone, TFs and others, ATAC-Seq, DNase-seq, RNA polymerase, Bisulfite-Seq
+   - Skip: Input control, Unclassified, No description, Annotation tracks
+
+3. **Read count tier** (based on column 8, first comma-separated value):
+   - Low: <10M reads
+   - Medium: 10–50M reads
+   - High: >50M reads
+
+#### Selection Method
+
+- For each **genome × experiment type × read tier** combination:
+  - Sort by accession number descending (newer experiments first — biases toward modern sequencing instruments)
+  - Pick **3 samples** from the top
+- This ensures multiple samples per organism to capture genome-structure-related variation in mapper/peak-caller behavior
+- **Expected size**: up to ~270 samples (6 genomes × 6 types × 3 tiers × 3 samples), fewer where combinations are sparse
+
+#### Selection Script
+
+`scripts/select-validation-samples.py` — reads experimentList.tab, applies filters and stratification, outputs the selected sample list to `data/validation-samples.tsv`
 
 ### 4.2 Three-Way Comparison
 
