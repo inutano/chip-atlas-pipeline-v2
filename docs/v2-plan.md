@@ -68,12 +68,14 @@ Modernize the full pipeline: add QC/trimming, use experiment-type-specific peak 
 
 ## Phase 1: Benchmarking & Tool Selection
 
-### 1.1 Profiling the v1 Pipeline
+### 1.1 ~~Profiling the v1 Pipeline~~ (Skipped)
 
-- Run v1 on a representative set of samples with per-step timing
-- Confirm bottlenecks (suspected: SRA download, alignment)
-- Measure CPU, memory, disk I/O, and wall time per step
-- Profile on both workstation and cluster node
+Reproducing v1 behavior is impractical — many variables and file paths are hardcoded or implicitly declared in the original shell scripts. Instead, we will:
+
+- Build the new pipelines (Option A and B) directly
+- Benchmark per-step timing on the new pipelines
+- Compare outputs against existing v1 results already available on chip-atlas.dbcls.jp
+- The new pipeline will be faster regardless; profiling v1 is not worth the effort
 
 ### 1.2 Aligner Evaluation
 
