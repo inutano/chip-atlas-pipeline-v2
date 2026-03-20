@@ -46,6 +46,17 @@ Modernize the full pipeline: add QC/trimming, use experiment-type-specific peak 
 
 ---
 
+## Important Policy: No Background/Input Control in Peak Calling
+
+ChIP-Atlas intentionally performs peak calling **without background data** (input DNA / negative control). This is a deliberate design decision, not an oversight:
+
+- **Why**: At the scale of 400K+ experiments from public repositories, it is impractical to reliably identify and pair each ChIP sample with its corresponding input control. Input data is often unavailable, mislabeled, or not explicitly described in the SRA metadata.
+- **How it works**: MACS2/MACS3 is run without a control BAM. Instead, peaks are called against a local background model, and users filter results using three q-value thresholds (1e-05, 1e-10, 1e-20) to control stringency.
+- **This is a defining characteristic of ChIP-Atlas** — it enables uniform processing of all public data regardless of whether controls exist.
+- **v2 must preserve this policy**: Both Option A and Option B must call peaks without background/input control. Do not implement control pairing logic.
+
+---
+
 ## Goals
 
 1. **Dramatically reduce processing time** (currently ~1 day/sample)
