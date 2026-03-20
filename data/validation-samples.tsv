@@ -1,0 +1,302 @@
+accession	genome	experiment_type	antigen	cell_type	cell_type_class	title	num_reads	mapping_rate	dup_rate	num_peaks	read_tier
+SRX20276866	ce11	ATAC-Seq	ATAC-Seq	Adult	Germline cells	GSM7316289: Isolated germ nuclei prde-1(mj207)V ATAC rep 3; Caenorhabditis elegans; ATAC-seq	87586715	24.7	30.7	3320	high
+SRX20276865	ce11	ATAC-Seq	ATAC-Seq	Adult	Germline cells	GSM7316288: Isolated germ nuclei prde-1(mj207)V ATAC rep 2; Caenorhabditis elegans; ATAC-seq	92055004	8.3	17.9	2071	high
+SRX20276864	ce11	ATAC-Seq	ATAC-Seq	Adult	Germline cells	GSM7316287: Isolated germ nuclei prde-1(mj207)V ATAC rep 1; Caenorhabditis elegans; ATAC-seq	101184494	44.5	71.4	3215	high
+SRX18303549	ce11	ATAC-Seq	ATAC-Seq	Larvae	L1	GSM6738585: rrb-1::degron; eft-3p::tir-1, 1 mM auxin, replicate 4; Caenorhabditis elegans; ATAC-seq	6794643	92.2	14.0	1170	low
+SRX18303545	ce11	ATAC-Seq	ATAC-Seq	Larvae	L1	GSM6738581: rrb-1::degron, 1 mM auxin, replicate 4; Caenorhabditis elegans; ATAC-seq	7617178	84.7	14.9	1349	low
+SRX18303540	ce11	ATAC-Seq	ATAC-Seq	Larvae	L1	GSM6738576: rpoa-2::degron; eft-3p::tir-1, 1 mM auxin, replicate 3; Caenorhabditis elegans; ATAC-seq	5323987	92.2	12.8	1186	low
+SRX21804024	ce11	ATAC-Seq	ATAC-Seq	Embryo	Embryos	GSM7785042: N2, input; Caenorhabditis elegans; ATAC-seq	25456261	33.5	20.1	422	medium
+SRX21804023	ce11	ATAC-Seq	ATAC-Seq	Embryo	Embryos	GSM7785041: let-418+nurf-1, embryo, 26°C, ATAC-seq rep2; Caenorhabditis elegans; ATAC-seq	17809067	17.4	44.7	259	medium
+SRX21804022	ce11	ATAC-Seq	ATAC-Seq	Embryo	Embryos	GSM7785040: let-418+nurf-1, embryo, 26°C, ATAC-seq rep1; Caenorhabditis elegans; ATAC-seq	17090101	23.0	36.1	258	medium
+SRX2170085	ce11	Bisulfite-Seq	Bisulfite-Seq	Larvae	L4	GSM2318501: whole L4 stage wildtype C. elegans gDNA; Caenorhabditis elegans; Bisulfite-Seq	326964	4.5	0.0	260	low
+SRX4085404	ce11	DNase-seq	DNase-Seq	Larvae	L3	GSM3142705: wt L3 DNase-seq rep2 50U ml; Caenorhabditis elegans; DNase-Hypersensitivity	82483409	97.9	26.6	0	high
+SRX4085403	ce11	DNase-seq	DNase-Seq	Larvae	L3	GSM3142704: wt L3 DNase-seq rep2 25U ml; Caenorhabditis elegans; DNase-Hypersensitivity	85721229	95.6	81.0	4915	high
+SRX4085353	ce11	DNase-seq	DNase-Seq	Embryo	Mixed embryo	GSM3142654: wt emb DNase-seq rep2 200U ml; Caenorhabditis elegans; DNase-Hypersensitivity	56107690	96.4	33.9	0	high
+SRX4085433	ce11	DNase-seq	DNase-Seq	Adult	Young adult	GSM3142734: wt YA DNase-seq rep1 400U ml; Caenorhabditis elegans; DNase-Hypersensitivity	5047183	90.3	18.9	205	low
+SRX4085432	ce11	DNase-seq	DNase-Seq	Adult	Young adult	GSM3142733: wt YA DNase-seq rep1 200U ml; Caenorhabditis elegans; DNase-Hypersensitivity	8102108	98.0	19.5	220	low
+SRX4085409	ce11	DNase-seq	DNase-Seq	Larvae	L4	GSM3142710: wt L4 DNase-seq rep1 2.5U ml; Caenorhabditis elegans; DNase-Hypersensitivity	6110196	42.1	6.1	546	low
+SRX4085443	ce11	DNase-seq	DNase-Seq	Adult	Young adult	GSM3142744: wt YA DNase-seq rep2 800U ml; Caenorhabditis elegans; DNase-Hypersensitivity	12951894	46.8	4.8	220	medium
+SRX4085442	ce11	DNase-seq	DNase-Seq	Adult	Young adult	GSM3142743: wt YA DNase-seq rep2 400U ml; Caenorhabditis elegans; DNase-Hypersensitivity	16165751	59.1	7.8	270	medium
+SRX4085441	ce11	DNase-seq	DNase-Seq	Adult	Young adult	GSM3142742: wt YA DNase-seq rep2 200U ml; Caenorhabditis elegans; DNase-Hypersensitivity	14155206	56.4	6.7	1209	medium
+SRX20276924	ce11	Histone	H3	Adult	Germline cells	GSM7316389: Isolated germ nuclei high salt prde-1(mj207)V H3 rep 1; Caenorhabditis elegans; ChIP-Seq	50091762	34.4	33.0	482	high
+SRX17392621	ce11	Histone	H4K5ac	Larvae	L4	GSM6533820: PA01-H4K5ac-rep2-IP; Caenorhabditis elegans; ChIP-Seq	51727448	94.9	15.0	0	high
+SRX7879252	ce11	Histone	H3K27me3	Larvae	L4	GSM4403458: H3K27me3 nfki-1(cer1) L4; Caenorhabditis elegans; ChIP-Seq	60530886	99.1	23.2	0	high
+SRX11322245	ce11	Histone	H3K9me3	Adult	Young adult	GSM5411838: Anti-him-8 piRNAi,H3K9me3 ChIP; Caenorhabditis elegans; ChIP-Seq	6526657	69.7	17.1	499	low
+SRX10171478	ce11	Histone	H3K27ac	Adult	Whole worm	GSM5104081: lin-53 RNAi H3K27ac-rep2 (ChIP-seq); Caenorhabditis elegans; ChIP-Seq	7405822	94.2	14.0	2474	low
+SRX10171477	ce11	Histone	H3K27ac	Adult	Whole worm	GSM5104080: lin-53 RNAi H3K27ac-rep1 (ChIP-seq); Caenorhabditis elegans; ChIP-Seq	7767055	98.4	11.4	579	low
+SRX26013000	ce11	Histone	H4K20me1	Larvae	L3	GSM8503689: H4K20me1 HW04 1hr auxin L3 rep2; Caenorhabditis elegans; ChIP-Seq	35952888	87.9	35.6	779	medium
+SRX26012999	ce11	Histone	H4K20me1	Larvae	L3	GSM8503688: H4K20me1 HW04 1hr auxin L3 rep1; Caenorhabditis elegans; ChIP-Seq	37774579	87.6	24.7	0	medium
+SRX26012998	ce11	Histone	H4K20me1	Larvae	L3	GSM8503687: H4K20me1 HW04 noauxin L3 rep2; Caenorhabditis elegans; ChIP-Seq	31484353	90.0	24.4	678	medium
+SRX1674101	ce11	RNA polymerase	RNA polymerase II	Adult	Young adult	GSM2104331: RNAPII Ser2p in RNAi rep1 ChIP-seq; Caenorhabditis elegans; ChIP-Seq	58288493	96.8	42.1	0	high
+SRX1674100	ce11	RNA polymerase	RNA polymerase II	Adult	Young adult	GSM2104330: RNAPII Ser2p in RNAi ChIP-seq; Caenorhabditis elegans; ChIP-Seq	57625311	96.5	44.3	12062	high
+SRX1674099	ce11	RNA polymerase	RNA polymerase II	Adult	Young adult	GSM2104329: Total RNAPII  in RNAi rep1 ChIP-seq; Caenorhabditis elegans; ChIP-Seq	104108339	95.3	52.2	0	high
+SRX21762564	ce11	RNA polymerase	RNA polymerase II	Larvae	L3	GSM7777494: 8WG16 JK05 1hrauxin L3 rep3 [JK200]; Caenorhabditis elegans; ChIP-Seq	7171321	95.9	14.7	1708	low
+SRX21762563	ce11	RNA polymerase	RNA polymerase II	Larvae	L3	GSM7777493: 8WG16 JK05 1hrauxin L3 rep2 [JK198]; Caenorhabditis elegans; ChIP-Seq	8465221	93.6	26.1	3633	low
+SRX13110313	ce11	RNA polymerase	RNA polymerase II	Larvae	L2-L3	GSM5686778: 8WG16 CA1200 1h auxin L2-L3 ext467 AKM256 input AKM249 ChIP-seq; Caenorhabditis elegans; ChIP-Seq	7352008	78.2	36.2	1864	low
+SRX21762566	ce11	RNA polymerase	RNA polymerase II	Larvae	L3	GSM7777496: 8WG16 JK06 1hrauxin L3 rep2 [JK199]; Caenorhabditis elegans; ChIP-Seq	11155204	95.6	25.2	5621	medium
+SRX21762565	ce11	RNA polymerase	RNA polymerase II	Larvae	L3	GSM7777495: 8WG16 JK06 1hrauxin L3 rep1 [HW06]; Caenorhabditis elegans; ChIP-Seq	14774536	74.0	27.8	7290	medium
+SRX21762562	ce11	RNA polymerase	RNA polymerase II	Larvae	L3	GSM7777492: 8WG16 JK05 1hrauxin L3 rep1 [HW04]; Caenorhabditis elegans; ChIP-Seq	26006759	83.2	40.6	8452	medium
+SRX17605267	ce11	TFs and others	grh-1	Larvae	L2	GSM6588395: exp1, 1M ChIP; Caenorhabditis elegans; ChIP-Seq	57387970	91.3	34.4	0	high
+SRX17605266	ce11	TFs and others	grh-1	Larvae	L2	GSM6588394: exp1, 500mM ChIP; Caenorhabditis elegans; ChIP-Seq	59307901	89.2	34.5	0	high
+SRX17605265	ce11	TFs and others	grh-1	Larvae	L2	GSM6588393: exp1, 350mM ChIP; Caenorhabditis elegans; ChIP-Seq	50210686	88.0	36.0	0	high
+SRX26261240	ce11	TFs and others	sma-4	Larvae	L4	GSM8551314: sma-4,CS692,L4larva,Exp1,Input1; Caenorhabditis elegans; ChIP-Seq	5080709	99.1	14.0	301	low
+SRX26261239	ce11	TFs and others	sma-4	Larvae	L4	GSM8551313: sma-4,CS692,L4larva,Exp1,ChIP2; Caenorhabditis elegans; ChIP-Seq	5702134	97.6	14.6	466	low
+SRX26261238	ce11	TFs and others	sma-4	Larvae	L4	GSM8551312: sma-4,CS692,L4larva,Exp1,ChIP1; Caenorhabditis elegans; ChIP-Seq	4933286	96.0	13.8	448	low
+SRX26261231	ce11	TFs and others	unc-119	Embryo	Late embryo	GSM8551305: mec-3,OP55,lateembryonic,Exp1,Input1; Caenorhabditis elegans; ChIP-Seq	10355747	99.2	16.6	369	medium
+SRX26261229	ce11	TFs and others	unc-119	Embryo	Late embryo	GSM8551303: mec-3,OP55,lateembryonic,Exp1,ChIP1; Caenorhabditis elegans; ChIP-Seq	10234902	98.7	17.8	535	medium
+SRX26261227	ce11	TFs and others	fkh-7	Larvae	L1	GSM8551301: fkh-7,PS9154,L1larva,Exp1,ChIP2; Caenorhabditis elegans; ChIP-Seq	10161746	93.5	12.2	542	medium
+SRX24149584	dm6	ATAC-Seq	ATAC-Seq	Adult	Brains	GSM8186980: 44hAPF Brain ATAC Rep3; Drosophila melanogaster; ATAC-seq	226865951	28.5	24.8	16044	high
+SRX24149583	dm6	ATAC-Seq	ATAC-Seq	Adult	Eye	GSM8186971: 44hAPF Eye ATAC Rep3; Drosophila melanogaster; ATAC-seq	53768572	78.7	18.8	7826	high
+SRX24149582	dm6	ATAC-Seq	ATAC-Seq	Adult	Eye	GSM8186970: 44hAPF Eye ATAC Rep2; Drosophila melanogaster; ATAC-seq	75326385	80.2	20.4	0	high
+SRX23760449	dm6	ATAC-Seq	ATAC-Seq	Unclassified	Unclassified	GSM8114526: ATAC, Constant zfh1 + ph-KD, rep2; Drosophila melanogaster; ATAC-seq	7474097	32.1	19.0	2865	low
+SRX23760448	dm6	ATAC-Seq	ATAC-Seq	Unclassified	Unclassified	GSM8114525: ATAC, Constant zfh1 + ph-KD, rep1; Drosophila melanogaster; ATAC-seq	7387601	40.9	20.0	3470	low
+SRX23760447	dm6	ATAC-Seq	ATAC-Seq	Unclassified	Unclassified	GSM8114524: ATAC, Constant gfp + ph-KD, rep2; Drosophila melanogaster; ATAC-seq	8950647	49.2	21.7	5187	low
+SRX25388676	dm6	ATAC-Seq	ATAC-Seq	Adult	Midgut	ATAC-seq of D. melanogaster: ISCs	30000054	75.6	83.0	5967	medium
+SRX25388675	dm6	ATAC-Seq	ATAC-Seq	Adult	Midgut	ATAC-seq of D. melanogaster: ISCs	30574574	91.2	78.1	6396	medium
+SRX25388674	dm6	ATAC-Seq	ATAC-Seq	Adult	Midgut	ATAC-seq of D. melanogaster: ISCs	36115814	92.5	77.9	11695	medium
+SRX7142440	dm6	Bisulfite-Seq	Bisulfite-Seq	Adult	Thorax	Drosophila melanogaster 3 WGBS data	65808736	85.6	25.2	9	high
+SRX7142439	dm6	Bisulfite-Seq	Bisulfite-Seq	Adult	Thorax	Drosophila melanogaster 2 WGBS data	85012607	76.6	27.4	14	high
+SRX7142438	dm6	Bisulfite-Seq	Bisulfite-Seq	Adult	Thorax	Drosophila melanogaster 1 WGBS data	93457596	80.8	37.8	19	high
+SRX3043673	dm6	Bisulfite-Seq	Bisulfite-Seq	Adult	Adult body	GSM2719783: Invader 4 LTR Dnmt2 mutant. Recovery 3 days; Drosophila melanogaster; Bisulfite-Seq	2275	17.0	0.0	0	low
+SRX3043672	dm6	Bisulfite-Seq	Bisulfite-Seq	Adult	Adult body	GSM2719782: Invader 4 LTR Dnmt2 mutant, Recovery 1 day; Drosophila melanogaster; Bisulfite-Seq	2097	14.7	0.0	0	low
+SRX3043671	dm6	Bisulfite-Seq	Bisulfite-Seq	Adult	Adult body	GSM2719781: Invader 4 LTR Dnmt2 mutant, heat shock; Drosophila melanogaster; Bisulfite-Seq	2061	17.5	0.0	0	low
+SRX14560446	dm6	Bisulfite-Seq	Bisulfite-Seq	Unclassified	Unclassified	WGBS of KC cells transfected with HsDnmt3a	22779396	82.5	7.9	4637	medium
+SRX14560445	dm6	Bisulfite-Seq	Bisulfite-Seq	Unclassified	Unclassified	WGBS of KC cells transfected with HsDnmt3a	19797175	86.7	9.1	3738	medium
+SRX14560444	dm6	Bisulfite-Seq	Bisulfite-Seq	Unclassified	Unclassified	WGBS of KC cells transfected with BgDnmt3a 3l	20240519	86.3	9.5	1082	medium
+ERX3978822	dm6	DNase-seq	DNase-Seq	Embryo	Embryos	Illumina HiSeq 2000 paired end sequencing; Tissue-specific DNase-seq Time Course during Drosophila melanogaster embryogenesis	53150262	90.9	38.6	13315	high
+ERX3978821	dm6	DNase-seq	DNase-Seq	Embryo	Myogenic mesoderm	Illumina HiSeq 2000 paired end sequencing; Tissue-specific DNase-seq Time Course during Drosophila melanogaster embryogenesis	57016606	89.3	19.1	11505	high
+ERX3978816	dm6	DNase-seq	DNase-Seq	Embryo	Embryos	Illumina HiSeq 2000 paired end sequencing; Tissue-specific DNase-seq Time Course during Drosophila melanogaster embryogenesis	58323456	82.0	78.6	6204	high
+SRX3145612	dm6	DNase-seq	DNase-Seq	Embryo	2-3h embryos	Pooled DNase of DGRP437 and DGRP705	7797454	0.0	0.0	0	low
+SRX3145610	dm6	DNase-seq	DNase-Seq	Embryo	2-3h embryos	Pooled DNase of DGRP380 and DGRP705	7310411	0.0	0.0	0	low
+SRX187082	dm6	DNase-seq	DNase-Seq	Cell line	OSC	GSM1000409: OSC DHSseq rep1; Drosophila melanogaster; DNase-Hypersensitivity	6300219	95.8	48.0	7875	low
+SRX10661194	dm6	DNase-seq	DNase-Seq	Cell line	S2	GSM5258764: DNase-seq from S2 (ENCLB005UWT); Drosophila melanogaster; DNase-Hypersensitivity	24742166	95.3	27.2	7712	medium
+ERX7593480	dm6	DNase-seq	DNase-Seq	Embryo	Stage 10-11 embryos	Illumina HiSeq 2000 paired end sequencing; Time course DNase assays on Drosophila melanogaster and Drosophila virilis embryos during embryogenesis	17532112	0.0	0.0	0	medium
+ERX4514579	dm6	DNase-seq	DNase-Seq	Unclassified	Unclassified	NextSeq 500 paired end sequencing; Time course DNase assays on Drosophila melanogaster and Drosophila virilis embryos during embryogenesis II	18210526	1.0	18.1	98	medium
+SRX17564624	dm6	Histone	H4K5K8K12ac	Cell line	S2	GSM6578679: H4Kac S2 HS 2; Drosophila melanogaster; ChIP-Seq	107301693	17.4	68.6	5360	high
+SRX17564623	dm6	Histone	H4K5K8K12ac	Cell line	S2	GSM6578678: H4Kac S2 HS 1; Drosophila melanogaster; ChIP-Seq	61541034	35.2	56.9	6617	high
+SRX17564619	dm6	Histone	H4K5K8K12ac	Cell line	S2	GSM6578674: H4Kac S2 1; Drosophila melanogaster; ChIP-Seq	52118990	88.8	9.5	11750	high
+SRX23238194	dm6	Histone	H3K36me3	Cell line	S2	GSM8019696: CUT&amp;RUN, H3K36me3, WT S2 cells, Replicate 1; Drosophila melanogaster; ChIP-Seq	4904409	69.4	10.7	1033	low
+SRX19695531	dm6	Histone	H3K27me3	Larvae	CNS and imaginal disc	GSM7102646: transgene MtallGAGAPRE1and2 H3K27me3 rep2; Drosophila melanogaster; ChIP-Seq	9869869	96.7	6.8	1019	low
+SRX19695530	dm6	Histone	H3K27me3	Larvae	CNS and imaginal disc	GSM7102645: transgene MtallGAGAPRE1and2 H3K27me3 rep1; Drosophila melanogaster; ChIP-Seq	7721975	95.9	5.6	804	low
+SRX24078790	dm6	Histone	H3K9me2	Cell line	S2	GSM8172284: MNase-ChIP, K9me2 ChIP, NSD RNAi S2 cells, Batch 6, Replicate 1; Drosophila melanogaster; ChIP-Seq	16857546	76.9	15.0	2523	medium
+SRX24078789	dm6	Histone	H3K9me2	Cell line	S2	GSM8172283: MNase-ChIP, K9me2 ChIP, GST RNAi S2 cells, Batch 6, Replicate 1; Drosophila melanogaster; ChIP-Seq	15182767	78.0	13.5	2206	medium
+SRX24078788	dm6	Histone	H3K27me3	Cell line	S2	GSM8172282: MNase-ChIP, K27me3 ChIP, NSD RNAi S2 cells, Batch 7, Replicate 1; Drosophila melanogaster; ChIP-Seq	19565931	90.6	11.5	1379	medium
+SRX21864855	dm6	RNA polymerase	RNA polymerase II	Cell line	S2R+	GSM7797163: S2, NHS, DMSO, Pol2S5P, rep2; Drosophila melanogaster; ChIP-Seq	56926697	95.5	67.9	12493	high
+SRX21864853	dm6	RNA polymerase	RNA polymerase II	Cell line	S2R+	GSM7797161: S2, NHS, CCG1423, Pol2S5P, rep2; Drosophila melanogaster; ChIP-Seq	69594480	95.1	76.2	12883	high
+SRX21864849	dm6	RNA polymerase	RNA polymerase II	Cell line	S2R+	GSM7797157: S2, HS, CCG1423, Pol2S5P, rep2; Drosophila melanogaster; ChIP-Seq	69501395	97.1	71.8	14388	high
+SRX20209940	dm6	RNA polymerase	RNA polymerase II	Adult	Ovary	GSM7291131: SuHw LOF ovaries 1 8st ChIP Rpb3; Drosophila melanogaster; ChIP-Seq	5041685	25.2	25.1	765	low
+SRX20209936	dm6	RNA polymerase	RNA polymerase II	Adult	Ovary	GSM7291127: WT ovaries 1 8st ChIP Rpb3; Drosophila melanogaster; ChIP-Seq	5887583	24.7	25.9	685	low
+SRX9518336	dm6	RNA polymerase	RNA polymerase II	Embryo	Embryos	GSM4910637: Rbp3.ctrl.c9-13 rep2; Drosophila melanogaster; ChIP-Seq	9797010	54.0	39.7	933	low
+SRX23238234	dm6	RNA polymerase	RNA polymerase II	Cell line	S2	GSM8019727: MNase-ChIP, S2Ph-PolII (ePol) ChIP, Control RNAi S2 cells, Batch 7, Replicate 3; Drosophila melanogaster; ChIP-Seq	30626355	88.1	14.9	2412	medium
+SRX23238231	dm6	RNA polymerase	RNA polymerase II	Cell line	S2	GSM8019726: MNase-ChIP, S2Ph-PolII (ePol) ChIP, Control RNAi S2 cells, Batch 4, Replicate 2; Drosophila melanogaster; ChIP-Seq	14184986	90.3	9.6	1596	medium
+SRX23238229	dm6	RNA polymerase	RNA polymerase II	Cell line	S2	GSM8019725: MNase-ChIP, S2Ph-PolII (ePol) ChIP, Control RNAi S2 cells, Batch 3, Replicate 1; Drosophila melanogaster; ChIP-Seq	17409351	74.5	19.4	1931	medium
+SRX24032095	dm6	TFs and others	CG1603	Adult	Whole body	GSM8162975: Mzfp1 wt y1w1118 adult anti Mzfp1 1; Drosophila melanogaster; ChIP-Seq	60678229	92.5	6.9	0	high
+SRX24032093	dm6	TFs and others	CG1603	Adult	Whole body	GSM8162973: Mzfp1 delta42 adult HA anti Mzfp1 1; Drosophila melanogaster; ChIP-Seq	52462543	85.5	6.7	5997	high
+SRX24032090	dm6	TFs and others	CG1603	Adult	Whole body	GSM8162970: Mzfp1 wt adult HA anti Mzfp1 2; Drosophila melanogaster; ChIP-Seq	56183254	89.4	7.3	6148	high
+SRX26299400	dm6	TFs and others	term	Embryo	Embryos	GSM8557212: term,term-GFP,embryonic,Exp1,Input1; Drosophila melanogaster; ChIP-Seq	6347686	86.4	9.4	432	low
+SRX26299399	dm6	TFs and others	term	Embryo	Embryos	GSM8557211: term,term-GFP,embryonic,Exp1,ChIP2; Drosophila melanogaster; ChIP-Seq	6012338	30.4	9.2	227	low
+SRX26299398	dm6	TFs and others	term	Embryo	Embryos	GSM8557210: term,term-GFP,embryonic,Exp1,ChIP1; Drosophila melanogaster; ChIP-Seq	5765110	36.8	8.5	226	low
+SRX26299396	dm6	TFs and others	SoxN	Embryo	Embryos	GSM8557208: SoxN,SoxN-GFP,embryonic,Exp1,ChIP2; Drosophila melanogaster; ChIP-Seq	12916728	94.3	23.5	3003	medium
+SRX26299395	dm6	TFs and others	SoxN	Embryo	Embryos	GSM8557207: SoxN,SoxN-GFP,embryonic,Exp1,ChIP1; Drosophila melanogaster; ChIP-Seq	11436374	93.0	23.3	1918	medium
+SRX26299394	dm6	TFs and others	slp1	Embryo	Embryos	GSM8557206: slp1,slp1-GFP,embryonic,Exp1,Input1; Drosophila melanogaster; ChIP-Seq	10905784	85.0	22.1	713	medium
+SRX26398647	hg38	ATAC-Seq	ATAC-Seq	Gonad	Ovary	ATAC-seq of  adult female ovarian	59661103	38.1	15.5	627	high
+SRX26398644	hg38	ATAC-Seq	ATAC-Seq	Gonad	Ovary	ATAC-seq of  adult female ovarian	58209453	34.4	16.0	608	high
+SRX26398643	hg38	ATAC-Seq	ATAC-Seq	Gonad	Ovary	ATAC-seq of  adult female ovarian	73167185	47.3	16.1	845	high
+SRX26106775	hg38	ATAC-Seq	ATAC-Seq	Breast	MCF-7	GSM8521401: KO-KAP1-E2-1h-rep2  [ATAC-Seq]; Homo sapiens; ATAC-seq	8319188	38.0	35.6	3316	low
+SRX25793269	hg38	ATAC-Seq	ATAC-Seq	Blood	K-562	ATAC-seq of K562 IFN-b stimulation with BAF/p300 inhibitors	8513458	99.2	38.7	12948	low
+SRX25793268	hg38	ATAC-Seq	ATAC-Seq	Blood	K-562	ATAC-seq of K562 IFN-b stimulation with BAF/p300 inhibitors	8035449	99.2	36.2	8389	low
+SRX26398646	hg38	ATAC-Seq	ATAC-Seq	Gonad	Ovary	ATAC-seq of  adult female ovarian	40840577	50.3	12.6	570	medium
+SRX26398645	hg38	ATAC-Seq	ATAC-Seq	Gonad	Ovary	ATAC-seq of  adult female ovarian	41959778	53.0	15.5	605	medium
+SRX26398642	hg38	ATAC-Seq	ATAC-Seq	Gonad	Ovary	ATAC-seq of  adult female ovarian	46664834	30.1	10.1	386	medium
+SRX26240695	hg38	Bisulfite-Seq	Bisulfite-Seq	Lung	NCI-H1299	GSM8546662: H1299 C50; Homo sapiens; Bisulfite-Seq	314118028	90.2	8.7	0	high
+SRX26240694	hg38	Bisulfite-Seq	Bisulfite-Seq	Lung	NCI-H1299	GSM8546661: H1299 C25; Homo sapiens; Bisulfite-Seq	309629918	91.8	8.2	0	high
+SRX26240693	hg38	Bisulfite-Seq	Bisulfite-Seq	Lung	NCI-H1299	GSM8546660: H1299 TDGKO; Homo sapiens; Bisulfite-Seq	306769621	92.0	7.6	0	high
+SRX25139082	hg38	Bisulfite-Seq	Bisulfite-Seq	Gonad	Sperm	GSM8365415: Sample 2-18 control; Homo sapiens; Bisulfite-Seq	122999	87.2	0.0	925	low
+SRX25139081	hg38	Bisulfite-Seq	Bisulfite-Seq	Gonad	Sperm	GSM8365414: Sample 2-17 case; Homo sapiens; Bisulfite-Seq	136225	86.5	0.0	1413	low
+SRX25139080	hg38	Bisulfite-Seq	Bisulfite-Seq	Gonad	Sperm	GSM8365413: Sample 2-16 case; Homo sapiens; Bisulfite-Seq	221064	91.5	0.1	1548	low
+SRX26303598	hg38	Bisulfite-Seq	Bisulfite-Seq	Cardiovascular	HUVEC	GSM8558107: Ad-NC transfected HUVECs, H3K27me3; Homo sapiens; Bisulfite-Seq	45663534	84.4	0.3	207751	medium
+SRX26303597	hg38	Bisulfite-Seq	Bisulfite-Seq	Cardiovascular	HUVEC	GSM8558106: Ad-NNMT transfected HUVECs, H3K27me3; Homo sapiens; Bisulfite-Seq	40483845	86.2	0.3	204551	medium
+SRX26303596	hg38	Bisulfite-Seq	Bisulfite-Seq	Cardiovascular	HUVEC	GSM8558105: Ad-NNMT-H3K4me3; Homo sapiens; Bisulfite-Seq	35383319	97.4	1.5	135005	medium
+SRX24388482	hg38	DNase-seq	DNase-Seq	Lung	Small Cell Lung Carcinoma	DHS-Seq of H69 50U S2	72621891	98.0	19.6	51473	high
+SRX24388481	hg38	DNase-seq	DNase-Seq	Lung	Small Cell Lung Carcinoma	DHS-Seq of H69 50U S1	73816127	98.3	16.4	60167	high
+SRX24388480	hg38	DNase-seq	DNase-Seq	Lung	Small Cell Lung Carcinoma	DHS-Seq of H69 40U S2	68238455	98.1	19.5	48096	high
+SRX23943861	hg38	DNase-seq	DNase-Seq	Blood	Peripheral blood	DNA-seq of blood: adult male peripheral blood	171161	96.5	3.9	0	low
+SRX23943860	hg38	DNase-seq	DNase-Seq	Kidney	Renal cell carcinoma	DNA-seq of blood: adult male peripheral blood	21470	11.6	13.4	0	low
+SRX23943859	hg38	DNase-seq	DNase-Seq	Blood	Peripheral blood	DNA-seq of blood: adult female peripheral blood	164744	98.5	2.0	0	low
+SRX24388475	hg38	DNase-seq	DNase-Seq	Pluripotent stem cell	iPS cells	DHS-Seq of iPSC7 S2	49717898	98.9	11.1	35958	medium
+SRX24388472	hg38	DNase-seq	DNase-Seq	Pluripotent stem cell	iPS cells	DHS-Seq of iPSC6 S1	46703949	98.8	15.8	25342	medium
+SRX24152104	hg38	DNase-seq	DNase-Seq	Breast	SK-BR-3	Repli-Seq of late S phase of SK-BR3	26854218	96.2	15.3	884	medium
+SRX26084219	hg38	Histone	H3K4me3	Blood	K-562	GSM8516197: Trip K562 H3K4me3 mildCHIP; Homo sapiens; ChIP-Seq	123470970	85.1	31.7	36988	high
+SRX26084218	hg38	Histone	H3K4me3	Blood	K-562	GSM8516196: Untr K562 H3K4me3 mildCHIP; Homo sapiens; ChIP-Seq	114574259	85.1	31.1	35711	high
+SRX26084217	hg38	Histone	H3K27ac	Blood	K-562	GSM8516195: Trip K562 K27ac mildCHIP; Homo sapiens; ChIP-Seq	67099823	85.1	28.8	6921	high
+SRX25595131	hg38	Histone	H3K9ac	Uterus	HeLa	GSM8439486: HelaS3, mitotic, DMSO, 0.0025x yeast spike-in, H3K9ac; Homo sapiens; ChIP-Seq	9960556	96.0	1.7	8797	low
+SRX25595128	hg38	Histone	H3K9ac	Uterus	HeLa	GSM8439484: HelaS3, mitotic, DMSO, 0.00025x yeast spike-in, H3K9ac; Homo sapiens; ChIP-Seq	8343480	96.1	1.5	8023	low
+SRX22536539	hg38	Histone	H3	Epidermis	BJ-5ta	GSM7901376: Leo1 A 10 H3; Homo sapiens; ChIP-Seq	289	93.4	1.5	0	low
+SRX26268299	hg38	Histone	H2AK120Ub	Liver	Hep G2	GSM8552877: sgUSP22 H2BK120ub ChIP; Homo sapiens; ChIP-Seq	26449798	96.7	19.8	1046	medium
+SRX26268297	hg38	Histone	H2AK120Ub	Liver	Hep G2	GSM8552875: control H2BK120ub ChIP; Homo sapiens; ChIP-Seq	25426323	95.2	20.7	166	medium
+SRX26208419	hg38	Histone	H3K18la	Neural	GBM	GSM8540718: GSC, H3K18la, ChIP; Homo sapiens; ChIP-Seq	23243531	97.4	14.0	2006	medium
+SRX26084172	hg38	RNA polymerase	RNA polymerase II	Breast	T-47D	GSM8516150: Trip A12 RNAP2 CHIP; Homo sapiens; ChIP-Seq	65441141	79.7	16.0	595	high
+SRX26084171	hg38	RNA polymerase	RNA polymerase II	Breast	T-47D	GSM8516149: Flav A12 RNAP2 CHIP; Homo sapiens; ChIP-Seq	68971440	82.0	13.0	11387	high
+SRX26084170	hg38	RNA polymerase	RNA polymerase II	Breast	T-47D	GSM8516148: Untr A12 RNAP2 CHIP; Homo sapiens; ChIP-Seq	51569130	79.3	11.6	6896	high
+SRX24105763	hg38	RNA polymerase	RNA polymerase II	Kidney	293	GSM8180070: HEK293, pThr4, Ssu72, rep3; Homo sapiens; ChIP-Seq	9921163	80.9	23.5	247	low
+SRX18646733	hg38	RNA polymerase	RNA polymerase II	Unclassified	Unclassified	GSM6809980: JM8.N4 mESC, Triptolide 4hr, XInput, rep2; Homo sapiens; Mus musculus; ChIP-Seq	2080839	7.0	8.6	7	low
+SRX18298170	hg38	RNA polymerase	RNA polymerase II	Digestive tract	HCT 116	GSM6737710: HUWE1-CS, shWRNIP1, ChIP RNAPII, rep2; Homo sapiens; ChIP-Seq	4985767	91.8	2.3	681	low
+SRX26084085	hg38	RNA polymerase	RNA polymerase II	Breast	T-47D	GSM8516064: DexTrip A12 RNAP2 CHIP; Homo sapiens; ChIP-Seq	20166390	97.2	8.8	820	medium
+SRX26084084	hg38	RNA polymerase	RNA polymerase II	Breast	T-47D	GSM8516063: VehTrip A12 RNAP2 CHIP; Homo sapiens; ChIP-Seq	22426255	97.3	8.0	514	medium
+SRX26084083	hg38	RNA polymerase	RNA polymerase II	Breast	T-47D	GSM8516062: Dex A12 RNAP2 CHIP; Homo sapiens; ChIP-Seq	28897690	97.5	9.6	13174	medium
+SRX26159220	hg38	TFs and others	RAD21	Neural	hTERT RPE-1	GSM8528496: NIPBL-D7-dTAG-24hr RAD21 ChIP; Homo sapiens; ChIP-Seq	52914730	80.3	26.8	23306	high
+SRX26159219	hg38	TFs and others	RAD21	Neural	hTERT RPE-1	GSM8528495: NIPBL-D7-dTAG-4hr RAD21 ChIP; Homo sapiens; ChIP-Seq	67362594	86.6	31.5	24982	high
+SRX26159217	hg38	TFs and others	RAD21	Neural	hTERT RPE-1	GSM8528493: NIPBL-A2-dTAG-24hr RAD21 ChIP; Homo sapiens; ChIP-Seq	53246550	74.3	31.5	26443	high
+SRX25254554	hg38	TFs and others	CTCF	Kidney	293	GSM8386436: HEK293T ChIPseq CTCF dTAG rep2; Homo sapiens; ChIP-Seq	9844155	98.7	1.7	28075	low
+SRX25050179	hg38	TFs and others	YY1	Kidney	HK-2	GSM8350609: HK2 OEKDM5C H514A, YY1, ChIP; Homo sapiens; ChIP-Seq	9315845	88.6	11.2	1671	low
+SRX25050178	hg38	TFs and others	YY1	Kidney	HK-2	GSM8350608: HK2 OEKDM5C, YY1, ChIP; Homo sapiens; ChIP-Seq	8575826	90.1	13.9	2229	low
+SRX26323825	hg38	TFs and others	RELA	Liver	MHCC97-H	GSM8561716: MHCC97H P65; Homo sapiens; ChIP-Seq	21655684	97.4	17.9	14704	medium
+SRX26208418	hg38	TFs and others	KAT2A	Neural	GBM	GSM8540717: GSC, KAT2A, ChIP; Homo sapiens; ChIP-Seq	21860429	98.6	16.4	1067	medium
+SRX26208417	hg38	TFs and others	ACSS2	Neural	GBM	GSM8540716: GSC, ACSS2, ChIP; Homo sapiens; ChIP-Seq	15057809	98.0	12.7	533	medium
+SRX26271628	mm10	ATAC-Seq	ATAC-Seq	Epidermis	Hair follicle stem cells	GSM8553934: ATAC Tel HFSC Setdb1 cKO rep1; Mus musculus; ATAC-seq	52154621	50.0	35.9	23294	high
+SRX26261928	mm10	ATAC-Seq	ATAC-Seq	Breast	4T1	GSM8551550: 4T1 LeptoM ATAC, Floating, R3; Mus musculus; ATAC-seq	65415774	69.2	35.6	45410	high
+SRX26261927	mm10	ATAC-Seq	ATAC-Seq	Breast	4T1	GSM8551549: 4T1 LeptoM ATAC, Floating, R2; Mus musculus; ATAC-seq	61880619	67.2	35.3	40643	high
+SRX25704441	mm10	ATAC-Seq	ATAC-Seq	Blood	CD8+ T cells	GSM8459572: Asxl1, replicate 2, ATAC; Mus musculus; ATAC-seq	7217700	73.9	13.9	18146	low
+SRX25690275	mm10	ATAC-Seq	ATAC-Seq	Blood	CD8+ T cells	GSM8456498: Control SLEC Replicate 3; Mus musculus; ATAC-seq	8016457	97.5	6.7	12602	low
+SRX25690274	mm10	ATAC-Seq	ATAC-Seq	Blood	CD8+ T cells	GSM8456497: Control SLEC Replicate 2; Mus musculus; ATAC-seq	6297630	97.6	5.2	12142	low
+SRX26425859	mm10	ATAC-Seq	ATAC-Seq	Cardiovascular	Angioblasts and endothelial cells	Pecam1+CD45-Pdpn-tdT+E13.5Pax3creATACseq	23395546	99.8	0.0	42282	medium
+SRX26425858	mm10	ATAC-Seq	ATAC-Seq	Cardiovascular	Angioblasts and endothelial cells	Pecam1+CD45-Pdpn-tdT-E13.5Pax3creATACseq	18257736	99.8	0.0	31987	medium
+SRX26425857	mm10	ATAC-Seq	ATAC-Seq	Cardiovascular	Angioblasts and endothelial cells	Pecam1+CD45-Pdpn+tdT+E13.5Pax3creATACseq	11996996	99.8	0.0	24507	medium
+SRX26193492	mm10	Bisulfite-Seq	Bisulfite-Seq	Pluripotent stem cell	EpiLC	WGBS of male extended epiblast-like cell: Kdm5c-KO B	181611052	91.8	7.7	0	high
+SRX26193491	mm10	Bisulfite-Seq	Bisulfite-Seq	Pluripotent stem cell	EpiLC	WGBS of male extended epiblast-like cell: Kdm5c-KO A	183899164	91.7	7.6	0	high
+SRX26193490	mm10	Bisulfite-Seq	Bisulfite-Seq	Pluripotent stem cell	EpiLC	WGBS of male extended epiblast-like cell: wild-type B	180032363	91.7	7.4	0	high
+SRX25681797	mm10	Bisulfite-Seq	Bisulfite-Seq	Pluripotent stem cell	ES cells	GSM8452846: REST NP R3; Mus musculus; Bisulfite-Seq	285930	2.4	0.0	529	low
+SRX25681796	mm10	Bisulfite-Seq	Bisulfite-Seq	Pluripotent stem cell	ES cells	GSM8452845: REST NP R2; Mus musculus; Bisulfite-Seq	284378	2.2	0.0	376	low
+SRX25681795	mm10	Bisulfite-Seq	Bisulfite-Seq	Pluripotent stem cell	ES cells	GSM8452844: REST NP R1; Mus musculus; Bisulfite-Seq	413976	3.6	0.0	796	low
+SRX26044361	mm10	Bisulfite-Seq	Bisulfite-Seq	Neural	Hippocampus	GSM8508039: HC, Old3, 12M; Mus musculus; Bisulfite-Seq	18710601	90.1	0.8	137063	medium
+SRX26044360	mm10	Bisulfite-Seq	Bisulfite-Seq	Neural	Hypothalamus	GSM8508038: HT, Old3, 12M; Mus musculus; Bisulfite-Seq	15926273	90.6	0.7	130340	medium
+SRX26044359	mm10	Bisulfite-Seq	Bisulfite-Seq	Neural	Olfactory Bulb	GSM8508037: OB, Old3, 12M; Mus musculus; Bisulfite-Seq	21304844	91.2	0.9	152744	medium
+SRX17912106	mm10	DNase-seq	DNase-Seq	Kidney	Kidney	GSM6639956: DNase-seq from kidney (ENCLB980ITX); Mus musculus; DNase-Hypersensitivity	136819852	19.6	7.8	5287	high
+SRX17912100	mm10	DNase-seq	DNase-Seq	Blood	Thymus	GSM6638106: DNase-seq from thymus (ENCLB377SKK); Mus musculus; DNase-Hypersensitivity	52339296	33.2	12.9	10745	high
+SRX17912098	mm10	DNase-seq	DNase-Seq	Kidney	Kidney	GSM6638104: DNase-seq from kidney (ENCLB525XQU); Mus musculus; DNase-Hypersensitivity	94153228	49.4	33.7	17454	high
+SRX8994250	mm10	DNase-seq	DNase-Seq	Blood	B cells	GSM4742378: DNAse seq-B6xPWK-B cell-DS36869A; Mus musculus; DNase-Hypersensitivity	4132173	82.5	3.5	8230	low
+SRX8994249	mm10	DNase-seq	DNase-Seq	Lung	Lung	GSM4742377: DNAse seq-B6xCAST-Lung-DS36795B; Mus musculus; DNase-Hypersensitivity	5690454	73.7	3.4	1106	low
+SRX8994248	mm10	DNase-seq	DNase-Seq	Lung	Lung	GSM4742376: DNAse seq-B6xCAST-Lung-DS36795A; Mus musculus; DNase-Hypersensitivity	6476557	47.3	0.8	687	low
+SRX22655368	mm10	DNase-seq	DNase-Seq	Liver	Liver	GSM7919529: Male STAT5 Low replicate11 G92 M5 outlier; Mus musculus; DNase-Hypersensitivity	21418624	97.4	11.4	24847	medium
+SRX22655367	mm10	DNase-seq	DNase-Seq	Liver	Liver	GSM7919528: Male STAT5 High replicate10 G74A M2 outlier; Mus musculus; DNase-Hypersensitivity	16357624	97.7	8.7	19346	medium
+SRX22655366	mm10	DNase-seq	DNase-Seq	Liver	Liver	GSM7919527: Male STAT5 High replicate9 G74A M1 outlier; Mus musculus; DNase-Hypersensitivity	26280201	97.2	10.4	25471	medium
+SRX25842408	mm10	Histone	H3K27ac	Embryo	Forelimb	GSM8484494: H3K27Ac FL E10.5+C59+6h rep1; Mus musculus; ChIP-Seq	50934379	97.6	21.3	18718	high
+SRX25655389	mm10	Histone	H3K27ac	Blood	Leukemia	GSM8449913: mm202C ChIP H3K27ac dTAG 500nM 48h REP1 240522 GCCAAT S3; Mus musculus; ChIP-Seq	52634605	98.6	3.9	35119	high
+SRX25531609	mm10	Histone	H3K27ac	Epidermis	B16-F10	GSM8434467: B16-F10-W2, H3K27Ac, ChIP-seq; Mus musculus; ChIP-Seq	53945979	98.4	34.5	34331	high
+SRX25655395	mm10	Histone	H3K79me2	Blood	Leukemia	GSM8449919: mm202C ChIP H3K79me2 dTAG 4h REP1 240509 CGATGT S2; Mus musculus; ChIP-Seq	9385899	98.6	5.5	95	low
+SRX25655385	mm10	Histone	H3K27ac	Blood	Leukemia	GSM8449909: mm202C ChIP H3K27ac dTAG 16h REP1 240509 GGCTAC S7; Mus musculus; ChIP-Seq	7833173	98.7	2.3	7689	low
+SRX24340174	mm10	Histone	H3K9ac	Kidney	Kidney	GSM8012652: KO-UUO1-ac; Mus musculus; ChIP-Seq	7875800	93.5	23.8	308	low
+SRX25919776	mm10	Histone	H3K27me3	Blood	Leukemia	GSM8490796: mm202C-sgLuc ChIP H3K27me3 dTAG 500nM 24h REP1 221026 ACAGTG S5; Mus musculus; ChIP-Seq	13926925	63.7	1.8	658	medium
+SRX25919775	mm10	Histone	H3K27me3	Blood	Leukemia	GSM8490795: mm202C-sgLuc ChIP H3K27me3 DMSO 24h REP1 221026 CGATGT S2; Mus musculus; ChIP-Seq	14472588	66.4	2.1	475	medium
+SRX25919774	mm10	Histone	H3K27ac	Blood	Leukemia	GSM8490794: mm202C-sgLuc ChIP H3K27ac dTAG 500nM 24h REP1 221026 TGACCA S4; Mus musculus; ChIP-Seq	32761611	81.2	6.7	30453	medium
+SRX21864865	mm10	RNA polymerase	RNA polymerase II	Embryonic fibroblast	NIH/3T3	GSM7797173: NIH, NHS, DMSO, Pol2S5P, rep2; Mus musculus; ChIP-Seq	68264492	93.9	25.5	12086	high
+SRX21864864	mm10	RNA polymerase	RNA polymerase II	Embryonic fibroblast	NIH/3T3	GSM7797172: NIH, NHS, CCG203971, Pol2S5P, rep2; Mus musculus; ChIP-Seq	61530030	96.4	51.1	14015	high
+SRX21864863	mm10	RNA polymerase	RNA polymerase II	Embryonic fibroblast	NIH/3T3	GSM7797171: NIH, HS, DMSO, Pol2S5P, rep2; Mus musculus; ChIP-Seq	69026881	95.4	41.7	12804	high
+SRX23607148	mm10	RNA polymerase	RNA polymerase II	Pluripotent stem cell	ES cells	GSM8076039: EXOSC2 AID ESCs, S2P Pol II, spikein, 20 hr rep2; Mus musculus; ChIP-Seq	8505705	38.9	6.0	157	low
+SRX23607138	mm10	RNA polymerase	RNA polymerase II	Pluripotent stem cell	ES cells	GSM8076029: EXOSC2 AID ESCs, S5P Pol II, spikein, 0 hr rep2; Mus musculus; ChIP-Seq	6356805	65.0	66.2	130	low
+SRX22092661	mm10	RNA polymerase	RNA polymerase II	Pluripotent stem cell	ES cells	GSM7841783: EXOSC2 AID ESCs, S5P Pol II, 4 hr, rep2; Mus musculus; ChIP-Seq	8483299	76.4	46.3	114	low
+SRX25655425	mm10	RNA polymerase	RNA polymerase II	Blood	Leukemia	GSM8449949: mm202C-sgLuc ChIP RNAPol2 pS2 DMSO 96h REP1 240304 ACAGTG S3; Mus musculus; ChIP-Seq	30048158	95.8	34.1	1050	medium
+SRX25655418	mm10	RNA polymerase	RNA polymerase II	Blood	Leukemia	GSM8449942: mm202C ChIP RNAPol2 pS2 dTAG 500nM 1h REP1 240522 TTAGGC S1; Mus musculus; ChIP-Seq	29369819	96.4	33.7	2031	medium
+SRX25655417	mm10	RNA polymerase	RNA polymerase II	Blood	Leukemia	GSM8449941: mm202C ChIP RNAPol2 pS2 dTAG 500nM 16h REP1 240612 GGCTAC S11; Mus musculus; ChIP-Seq	26044699	98.6	83.5	279	medium
+SRX26175720	mm10	TFs and others	Smarca5	Blood	Lymphoma, B-Cell	GSM8532279: ChIP-seq on mutCH12 cells with Snf2h antibodies; Mus musculus; ChIP-Seq	81748269	0.0	0.1	0	high
+SRX26175719	mm10	TFs and others	Smarca5	Blood	Lymphoma, B-Cell	GSM8532278: ChIP-seq on wtCH12 cells with Snf2h antibodies; Mus musculus; ChIP-Seq	78998352	0.0	0.0	0	high
+SRX25928399	mm10	TFs and others	Rbbp5	Liver	Liver	GSM8492199: RBBP5 CT20; Mus musculus; ChIP-Seq	51972338	95.7	14.5	430	high
+SRX24413851	mm10	TFs and others	Rpa2	Gonad	Spermatocytes	GSM8244167: SSDS-RPA2 Nbs1dB rep2; Mus musculus; ChIP-Seq	6745914	75.5	20.9	2480	low
+SRX24413849	mm10	TFs and others	Rad51	Gonad	Spermatocytes	GSM8244165: SSDS-RAD51 Nbs1dB rep3; Mus musculus; ChIP-Seq	5039894	50.7	35.5	42	low
+SRX24413848	mm10	TFs and others	Rad51	Gonad	Spermatocytes	GSM8244164: SSDS-RAD51 Nbs1dB rep2; Mus musculus; ChIP-Seq	4417336	69.9	27.5	365	low
+SRX26175730	mm10	TFs and others	Smc3	Embryonic fibroblast	NIH/3T3	GSM8532289: ChIP-seq on NIH3T3+BORIS (cl.2) cells with SMC3  Antibodies; Mus musculus; ChIP-Seq	28792374	94.5	6.4	50075	medium
+SRX26175729	mm10	TFs and others	Rad21	Embryonic fibroblast	NIH/3T3	GSM8532288: ChIP-seq on NIH3T3+BORIS (cl.2) cells with RAD21  Antibodies; Mus musculus; ChIP-Seq	25844652	95.6	7.2	41217	medium
+SRX26175728	mm10	TFs and others	Smc1a	Embryonic fibroblast	NIH/3T3	GSM8532287: ChIP-seq on NIH3T3+BORIS (cl.2) cells with SMC1  Antibodies; Mus musculus; ChIP-Seq	28468312	96.7	6.9	47661	medium
+SRX21909493	rn6	ATAC-Seq	ATAC-Seq	Neural	Brain	GSM7808600: Hippocampus, ISC8 S9; Rattus norvegicus; ATAC-seq	67074220	93.6	15.5	41027	high
+SRX21909490	rn6	ATAC-Seq	ATAC-Seq	Neural	Brain	GSM7808597: Hippocampus, IS2 S2; Rattus norvegicus; ATAC-seq	60157819	93.3	13.6	18978	high
+SRX21909489	rn6	ATAC-Seq	ATAC-Seq	Neural	Brain	GSM7808596: Hippocampus, IS1 S1; Rattus norvegicus; ATAC-seq	68864104	93.5	14.0	37681	high
+SRX17877820	rn6	ATAC-Seq	ATAC-Seq	Liver	Liver	Whole mtDNA ATAC-seq MHC-ATP8#7-Liver	3948104	99.2	61.0	0	low
+SRX17877819	rn6	ATAC-Seq	ATAC-Seq	Cardiovascular	Heart	Whole mtDNA ATAC-seq MHC-ATP8#7-Heart	4132575	99.2	62.4	0	low
+SRX17877818	rn6	ATAC-Seq	ATAC-Seq	Gonad	Ovary	Whole mtDNA ATAC-seq MHC-ND1#37-Ovary	4150973	99.2	53.3	0	low
+SRX21909494	rn6	ATAC-Seq	ATAC-Seq	Neural	Brain	GSM7808601: Hippocampus, ISC9 S10; Rattus norvegicus; ATAC-seq	49299488	93.1	13.3	32394	medium
+SRX21909492	rn6	ATAC-Seq	ATAC-Seq	Neural	Brain	GSM7808599: Hippocampus, ISC11 S12; Rattus norvegicus; ATAC-seq	48664591	94.5	13.0	29473	medium
+SRX21909491	rn6	ATAC-Seq	ATAC-Seq	Neural	Brain	GSM7808598: Hippocampus, ISC10 S11; Rattus norvegicus; ATAC-seq	49075282	95.2	12.2	38893	medium
+SRX18528745	rn6	Bisulfite-Seq	Bisulfite-Seq	Gonad	Sperm	GSM6801730: spermatozoa 3; Rattus norvegicus; Bisulfite-Seq	96980325	94.9	5.1	446202	high
+SRX18528744	rn6	Bisulfite-Seq	Bisulfite-Seq	Gonad	Sperm	GSM6801729: spermatozoa 2; Rattus norvegicus; Bisulfite-Seq	61778275	95.9	3.9	179857	high
+SRX18528743	rn6	Bisulfite-Seq	Bisulfite-Seq	Gonad	Sperm	GSM6801728: spermatozoa 1; Rattus norvegicus; Bisulfite-Seq	60605897	95.8	3.7	366557	high
+SRX25981363	rn6	Bisulfite-Seq	Bisulfite-Seq	Neural	Brain cortex	GSM8497518: Sample 348ctx; Rattus norvegicus; Bisulfite-Seq	3921585	0.0	0.0	0	low
+SRX25981362	rn6	Bisulfite-Seq	Bisulfite-Seq	Placenta	Placenta	GSM8497517: Sample 340pl; Rattus norvegicus; Bisulfite-Seq	2113135	0.0	0.0	0	low
+SRX25981361	rn6	Bisulfite-Seq	Bisulfite-Seq	Neural	Brain cortex	GSM8497516: Sample 340ctx; Rattus norvegicus; Bisulfite-Seq	2752458	0.0	0.0	0	low
+SRX23868281	rn6	Bisulfite-Seq	Bisulfite-Seq	Neural	Hypothalamic arcuate nucleus	GSM8134144: RRBS HF HF5; Rattus norvegicus; Bisulfite-Seq	29010510	61.8	1.0	102735	medium
+SRX23868280	rn6	Bisulfite-Seq	Bisulfite-Seq	Neural	Hypothalamic arcuate nucleus	GSM8134143: RRBS HF HF4; Rattus norvegicus; Bisulfite-Seq	20423261	59.8	0.6	91730	medium
+SRX23868279	rn6	Bisulfite-Seq	Bisulfite-Seq	Neural	Hypothalamic arcuate nucleus	GSM8134142: RRBS HF HF3; Rattus norvegicus; Bisulfite-Seq	29567541	57.9	0.8	97955	medium
+SRX5094898	rn6	DNase-seq	DNase-Seq	Neural	Microglia	GSM3500809: GCM-treated rat microglia DNaseI-seq rep2; Rattus norvegicus; DNase-Hypersensitivity	418394862	13.8	79.0	990	high
+SRX5094897	rn6	DNase-seq	DNase-Seq	Neural	Microglia	GSM3500808: GCM-treated rat microglia DNaseI-seq rep1; Rattus norvegicus; DNase-Hypersensitivity	414775139	16.0	87.3	343	high
+SRX5094896	rn6	DNase-seq	DNase-Seq	Neural	Microglia	GSM3500807: LPS-treated rat microglia DNaseI-seq rep2; Rattus norvegicus; DNase-Hypersensitivity	422113303	13.3	82.0	1623	high
+SRX22320798	rn6	Histone	H3K4me1	Liver	Liver	GSM7874442: rat F H3K4me1; Rattus norvegicus; ChIP-Seq	58012489	91.7	22.5	2863	high
+SRX22320796	rn6	Histone	H3K27me3	Liver	Liver	GSM7874440: rat F H3K27me3; Rattus norvegicus; ChIP-Seq	56938340	88.0	21.1	3521	high
+SRX22320795	rn6	Histone	H3K4me3	Liver	Liver	GSM7874439: rat M H3K4me3; Rattus norvegicus; ChIP-Seq	65658517	87.6	30.6	25108	high
+SRX9702147	rn6	Histone	H3K4me3	Liver	Liver	GSM4979801: BNRIJHsd H3K4m3 Liver; Rattus norvegicus; ChIP-Seq	7450938	92.6	3.7	19456	low
+SRX9702146	rn6	Histone	H3K4me3	Gonad	Testis	GSM4979800: BNRIJHsd H3K4m3 Testis; Rattus norvegicus; ChIP-Seq	4615660	89.5	1.6	9265	low
+SRX8566509	rn6	Histone	H3	Gonad	Sperm	GSM4623351: GG14; Rattus norvegicus; ChIP-Seq	955711	95.7	0.4	58	low
+SRX24057076	rn6	Histone	H3K9me3	Cardiovascular	Cardiomyocytes	GSM8169715: NRVC,H3K9me3,ChIP6 [K9 B3]; Rattus norvegicus; ChIP-Seq	23414957	92.7	15.1	1062	medium
+SRX24057075	rn6	Histone	H3K9me3	Cardiovascular	Cardiomyocytes	GSM8169714: NRVC,H3K9me3,ChIP5 [K9 B2]; Rattus norvegicus; ChIP-Seq	21735289	91.9	14.6	976	medium
+SRX24057074	rn6	Histone	H3K9me3	Cardiovascular	Cardiomyocytes	GSM8169713: NRVC,H3K9me3,ChIP4 [K9 B1]; Rattus norvegicus; ChIP-Seq	22662592	93.1	15.0	1047	medium
+SRX5433269	rn6	RNA polymerase	RNA polymerase II	Cardiovascular	Ventricular fibroblasts	GSM3630976: pol2 veh; Rattus norvegicus; ChIP-Seq	60195950	89.1	18.3	18853	high
+SRX5433268	rn6	RNA polymerase	RNA polymerase II	Cardiovascular	Ventricular fibroblasts	GSM3630975: pol2 tgfb; Rattus norvegicus; ChIP-Seq	54156347	86.3	16.6	17595	high
+SRX5375026	rn6	RNA polymerase	RNA polymerase II	Pancreas	INS-1E	GSM3604468: PolIICON; Rattus norvegicus; ChIP-Seq	50913975	97.3	20.9	24615	high
+SRX10533685	rn6	RNA polymerase	RNA polymerase II	Liver	Liver	GSM5229687: Vehicle RNA Pol2 (pSer2) ChIP - GH1996 pulsatile 180; Rattus norvegicus; ChIP-Seq	26396228	47.6	28.9	1749	medium
+SRX10533684	rn6	RNA polymerase	RNA polymerase II	Liver	Liver	GSM5229686: Vehicle RNA Pol2 (pSer2) ChIP - GH1993 pulsatile 140; Rattus norvegicus; ChIP-Seq	31491527	53.6	29.4	3170	medium
+SRX10533683	rn6	RNA polymerase	RNA polymerase II	Liver	Liver	GSM5229685: Corticosterone RNA Pol2 (pSer2) ChIP - GH2012 constant 180 rep2; Rattus norvegicus; ChIP-Seq	25765184	39.3	29.5	1096	medium
+SRX16091421	rn6	TFs and others	Nkx2-1	Others	PCCL3	GSM6318165: PCCL3-rat-NKX21-IP; Rattus norvegicus; ChIP-Seq	97459639	90.9	19.1	65974	high
+SRX14775993	rn6	TFs and others	Creb3l1	Neural	Hypothalamus	GSM6032668: MCN water deprived 72 hours Creb3l1; Rattus norvegicus; ChIP-Seq	57483380	96.6	4.6	2317	high
+SRX11951810	rn6	TFs and others	Dbp	Pancreas	INS-1 832/13	GSM5543439: DBP ChIP-seq; Rattus norvegicus; ChIP-Seq	70466510	99.2	20.4	1753	high
+SRX9430848	rn6	TFs and others	Nr3c1	Neural	Hippocampus	GSM4879534: GR 4A training Corticosterone; Rattus norvegicus; ChIP-Seq	9108649	87.9	26.7	4624	low
+SRX9430830	rn6	TFs and others	Nr3c1	Neural	Hippocampus	GSM4879516: GR 2A no training Corticosterone; Rattus norvegicus; ChIP-Seq	9066834	86.3	26.9	4337	low
+SRX9430823	rn6	TFs and others	Nr3c1	Neural	Hippocampus	GSM4879509: GR 1C no training Vehicle; Rattus norvegicus; ChIP-Seq	9346884	90.0	21.2	7096	low
+SRX23223030	rn6	TFs and others	Myt1	Neural	CG-4	GSM8017007: CG4, MYT1, ChIP; Rattus norvegicus; ChIP-Seq	22788283	89.7	21.1	1147	medium
+SRX22542545	rn6	TFs and others	Srebf1	Neural	Sciatic Nerve	GSM7903810: SN SREBP1, IP; Rattus norvegicus; ChIP-Seq	30505033	91.0	70.8	2008	medium
+SRX22320803	rn6	TFs and others	Ctcf	Liver	Liver	GSM7874447: rat M CTCF; Rattus norvegicus; ChIP-Seq	44602761	86.3	21.8	32182	medium
+SRX13769930	sacCer3	ATAC-Seq	ATAC-Seq	Yeast strain	CGY28.52	GSM5814868: ATACseq profile from strain with 225 rDNA repeats [CLS rDNAcn ATAC strain89]; Saccharomyces cerevisiae; ATAC-seq	76157762	61.6	38.7	0	high
+SRX13769929	sacCer3	ATAC-Seq	ATAC-Seq	Yeast strain	CGY24.09	GSM5814867: ATACseq profile from strain with 156 rDNA repeats [CLS rDNAcn ATAC strain42]; Saccharomyces cerevisiae; ATAC-seq	51563964	61.3	36.4	0	high
+SRX13769927	sacCer3	ATAC-Seq	ATAC-Seq	Yeast strain	CGY29.01	GSM5814865: ATACseq profile from strain with 84 rDNA repeats [CLS rDNAcn ATAC strain105]; Saccharomyces cerevisiae; ATAC-seq	87400097	64.4	41.1	0	high
+SRX25736104	sacCer3	ATAC-Seq	ATAC-Seq	Yeast strain	BY4741	GSM8464302: ATAC ddmsn B; Saccharomyces cerevisiae; ATAC-seq	469309	89.8	14.9	807	low
+SRX25736103	sacCer3	ATAC-Seq	ATAC-Seq	Yeast strain	BY4741	GSM8464301: ATAC ddmsn A; Saccharomyces cerevisiae; ATAC-seq	1025133	89.0	19.8	1151	low
+SRX25736102	sacCer3	ATAC-Seq	ATAC-Seq	Yeast strain	BY4741	GSM8464300: ATAC BY B; Saccharomyces cerevisiae; ATAC-seq	662319	92.0	12.7	1035	low
+SRX22842947	sacCer3	ATAC-Seq	ATAC-Seq	Yeast strain	BY4742	ATAC-seq of yeast	30065331	32.6	22.4	0	medium
+SRX22842946	sacCer3	ATAC-Seq	ATAC-Seq	Yeast strain	BY4742	ATAC-seq of yeast	32753432	41.0	24.1	0	medium
+SRX22842945	sacCer3	ATAC-Seq	ATAC-Seq	Yeast strain	BY4742	ATAC-seq of yeast	25804738	49.8	28.5	0	medium
+SRX15183776	sacCer3	Bisulfite-Seq	Bisulfite-Seq	Yeast strain	S288C	GSM6111857: NOMe-Seq with CCMT; Saccharomyces cerevisiae; Bisulfite-Seq	5882975	94.2	28.4	0	low
+SRX3236115	sacCer3	Bisulfite-Seq	Bisulfite-Seq	Yeast strain	BY4742	GSM2801038: mC pYES2 DNMT2 A; Saccharomyces cerevisiae; Bisulfite-Seq	8268426	0.0	0.0	0	low
+SRX3236114	sacCer3	Bisulfite-Seq	Bisulfite-Seq	Yeast strain	BY4742	GSM2801037: mC pYES2 DIRS2 B; Saccharomyces cerevisiae; Bisulfite-Seq	9357410	94.7	27.2	0	low
+SRX4958465	sacCer3	Bisulfite-Seq	Bisulfite-Seq	Yeast strain	NRRL Y-567	WGBS of S. cerevisiae	31025898	92.6	173.4	1	medium
+ERX4244118	sacCer3	Bisulfite-Seq	Bisulfite-Seq	Yeast strain	YPH499	Illumina HiSeq 2000 paired end sequencing; WGBS on yeast expressing 3 or 4 murine DNMTs	13731464	93.6	93.7	68	medium
+ERX4244117	sacCer3	Bisulfite-Seq	Bisulfite-Seq	Yeast strain	YPH499	Illumina HiSeq 2000 paired end sequencing; WGBS on yeast expressing 3 or 4 murine DNMTs	13709599	93.5	93.1	443	medium
+SRX7037575	sacCer3	DNase-seq	DNase-Seq	Yeast strain	BY4741	GSM4135849: G170D 6h; Saccharomyces cerevisiae; DNase-Hypersensitivity	85998778	97.9	89.8	0	high
+SRX7037574	sacCer3	DNase-seq	DNase-Seq	Yeast strain	BY4741	GSM4135848: WT 6h; Saccharomyces cerevisiae; DNase-Hypersensitivity	85640912	99.1	88.3	0	high
+SRX2250625	sacCer3	DNase-seq	DNase-Seq	Yeast strain	W303	GSM2350622: G170DD15; Saccharomyces cerevisiae; DNase-Hypersensitivity	68551586	92.5	81.8	0	high
+SRX2250624	sacCer3	DNase-seq	DNase-Seq	Unclassified	Unclassified	GSM2350621: Hsp82D15; Saccharomyces cerevisiae; DNase-Hypersensitivity	43600727	91.5	78.8	0	medium
+SRX180134	sacCer3	DNase-seq	DNase-Seq	Yeast strain	BY4741	GSM989338: gcn5 deletion DNase-seq; Saccharomyces cerevisiae; DNase-Hypersensitivity	35765332	91.7	75.3	0	medium
+SRX180133	sacCer3	DNase-seq	DNase-Seq	Yeast strain	BY4741	GSM989337: sba1 deletion DNase-seq; Saccharomyces cerevisiae; DNase-Hypersensitivity	46782963	94.7	76.3	0	medium
+SRX24657559	sacCer3	Histone	H3K9ac	Yeast strain	YDA385	GSM8287134: TBP-AA Vehicle H3K9ac; Saccharomyces cerevisiae; ChIP-Seq	51004377	78.9	64.2	0	high
+SRX24657551	sacCer3	Histone	H3	Yeast strain	YDS2	GSM8287126: WT Vehicle H3; Saccharomyces cerevisiae; ChIP-Seq	58446145	91.9	66.9	0	high
+SRX17020189	sacCer3	Histone	H3	Yeast strain	BY4741	GSM6442882: WT H3; Saccharomyces cerevisiae; ChIP-Seq	93891898	23.6	22.4	0	high
+SRX22049197	sacCer3	Histone	H3K4me3	Yeast strain	W303	GSM7834084: H3K4me3 eSPAN- HXK2Δ; Saccharomyces cerevisiae; ChIP-Seq	946747	81.8	17.7	429	low
+SRX22049196	sacCer3	Histone	H3K4me3	Yeast strain	W303	GSM7834083: H3K4me3 eSPAN- HXK2Δ + PSF-HXK2; Saccharomyces cerevisiae; ChIP-Seq	1191113	75.4	17.7	469	low
+SRX22049195	sacCer3	Histone	H3K4me3	Yeast strain	W303	GSM7834082: H3K4me3 eSPAN- WT; Saccharomyces cerevisiae; ChIP-Seq	1457503	77.2	18.2	489	low
+SRX24657569	sacCer3	Histone	H3K9ac	Yeast strain	YJB338	GSM8287144: Sfp1-AA Ifh1-AA Vehicle H3K9ac; Saccharomyces cerevisiae; ChIP-Seq	19715878	87.6	65.2	0	medium
+SRX24657567	sacCer3	Histone	H3K9ac	Yeast strain	YYG826	GSM8287142: deltastb3deltatod6deltadot6 Vehicle H3K9ac; Saccharomyces cerevisiae; ChIP-Seq	27309324	70.2	52.3	0	medium
+SRX24657561	sacCer3	Histone	H3	Yeast strain	YDA385	GSM8287136: TBP-AA Vehicle H3; Saccharomyces cerevisiae; ChIP-Seq	43410867	91.3	59.5	0	medium
+SRX25055979	sacCer3	RNA polymerase	RNA polymerase II	Yeast strain	FZY858	GSM8352099: Rpb1ChIP edc3scd6 Replicate 3; Saccharomyces cerevisiae; ChIP-Seq	55166288	90.6	20.1	0	high
+SRX25055977	sacCer3	RNA polymerase	RNA polymerase II	Yeast strain	FZY858	GSM8352097: Rpb1ChIP edc3scd6 Replicate 1; Saccharomyces cerevisiae; ChIP-Seq	50420119	88.3	14.8	0	high
+SRX25055975	sacCer3	RNA polymerase	RNA polymerase II	Yeast strain	W303	GSM8352095: Rpb1ChIP WT Replicate 2; Saccharomyces cerevisiae; ChIP-Seq	55501729	89.5	14.8	0	high
+SRX25308073	sacCer3	RNA polymerase	RNA polymerase II	Yeast strain	KY4302/KL02	GSM8394801: Wt, INPUT, IP1, Rep2; Saccharomyces cerevisiae; Kluyveromyces lactis; ChIP-Seq	7424271	83.8	13.5	0	low
+SRX25308072	sacCer3	RNA polymerase	RNA polymerase II	Yeast strain	KY4302/KL02	GSM8394800: Wt, INPUT, IP1, Rep1; Saccharomyces cerevisiae; Kluyveromyces lactis; ChIP-Seq	6993041	85.5	12.4	0	low
+SRX23576101	sacCer3	RNA polymerase	RNA polymerase II	Yeast strain	KY4302/KL02	GSM8070520: Wt, INPUT, Rep2; Saccharomyces cerevisiae; Kluyveromyces lactis; ChIP-Seq	7424271	83.8	13.5	0	low
+SRX25308071	sacCer3	RNA polymerase	RNA polymerase II	Yeast strain	KY4302/KL02	GSM8394799: Wt, antiFLAG, IP1, Rep2; Saccharomyces cerevisiae; Kluyveromyces lactis; ChIP-Seq	15138652	89.3	14.3	0	medium
+SRX25308070	sacCer3	RNA polymerase	RNA polymerase II	Yeast strain	KY4302/KL02	GSM8394798: Wt, antiFLAG, IP1, Rep1; Saccharomyces cerevisiae; Kluyveromyces lactis; ChIP-Seq	15189164	90.6	13.3	0	medium
+SRX25055978	sacCer3	RNA polymerase	RNA polymerase II	Yeast strain	FZY858	GSM8352098: Rpb1ChIP edc3scd6 Replicate 2; Saccharomyces cerevisiae; ChIP-Seq	48495982	91.1	17.6	0	medium
+SRX24657565	sacCer3	TFs and others	IFH1	Yeast strain	YDA385	GSM8287140: TBP-AA Vehicle Ifh1; Saccharomyces cerevisiae; ChIP-Seq	61817249	27.4	56.7	0	high
+SRX23485664	sacCer3	TFs and others	GAL11	Yeast strain	BY4742	GSM8057302: Med15 2h; Saccharomyces cerevisiae; ChIP-Seq	178928494	58.9	68.3	0	high
+SRX23485663	sacCer3	TFs and others	MED1	Yeast strain	BY4742	GSM8057301: Med1 2h; Saccharomyces cerevisiae; ChIP-Seq	179557171	65.7	55.1	0	high
+SRX25449668	sacCer3	TFs and others	Epitope tags	Unclassified	Unclassified	GSM8417130: Htz1 Swr1∆11-Bdf1 Yaf9-YEATS3A rep2; Saccharomyces cerevisiae; ChIP-Seq	5315457	86.2	4.7	0	low
+SRX25449666	sacCer3	TFs and others	Epitope tags	Unclassified	Unclassified	GSM8417128: Htz1 Yaf9-YEATS3A rep2; Saccharomyces cerevisiae; ChIP-Seq	4290641	83.2	4.6	0	low
+SRX25449664	sacCer3	TFs and others	Epitope tags	Unclassified	Unclassified	GSM8417126: Htz1 Swr1∆11-Bdf1 rep2; Saccharomyces cerevisiae; ChIP-Seq	5968630	87.2	4.6	0	low
+SRX25449667	sacCer3	TFs and others	Epitope tags	Unclassified	Unclassified	GSM8417129: Htz1 Swr1∆11-Bdf1 Yaf9-YEATS3A rep1; Saccharomyces cerevisiae; ChIP-Seq	15201994	87.6	13.6	0	medium
+SRX25449665	sacCer3	TFs and others	Epitope tags	Unclassified	Unclassified	GSM8417127: Htz1 Yaf9-YEATS3A rep1; Saccharomyces cerevisiae; ChIP-Seq	15443655	87.5	10.8	0	medium
+SRX25449661	sacCer3	TFs and others	Epitope tags	Unclassified	Unclassified	GSM8417123: Htz1 WT rep1; Saccharomyces cerevisiae; ChIP-Seq	18863231	86.4	8.6	0	medium
