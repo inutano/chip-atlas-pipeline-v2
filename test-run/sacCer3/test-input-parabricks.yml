@@ -1,0 +1,36 @@
+sample_id: SRX22049197
+
+fastq_fwd:
+  class: File
+  path: SRR26341472_1.fastq
+
+fastq_rev:
+  class: File
+  path: SRR26341472_2.fastq
+
+genome_fasta:
+  class: File
+  path: bwa-index/sacCer3.fa
+  secondaryFiles:
+    - class: File
+      path: bwa-index/sacCer3.fa.fai
+    - class: File
+      path: bwa-index/sacCer3.fa.amb
+    - class: File
+      path: bwa-index/sacCer3.fa.ann
+    - class: File
+      path: bwa-index/sacCer3.fa.bwt
+    - class: File
+      path: bwa-index/sacCer3.fa.pac
+    - class: File
+      path: bwa-index/sacCer3.fa.sa
+
+chrom_sizes:
+  class: File
+  path: chrom.sizes
+
+genome_size: "1.2e7"
+
+format: BAMPE
+
+num_gpus: 1

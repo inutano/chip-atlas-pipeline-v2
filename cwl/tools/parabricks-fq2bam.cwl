@@ -75,7 +75,7 @@ arguments:
         if (inputs.fastq_rev) {
           cmd += " " + inputs.fastq_rev.path;
         }
-        cmd += " \"@RG\\tID:" + inputs.sample_id + "\\tSM:" + inputs.sample_id + "\\tPL:ILLUMINA\"";
+        cmd += " \"@RG\\tID:" + inputs.sample_id + "\\tSM:" + inputs.sample_id + "\\tPL:ILLUMINA\\tPU:" + inputs.sample_id + "\\tLB:" + inputs.sample_id + "\"";
         return cmd;
       }
     shellQuote: false

@@ -121,7 +121,7 @@ steps:
         valueFrom: $(self).05
       genome_size: genome_size
       qvalue:
-        default: 0.00001
+        default: "1e-05"
       format: format
     out: [narrow_peaks, summits, xls]
 
@@ -137,7 +137,7 @@ steps:
         valueFrom: $(self).10
       genome_size: genome_size
       qvalue:
-        default: 0.0000000001
+        default: "1e-10"
       format: format
     out: [narrow_peaks, summits, xls]
 
@@ -153,7 +153,7 @@ steps:
         valueFrom: $(self).20
       genome_size: genome_size
       qvalue:
-        default: 0.00000000000000000001
+        default: "1e-20"
       format: format
     out: [narrow_peaks, summits, xls]
 
