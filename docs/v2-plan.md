@@ -266,6 +266,50 @@ Metrics:
 - `validate-vs-v1.py`: takes two BED files, reports peak count, overlap stats, generates comparison plots
 - Run as part of the test suite
 
+## Progress Log
+
+### 2026-03-20: Initial pipeline implementation and testing
+
+**Completed:**
+
+1. **CWL tool definitions** (11 tools):
+   - `fasterq-dump.cwl` — SRA download (sra-tools 3.0.10)
+   - `bwa-mem2-align.cwl` — alignment (bwa-mem2 2.2.1)
+   - `samtools-sort.cwl` — name/coordinate sort (samtools 1.19.2)
+   - `samtools-fixmate.cwl` — add mate score tags for markdup
+   - `samtools-markdup.cwl` — duplicate removal (replaces deprecated rmdup)
+   - `samtools-mapped-count.cwl` — read count for RPM normalization
+   - `bedtools-genomecov.cwl` — BedGraph coverage (bedtools 2.31.1)
+   - `bedgraphtobigwig.cwl` — BedGraph → BigWig (UCSC tools 482)
+   - `macs3-callpeak.cwl` — peak calling without control (MACS3 3.0.4)
+   - `bedtobigbed.cwl` — BED → BigBed (UCSC tools 482)
+   - `parabricks-fq2bam.cwl` — GPU-accelerated align+sort+dedup (Parabricks 4.3.1)
+
+2. **Two workflow variants**:
+   - `option-a.cwl` — CPU pipeline (bwa-mem2 → sort → fixmate → sort → markdup → ...)
+   - `option-a-parabricks.cwl` — GPU pipeline (fq2bam replaces align+sort+markdup)
+
+3. **Validation sample set**: 301 samples selected across 6 genomes × 6 experiment types × 3 read tiers
+
+4. **First test run** on sacCer3 (SRX22049197, H3K4me3, ~950K reads):
+
+| Threshold | v1 (MACS2 + Bowtie2) | v2 bwa-mem2 | v2 Parabricks |
+|-----------|---------------------|-------------|---------------|
+| q 1e-05   | 429                 | 539         | 539           |
+| q 1e-10   | —                   | 396         | 397           |
+| q 1e-20   | —                   | 286         | 286           |
+
+- bwa-mem2 and Parabricks produce nearly identical results (±1 peak)
+- v2 finds ~25% more peaks than v1 at q 1e-05 (expected: bwa-mem2 is more sensitive than Bowtie2)
+
+**Issues found and fixed during testing:**
+- `samtools markdup` requires `fixmate -m` first → added name-sort → fixmate → coord-sort flow
+- CWL `float` type truncates tiny q-values (1e-10, 1e-20) to 0 → changed to `string` type
+- Several Biocontainers Docker image tags didn't exist → verified and fixed all tags
+- Parabricks requires `PU` and `LB` fields in read group → added to fq2bam tool
+
+---
+
 ## Phase 5: Production Deployment & Migration
 
 ### 5.1 Decision Point

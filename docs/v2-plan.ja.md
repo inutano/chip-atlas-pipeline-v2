@@ -266,6 +266,50 @@ chip-atlas-pipeline-v2/
 - `validate-vs-v1.py`: 2つのBEDファイルを入力し、ピーク数・オーバーラップ統計を報告、比較プロットを生成
 - テストスイートの一部として実行
 
+## 進捗ログ
+
+### 2026-03-20: パイプライン初期実装とテスト
+
+**完了項目:**
+
+1. **CWLツール定義**（11ツール）:
+   - `fasterq-dump.cwl` — SRAダウンロード (sra-tools 3.0.10)
+   - `bwa-mem2-align.cwl` — アライメント (bwa-mem2 2.2.1)
+   - `samtools-sort.cwl` — name/coordinateソート (samtools 1.19.2)
+   - `samtools-fixmate.cwl` — markdup用のmate scoreタグ追加
+   - `samtools-markdup.cwl` — 重複除去（非推奨のrmdupを置換）
+   - `samtools-mapped-count.cwl` — RPM正規化用のリード数カウント
+   - `bedtools-genomecov.cwl` — BedGraphカバレッジ (bedtools 2.31.1)
+   - `bedgraphtobigwig.cwl` — BedGraph → BigWig (UCSC tools 482)
+   - `macs3-callpeak.cwl` — コントロールなしのピークコール (MACS3 3.0.4)
+   - `bedtobigbed.cwl` — BED → BigBed (UCSC tools 482)
+   - `parabricks-fq2bam.cwl` — GPU高速化アライメント+ソート+重複除去 (Parabricks 4.3.1)
+
+2. **2つのワークフローバリアント**:
+   - `option-a.cwl` — CPUパイプライン（bwa-mem2 → sort → fixmate → sort → markdup → ...）
+   - `option-a-parabricks.cwl` — GPUパイプライン（fq2bamがalign+sort+markdupを置換）
+
+3. **検証用サンプルセット**: 6ゲノム × 6実験タイプ × 3リード数階層で301サンプルを選定
+
+4. **初回テスト実行** sacCer3 (SRX22049197, H3K4me3, 約95万リード):
+
+| 閾値 | v1 (MACS2 + Bowtie2) | v2 bwa-mem2 | v2 Parabricks |
+|------|---------------------|-------------|---------------|
+| q 1e-05 | 429             | 539         | 539           |
+| q 1e-10 | —               | 396         | 397           |
+| q 1e-20 | —               | 286         | 286           |
+
+- bwa-mem2とParabricksはほぼ同一の結果（±1ピーク）
+- v2はq 1e-05でv1より約25%多くのピークを検出（bwa-mem2がBowtie2より高感度なため想定通り）
+
+**テスト中に発見・修正した問題:**
+- `samtools markdup`は事前に`fixmate -m`が必要 → name-sort → fixmate → coord-sortフローを追加
+- CWLの`float`型が極小のq値（1e-10、1e-20）を0に丸める → `string`型に変更
+- 複数のBiocontainers Dockerイメージタグが存在しない → 全タグを検証・修正
+- Parabricksはリードグループに`PU`と`LB`フィールドが必須 → fq2bamツールに追加
+
+---
+
 ## Phase 5: 本番デプロイとマイグレーション
 
 ### 5.1 判断ポイント
