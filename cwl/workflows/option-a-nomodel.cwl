@@ -2,12 +2,11 @@
 cwlVersion: v1.2
 class: Workflow
 
-label: "ChIP-Atlas Option A - Fast Classic"
+label: "ChIP-Atlas Option A - Fast Classic (--nomodel)"
 doc: |
   ChIP-Atlas v2 primary processing pipeline (Option A: Fast Classic).
-  Same steps as v1 with modern tool replacements for speed.
-  No QC, no trimming, single peak caller for all experiment types.
-  Peaks called WITHOUT background/input control (ChIP-Atlas policy).
+  Same as option-a.cwl but with --nomodel --extsize 200 for MACS3.
+  Skips fragment size model building to avoid failures on low-signal samples.
 
   Steps: SRA download → BWA-MEM2 align → name-sort → fixmate → coord-sort
          → markdup → bedtools genomecov → bedGraphToBigWig
@@ -157,6 +156,8 @@ steps:
       qvalue:
         default: "1e-05"
       format: format
+      nomodel:
+        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
@@ -173,6 +174,8 @@ steps:
       qvalue:
         default: "1e-10"
       format: format
+      nomodel:
+        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
@@ -189,6 +192,8 @@ steps:
       qvalue:
         default: "1e-20"
       format: format
+      nomodel:
+        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
