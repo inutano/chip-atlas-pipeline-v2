@@ -8,7 +8,7 @@ set -eo pipefail
 
 BASE_DIR="$HOME/repos/chip-atlas-pipeline-v2"
 TEST_DIR="/data3/chip-atlas-v2/test-run"
-CPU_TIMING="$BASE_DIR/data/benchmark-timing.tsv"
+CPU_TIMING="$BASE_DIR/data/benchmark-timing-nomodel.tsv"
 WORKFLOW="$BASE_DIR/cwl/workflows/option-a-parabricks.cwl"
 SRA_IMG="quay.io/biocontainers/sra-tools:3.0.10--h9f5acd7_0"
 TIMING_LOG="$BASE_DIR/data/benchmark-timing-parabricks.tsv"
@@ -92,8 +92,18 @@ for accession in $cpu_samples; do
     echo "  Download time: ${dl_sec}s"
   fi
 
-  # Determine SE vs PE from cached files
-  fq_count=$(ls "$cache_dir"/${srr}*.fastq 2>/dev/null | wc -w)
+  # Determine forward read file
+  if [ -f "${cache_dir}/${srr}_1.fastq" ]; then
+    fwd="${cache_dir}/${srr}_1.fastq"
+  elif [ -f "${cache_dir}/${srr}.fastq" ]; then
+    fwd="${cache_dir}/${srr}.fastq"
+  else
+    fwd=$(ls "${cache_dir}/${srr}"*.fastq 2>/dev/null | head -1)
+    if [ -z "$fwd" ]; then
+      echo "[WARN] No FASTQ found for $srr, skipping"
+      continue
+    fi
+  fi
 
   # Build CWL input YAML
   input_yml="$work_dir/input.yml"
@@ -101,10 +111,10 @@ for accession in $cpu_samples; do
 sample_id: ${accession}
 fastq_fwd:
   class: File
-  path: ${cache_dir}/${srr}_1.fastq
+  path: ${fwd}
 YAML
 
-  if [ "$fq_count" -ge 2 ] && [ -f "${cache_dir}/${srr}_2.fastq" ]; then
+  if [ -f "${cache_dir}/${srr}_2.fastq" ]; then
     cat >> "$input_yml" <<YAML
 fastq_rev:
   class: File

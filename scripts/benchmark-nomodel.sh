@@ -54,14 +54,22 @@ tail -n +2 "$SAMPLES_TSV" | awk -F'\t' -v g="$TARGET_GENOME" '$2==g' | while IFS
   dl_end=$(date +%s)
   dl_sec=$((dl_end - dl_start))
 
-  # Determine forward read file
+  # Determine forward read file — handle various naming conventions:
+  #   PE: SRR_1.fastq + SRR_2.fastq
+  #   SE: SRR.fastq
+  #   Unusual: SRR_subreads.fastq, etc.
   if [ -f "${cache_dir}/${srr}_1.fastq" ]; then
     fwd="${cache_dir}/${srr}_1.fastq"
   elif [ -f "${cache_dir}/${srr}.fastq" ]; then
     fwd="${cache_dir}/${srr}.fastq"
   else
-    echo "[ERROR] No FASTQ found for $srr, skipping"
-    continue
+    # Find any FASTQ matching this SRR
+    fwd=$(ls "${cache_dir}/${srr}"*.fastq 2>/dev/null | head -1)
+    if [ -z "$fwd" ]; then
+      echo "[WARN] No FASTQ found for $srr, skipping"
+      continue
+    fi
+    echo "[INFO] Using non-standard FASTQ: $(basename "$fwd")"
   fi
 
   # Build CWL input YAML

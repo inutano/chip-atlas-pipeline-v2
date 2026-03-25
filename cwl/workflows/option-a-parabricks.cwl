@@ -123,6 +123,8 @@ steps:
       qvalue:
         default: "1e-05"
       format: format
+      nomodel:
+        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
@@ -139,6 +141,8 @@ steps:
       qvalue:
         default: "1e-10"
       format: format
+      nomodel:
+        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
@@ -155,6 +159,8 @@ steps:
       qvalue:
         default: "1e-20"
       format: format
+      nomodel:
+        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================

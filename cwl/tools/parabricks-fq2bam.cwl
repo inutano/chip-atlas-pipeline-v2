@@ -67,16 +67,15 @@ inputs:
     doc: "Number of GPUs to use"
 
 arguments:
-  - prefix: --in-fq
-    position: 2
+  - position: 2
     valueFrom: |
       ${
-        var cmd = inputs.fastq_fwd.path;
+        var rg = "\"@RG\\tID:" + inputs.sample_id + "\\tSM:" + inputs.sample_id + "\\tPL:ILLUMINA\\tPU:" + inputs.sample_id + "\\tLB:" + inputs.sample_id + "\"";
         if (inputs.fastq_rev) {
-          cmd += " " + inputs.fastq_rev.path;
+          return "--in-fq " + inputs.fastq_fwd.path + " " + inputs.fastq_rev.path + " " + rg;
+        } else {
+          return "--in-se-fq " + inputs.fastq_fwd.path + " " + rg;
         }
-        cmd += " \"@RG\\tID:" + inputs.sample_id + "\\tSM:" + inputs.sample_id + "\\tPL:ILLUMINA\\tPU:" + inputs.sample_id + "\\tLB:" + inputs.sample_id + "\"";
-        return cmd;
       }
     shellQuote: false
   - prefix: --out-bam

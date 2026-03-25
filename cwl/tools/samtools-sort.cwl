@@ -52,7 +52,4 @@ outputs:
       - pattern: .bai
         required: false
     outputBinding:
-      glob: |
-        ${
-          return inputs.by_name ? "*.namesorted.bam" : "*.sorted.bam";
-        }
+      glob: "$(inputs.sample_id + (inputs.by_name ? '.namesorted.bam' : '.sorted.bam'))"
