@@ -308,6 +308,77 @@ Metrics:
 - Several Biocontainers Docker image tags didn't exist → verified and fixed all tags
 - Parabricks requires `PU` and `LB` fields in read group → added to fq2bam tool
 
+### 2026-03-25: ce11 full benchmark complete
+
+**Benchmark scope**: 46 ce11 samples (6 experiment types × 3 read tiers × ~3 samples), 1 PacBio sample excluded.
+
+#### Three pipelines tested
+
+| Pipeline | Workflow | Description |
+|----------|----------|-------------|
+| CPU (default) | `option-a.cwl` | bwa-mem2, MACS3 with model building |
+| CPU (nomodel) | `option-a-nomodel.cwl` | bwa-mem2, MACS3 with `--nomodel --extsize 200` |
+| GPU (Parabricks) | `option-a-parabricks.cwl` | Parabricks fq2bam, MACS3 with `--nomodel` |
+
+#### Success rates
+
+| Pipeline | OK | Failed | Notes |
+|----------|-----|--------|-------|
+| CPU (default) | 34 | 12 | 6 MACS3 model failures, 4 SE naming, 1 sort glob, 1 PacBio |
+| CPU (nomodel) | 45 | 1 | Only PacBio sample failed |
+| GPU (Parabricks) | 45 | 0 | All passed after SE fix (`--in-se-fq`) |
+
+**Conclusion**: `--nomodel --extsize 200` eliminates all MACS3 model-building failures with no loss of accuracy.
+
+#### Processing time (pipeline only, excluding download)
+
+| Read Tier | Samples | CPU (nomodel) | GPU (Parabricks) | Speedup |
+|-----------|---------|---------------|-------------------|---------|
+| Low (<10M) | 15 | 7 min | 5 min | 1.25x |
+| Medium (10-50M) | 15 | 16 min | 11 min | 1.47x |
+| High (>50M) | 15 | 43 min | 31 min | 1.37x |
+| **Overall** | **45** | **22 min** | **16 min** | **1.37x** |
+
+Compared to v1's ~1 day/sample, the v2 pipeline is **~65x faster** (CPU) to **~90x faster** (GPU) on ce11.
+
+#### Peak count comparison
+
+**nomodel vs default model (CPU, q 1e-05)**:
+- ATAC-Seq, DNase-seq, Histone, TFs: **identical peaks** (0 difference)
+- RNA polymerase: **<2% difference** (minor, due to estimated vs fixed fragment size)
+- `--nomodel` is safe to use as the default
+
+**CPU vs GPU (q 1e-05)**:
+- 45 samples compared
+- **0.9% total peak count difference** (171,677 vs 173,185)
+- Most samples differ by ±1-15 peaks
+- bwa-mem2 and Parabricks (BWA-MEM) produce essentially identical results
+
+#### Download speed
+
+| Method | Speed | Notes |
+|--------|-------|-------|
+| fasterq-dump (NCBI) | Baseline | Single-threaded SRA conversion |
+| aria2c + ENA | **2.5x faster** | 8 parallel HTTP connections, pre-generated FASTQ |
+| aria2c + DDBJ | Available for DRR | Uses cached fastqlist for path lookup |
+
+Download routing by accession prefix: DRR → DDBJ → ENA → fasterq-dump, SRR/ERR → ENA → fasterq-dump.
+
+#### Issues found and fixed
+
+| Issue | Fix |
+|-------|-----|
+| MACS3 model building fails on low-signal samples | Added `--nomodel --extsize 200` |
+| Single-end FASTQ naming (`SRR.fastq` vs `SRR_1.fastq`) | Flexible FASTQ detection in scripts |
+| Parabricks SE reads need `--in-se-fq` not `--in-fq` | Conditional argument in CWL tool |
+| ENA `_subreads.fastq` naming for PacBio data | Flexible FASTQ detection + exclude PacBio from validation |
+| CWL `float` truncates small q-values | Changed to `string` type |
+| MACS3 `xls` output missing when no peaks found | Made output optional (`File?`) |
+
+#### Data quality observation
+
+- SRX2170085 (ce11, Bisulfite-Seq) is a **PacBio RS II** sample mislabeled in SRA metadata. It has 4.5% mapping rate against a short-read index. The v1 pipeline should have filtered this by instrument model. **Recommendation**: add instrument filter to the v2 sample selection to exclude PacBio/ONT samples.
+
 ---
 
 ## Phase 5: Production Deployment & Migration
