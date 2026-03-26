@@ -379,6 +379,55 @@ Download routing by accession prefix: DRR → DDBJ → ENA → fasterq-dump, SRR
 
 - SRX2170085 (ce11, Bisulfite-Seq) is a **PacBio RS II** sample mislabeled in SRA metadata. It has 4.5% mapping rate against a short-read index. The v1 pipeline should have filtered this by instrument model. **Recommendation**: add instrument filter to the v2 sample selection to exclude PacBio/ONT samples.
 
+### 2026-03-27: hg38 benchmark complete
+
+**Benchmark scope**: 18 hg38 samples (1 per experiment type × read tier), both CPU and GPU pipelines run in parallel.
+
+#### Processing time
+
+| Read Tier | Samples | CPU (nomodel) | GPU (Parabricks) | Speedup |
+|-----------|---------|---------------|-------------------|---------|
+| Low (<10M) | 6 | 7 min | 5 min | 1.4x |
+| Medium (10-50M) | 6 | 60 min | 31 min | 1.9x |
+| High (>50M) | 6 | 118 min | 72 min | 1.6x |
+| **Overall** | **18** | **61 min** | **36 min** | **1.7x** |
+
+GPU speedup is larger on hg38 (1.7x) than ce11 (1.37x) — GPU acceleration benefits more from larger genomes.
+
+Notable outliers:
+- Bisulfite-Seq 45M reads: CPU 91 min vs GPU **8 min** (10.2x speedup)
+- Bisulfite-Seq 314M reads: CPU 214 min vs GPU **67 min** (3.1x speedup)
+- Some samples showed CPU faster than GPU (ATAC-Seq 59M, Histone 123M) — likely due to GPU/CPU resource contention from running both benchmarks in parallel
+
+#### Peak count comparison (CPU vs GPU, q 1e-05)
+
+- 14 samples compared (1 GPU output missing)
+- **0.8% total peak count difference** (168,493 CPU vs 167,069 GPU)
+- Most samples differ by <1%, consistent with ce11 results
+- One outlier: SRX26159220 (TFs) differed by ~1,500 peaks (7%) — worth investigating
+
+#### Processing time estimates for full ChIP-Atlas reprocessing (hg38)
+
+Based on average pipeline times (excluding download):
+
+| Scenario | Per sample | 200K hg38 samples | With download |
+|----------|-----------|-------------------|---------------|
+| CPU (1 node, 8 cores) | 61 min | ~23 years | + download time |
+| GPU (1 node, 1 GPU) | 36 min | ~14 years | + download time |
+| CPU cluster (10 nodes) | 61 min | ~2.3 years | + download time |
+| GPU cluster (10 GPUs) | 36 min | ~1.4 years | + download time |
+| CPU cluster (100 nodes) | 61 min | ~84 days | + download time |
+
+**Conclusion**: Processing at scale requires significant parallelism. A cluster with 100+ CPU nodes or 10+ GPU nodes is needed for a reasonable reprocessing timeline.
+
+#### Comparison: ce11 vs hg38 scaling
+
+| Metric | ce11 (100MB genome) | hg38 (3GB genome) | Ratio |
+|--------|--------------------|--------------------|-------|
+| CPU avg pipeline | 22 min | 61 min | 2.8x |
+| GPU avg pipeline | 16 min | 36 min | 2.3x |
+| GPU speedup | 1.37x | 1.7x | GPU benefits more on larger genomes |
+
 ---
 
 ## Phase 5: Production Deployment & Migration
