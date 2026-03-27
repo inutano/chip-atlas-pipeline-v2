@@ -35,7 +35,7 @@ CWL Zen is a minimal, fast CWL runner that supports a well-defined subset of CWL
 |-------|-----------|-------|
 | `CommandLineTool` | Yes | Core |
 | `Workflow` | Yes | Core |
-| `ExpressionTool` | Yes | Shell-based (see below) |
+| `ExpressionTool` | **No** | Push all transformations to shell inside CommandLineTools |
 
 ### CommandLineTool Features
 
@@ -115,31 +115,35 @@ $(self[0].contents)         → file contents (with loadContents)
 - Nested property access works: `$(inputs.file.path)`
 - No arithmetic, no function calls, no conditionals
 
-### ExpressionTool (Shell-based)
+### ExpressionTool — Not Supported
 
-CWL Zen reimagines ExpressionTool as a lightweight shell transformation:
+ExpressionTool is excluded from CWL Zen. All data transformations between steps should be done inside CommandLineTools using shell commands.
+
+**Example: RPM scale factor calculation**
+
+Instead of an ExpressionTool that computes `1000000 / mapped_reads`, embed the calculation in the consuming tool:
 
 ```yaml
-class: ExpressionTool
-requirements:
-  ShellCommandRequirement: {}
-
-expression:
-  shellCommand: |
-    echo $(inputs.mapped_count) | awk '{printf "%.10f\n", 1000000/$1}'
-
-inputs:
-  mapped_count:
-    type: long
-
+# samtools-mapped-count.cwl outputs a File (not a parsed int)
 outputs:
-  scale_factor:
-    type: string
+  count_file:
+    type: File
+    outputBinding:
+      glob: mapped_count.txt
+
+# bedtools-genomecov.cwl reads the file in its shell command
+arguments:
+  - shellQuote: false
+    valueFrom: |
+      SCALE=$(awk '{printf "%.10f", 1000000/$1}' $(inputs.count_file.path))
+      bedtools genomecov -bg -ibam $(inputs.bam.path) -scale $SCALE ...
 ```
 
-The shell command receives inputs as parameter references, stdout is captured as the output. This replaces JS expressions with shell commands — keeping the transformation explicit and debuggable.
-
-**Note:** This is a CWL Zen extension, not standard CWL. Standard ExpressionTool uses JS `expression` field. CWL Zen translates `expression` to a shell command — documents using this feature are not portable to cwltool without modification.
+**Design rationale:**
+- Every transformation is inside a CommandLineTool — one execution model, not two
+- Shell commands are explicit, debuggable, and don't need a special interpreter
+- Keeps the runner simpler — no need to handle a third class type
+- If ExpressionTool is needed in the future, it can be added back as a shell-based extension
 
 ## Architecture
 
@@ -261,6 +265,10 @@ cwl-zen-lint workflow.cwl
 
 ## Relationship to CWL v1.2
 
-CWL Zen documents are a **strict subset** of CWL v1.2 (with one exception: shell-based ExpressionTool). Any CWL Zen document should also be valid under cwltool (minus the ExpressionTool extension). The reverse is not true — cwltool documents with JS are not CWL Zen compatible.
+CWL Zen documents are a **strict subset** of CWL v1.2. Any CWL Zen document is valid CWL v1.2 and can be executed by cwltool or any compliant runner. The reverse is not true — CWL documents with InlineJavascriptRequirement or ExpressionTool are not CWL Zen compatible.
 
-A `cwl-zen-lint` tool can validate this: it checks for InlineJavascriptRequirement, JS expressions in valueFrom/when/outputEval, and reports incompatibilities.
+`cwl-zen-lint` validates compatibility by checking for:
+- InlineJavascriptRequirement
+- ExpressionTool usage
+- JS expressions in valueFrom/when/outputEval
+- Unsupported features (nested_crossproduct, etc.)
