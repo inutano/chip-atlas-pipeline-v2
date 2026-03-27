@@ -308,7 +308,9 @@ Metrics:
 - Several Biocontainers Docker image tags didn't exist → verified and fixed all tags
 - Parabricks requires `PU` and `LB` fields in read group → added to fq2bam tool
 
-### 2026-03-25: ce11 full benchmark complete
+### 2026-03-25: ce11 full benchmark complete (Option A "Fast Classic")
+
+**All benchmarks below are Option A "Fast Classic"** — same processing steps as v1 (no QC, no trimming, single peak caller), with modern tool replacements for speed. Option B "Modern" (with fastp, experiment-type-specific callers) has not been tested yet.
 
 **Benchmark scope**: 46 ce11 samples (6 experiment types × 3 read tiers × ~3 samples), 1 PacBio sample excluded.
 
@@ -379,9 +381,9 @@ Download routing by accession prefix: DRR → DDBJ → ENA → fasterq-dump, SRR
 
 - SRX2170085 (ce11, Bisulfite-Seq) is a **PacBio RS II** sample mislabeled in SRA metadata. It has 4.5% mapping rate against a short-read index. The v1 pipeline should have filtered this by instrument model. **Recommendation**: add instrument filter to the v2 sample selection to exclude PacBio/ONT samples.
 
-### 2026-03-27: hg38 benchmark complete
+### 2026-03-27: hg38 benchmark complete (Option A "Fast Classic")
 
-**Benchmark scope**: 18 hg38 samples (1 per experiment type × read tier), both CPU and GPU pipelines run in parallel.
+**Benchmark scope**: 18 hg38 samples (1 per experiment type × read tier), both CPU and GPU pipelines run in parallel. All using Option A "Fast Classic" with `--nomodel`.
 
 #### Processing time
 
@@ -428,9 +430,9 @@ Based on average pipeline times (excluding download):
 | GPU avg pipeline | 16 min | 36 min | 2.3x |
 | GPU speedup | 1.37x | 1.7x | GPU benefits more on larger genomes |
 
-### 2026-03-27: v1 vs v2 Peak Overlap Analysis
+### 2026-03-27: v1 vs v2 Peak Overlap Analysis (Option A "Fast Classic")
 
-Downloaded v1 BED files from chip-atlas.dbcls.jp and compared peak overlap with v2 results using bedtools intersect.
+Downloaded v1 BED files from chip-atlas.dbcls.jp and compared peak overlap with v2 Option A results using bedtools intersect.
 
 #### ce11 (35 samples with v1 peaks + 10 with v1=0)
 
