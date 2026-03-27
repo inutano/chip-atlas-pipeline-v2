@@ -150,6 +150,20 @@ Metrics to compare:
 
 **Key difference**: Option A keeps the same steps as v1 (no QC, no trimming, single peak caller for all types). Option B adds QC/trimming and uses experiment-type-specific peak callers.
 
+### Pipeline Diagrams
+
+**Option A "Fast Classic" (CPU, --nomodel):**
+
+![Option A nomodel](diagrams/option-a-nomodel.png)
+
+**Option B "Modern" (CPU):**
+
+![Option B](diagrams/option-b.png)
+
+**Option A Parabricks (GPU):**
+
+![Option A Parabricks](diagrams/option-a-parabricks.png)
+
 ### 1.4 CUT&Tag Considerations (Option B only)
 
 - CUT&Tag has lower background than ChIP-seq — SEACR is the recommended peak caller
