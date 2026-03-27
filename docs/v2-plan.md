@@ -474,13 +474,37 @@ Downloaded v1 BED files from chip-atlas.dbcls.jp and compared peak overlap with 
 - SRX25595131 (Histone, 10M reads, SE): v1=8,797 peaks → v2=201 peaks (2% overlap). This is a spike-in experiment (HeLa S3 with yeast spike-in). The dramatic drop may be due to SE handling differences between Bowtie2/MACS2 and bwa-mem2/MACS3. Needs further investigation.
 - SRX25254554 (TFs, 10M reads): v1=28,075 → v2=20,239 (66% overlap). v2 finds fewer peaks.
 
+#### Multi-threshold comparison (q 1e-05, 1e-10, 1e-20)
+
+**v1 vs v2 CPU peak count ratio across all thresholds:**
+
+| Genome | q05 (v2/v1) | q10 (v2/v1) | q20 (v2/v1) |
+|--------|------------|------------|------------|
+| ce11 (35 samples) | 1.5x | 1.5x | 1.7x |
+| hg38 (11 samples, excl. outlier) | 1.0x | 0.9x | 0.8x |
+
+- ce11: v2 consistently finds **more peaks at all thresholds**, with the ratio increasing at stricter cutoffs — v2's additional peaks are high-confidence
+- hg38: v2 and v1 are **near-parity at q05**, with v2 finding slightly fewer at stricter thresholds
+- The difference between genomes may reflect aligner-specific behavior on different genome structures (ce11 ~100MB vs hg38 ~3GB)
+
+**v2 CPU vs GPU consistency across thresholds:**
+
+| Threshold | ce11 (45 samples) | hg38 (18 samples) |
+|-----------|------------------|-------------------|
+| q05 | 0.8% diff | 0.8% diff |
+| q10 | 1.1% diff | — |
+| q20 | 1.3% diff | — |
+
+CPU and GPU produce nearly identical results at all thresholds, confirming that the choice of aligner (bwa-mem2 vs Parabricks BWA-MEM) has minimal impact on peak calling.
+
 #### Interpretation
 
 1. **v2 recovers most v1 peaks** (~90% for ce11, ~77% for hg38) — the core signal is preserved
-2. **v2 generally finds more peaks** — bwa-mem2 maps more reads than Bowtie2, and MACS3 may be more sensitive
-3. **Samples with v1=0 now have peaks in v2** — this is an improvement, not a regression
+2. **v2 finds more peaks on ce11** (1.5x) but is **near-parity on hg38** — the v1-v2 difference is genome-dependent
+3. **Samples with v1=0 now have peaks in v2** — this is an improvement, not a regression (10 ce11 samples)
 4. **Some samples show fewer peaks in v2** — expected given different tools; users can adjust with q-value thresholds
 5. **Overlap varies by experiment type** — RNA polymerase shows the best concordance, ATAC-Seq shows the most new peaks
+6. **CPU and GPU are interchangeable** — <1.5% peak difference at all thresholds
 
 ---
 
