@@ -1,5 +1,35 @@
 # ChIP-Atlas Pipeline v2: Upgrade Plan
 
+## Status Overview
+
+| Phase | Status | Summary |
+|-------|--------|---------|
+| 1. Benchmarking & Tool Selection | [x] Done (Option A) | bwa-mem2 + Parabricks evaluated, --nomodel validated |
+| 2. CWL Workflow Development (Option A) | [x] Done | option-a, option-a-nomodel, option-a-parabricks |
+| 2. CWL Workflow Development (Option B) | [ ] Not started | fastp, HMMRATAC, SEACR, deeptools |
+| 3. Secondary Analysis Rewrite | [ ] Not started | Target genes, colocalization, enrichment |
+| 4. Validation (Option A vs v1) | [x] Done (ce11 + hg38) | ~90% peak overlap, 1.5x more peaks on ce11, parity on hg38 |
+| 4. Validation (Option B vs v1) | [ ] Not started | |
+| 4. Validation (Option A vs B) | [ ] Not started | |
+| 5. Production Deployment | [ ] Not started | Cluster setup guide written |
+| Custom CWL Runner | [ ] Not started | |
+
+### Remaining TODO
+
+- [ ] Implement Option B "Modern" workflow (fastp + experiment-type-specific callers)
+- [ ] Benchmark Option B on ce11 and hg38, compare with Option A and v1
+- [ ] Benchmark remaining genomes (dm6, mm10, rn6) — indexes ready, not yet benchmarked
+- [ ] Add instrument filter to sample selection (exclude PacBio/ONT)
+- [ ] Investigate SRX25595131 outlier (hg38 Histone, v1=8797 → v2=201)
+- [ ] Integrate fast-download.sh (aria2c + ENA/DDBJ) into all benchmark scripts
+- [ ] Rewrite secondary analyses (target genes, colocalization, enrichment) in CWL
+- [ ] Test on shared HPC cluster (cluster setup guide written)
+- [ ] Develop custom CWL runner
+- [ ] Process 10K+ remaining unprocessed samples
+- [ ] Full reprocessing decision after Option A vs B comparison
+
+---
+
 ## Design Philosophy
 
 The original ChIP-Atlas pipeline was intentionally minimal: because each sample has a different experimental setup (antibody, cell type, protocol, sequencing depth), per-sample optimization is impractical at scale. The v1 pipeline applies the same basic processing to all samples uniformly — this simplicity is a feature, not a limitation.
@@ -77,7 +107,7 @@ ChIP-Atlas intentionally performs peak calling **without background data** (inpu
 - **Containers**: Singularity/Apptainer
 - **Benchmark across hardware configs** — different GPU models, memory sizes
 
-## Phase 1: Benchmarking & Tool Selection
+## Phase 1: Benchmarking & Tool Selection [x]
 
 ### 1.1 ~~Profiling the v1 Pipeline~~ (Skipped)
 
@@ -126,7 +156,7 @@ Metrics to compare:
 - Separate peak-calling branch in the CWL workflow
 - Alignment parameters may differ (e.g., fragment size expectations)
 
-## Phase 2: CWL Workflow Development
+## Phase 2: CWL Workflow Development [x] Option A / [ ] Option B
 
 ### 2.1 Workflow Structure
 
@@ -193,7 +223,7 @@ chip-atlas-pipeline-v2/
 - Designed for throughput at scale (400K+ samples)
 - Language TBD (Rust? Go? Python?)
 
-## Phase 3: Secondary Analysis Rewrite
+## Phase 3: Secondary Analysis Rewrite [ ]
 
 ### 3.1 Target Gene Analysis
 
@@ -215,7 +245,7 @@ chip-atlas-pipeline-v2/
 - bedtools intersect + scipy for Fisher's exact test
 - BH correction via statsmodels
 
-## Phase 4: Validation
+## Phase 4: Validation [x] Option A / [ ] Option B
 
 ### 4.1 Sample Selection
 
@@ -510,7 +540,7 @@ CPU and GPU produce nearly identical results at all thresholds, confirming that 
 
 ---
 
-## Phase 5: Production Deployment & Migration
+## Phase 5: Production Deployment & Migration [ ]
 
 ### 5.1 Decision Point
 
@@ -533,12 +563,14 @@ After Phase 4 validation, decide:
 
 ## Timeline (rough phases, not time estimates)
 
-1. **Benchmarking** — profile v1, evaluate aligners and tool candidates
-2. **CWL development** — build Option A and Option B workflows
-3. **Custom runner** — develop minimal CWL runner (can parallel with #2)
-4. **Secondary analyses** — rewrite in Python + CWL
-5. **Validation** — three-way comparison (A vs v1, B vs v1, A vs B)
-6. **Decision & Production** — choose option, process remaining samples
+1. [x] **Benchmarking** — evaluate aligners (bwa-mem2, Parabricks), validate --nomodel
+2. [x] **CWL development (Option A)** — option-a, option-a-nomodel, option-a-parabricks
+3. [ ] **CWL development (Option B)** — fastp, HMMRATAC, SEACR, deeptools
+4. [ ] **Custom runner** — develop minimal CWL runner (can parallel with #3)
+5. [ ] **Secondary analyses** — rewrite in Python + CWL
+6. [x] **Validation (Option A)** — A vs v1 on ce11 + hg38
+7. [ ] **Validation (Option B)** — B vs v1, A vs B
+8. [ ] **Decision & Production** — choose option, process remaining samples
 
 ## Open Questions
 
@@ -547,3 +579,5 @@ After Phase 4 validation, decide:
 - [ ] Custom CWL runner language choice
 - [ ] CUT&Tag-specific parameters and peak caller (SEACR vs MACS3)
 - [ ] Data storage strategy for v2 outputs (same filesystem? new structure?)
+- [ ] Why does hg38 show near-parity with v1 while ce11 shows 1.5x more peaks?
+- [ ] SRX25595131 outlier investigation (SE spike-in sample)
