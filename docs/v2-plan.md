@@ -20,7 +20,7 @@
 - [ ] Benchmark Option B on ce11 and hg38, compare with Option A and v1
 - [ ] Benchmark remaining genomes (dm6, mm10, rn6) — indexes ready, not yet benchmarked
 - [ ] Add instrument filter to sample selection (exclude PacBio/ONT)
-- [ ] Investigate SRX25595131 outlier (hg38 Histone, v1=8797 → v2=201)
+- [x] ~~Investigate SRX25595131 outlier~~ — resolved: multi-run experiment, only 1 of 2 SRR runs was downloaded
 - [ ] Integrate fast-download.sh (aria2c + ENA/DDBJ) into all benchmark scripts
 - [ ] Rewrite secondary analyses (target genes, colocalization, enrichment) in CWL
 - [ ] Test on shared HPC cluster (cluster setup guide written)
@@ -503,7 +503,7 @@ Downloaded v1 BED files from chip-atlas.dbcls.jp and compared peak overlap with 
 | RNA pol (20M) | 820 | 1,513 | 80% | v2 finds ~2x more |
 
 **Outliers:**
-- SRX25595131 (Histone, 10M reads, SE): v1=8,797 peaks → v2=201 peaks (2% overlap). This is a spike-in experiment (HeLa S3 with yeast spike-in). The dramatic drop may be due to SE handling differences between Bowtie2/MACS2 and bwa-mem2/MACS3. Needs further investigation.
+- ~~SRX25595131 (Histone, 10M reads, SE): v1=8,797 peaks → v2=201 peaks~~ **RESOLVED**: This experiment has **2 SRR runs** (SRR30125615: 3M reads + SRR30125616: 7M reads) but the benchmark only downloaded the first run (30% of data). After downloading and concatenating both runs: **v2=6,633 peaks** — consistent with v1's 8,797 (~25% difference from tool changes, not a bug). **Fix**: `download-experiment.sh` now resolves all runs per experiment and concatenates FASTQs, matching v1's behavior.
 - SRX25254554 (TFs, 10M reads): v1=28,075 → v2=20,239 (66% overlap). v2 finds fewer peaks.
 
 #### Multi-threshold comparison (q 1e-05, 1e-10, 1e-20)
@@ -580,4 +580,4 @@ After Phase 4 validation, decide:
 - [ ] CUT&Tag-specific parameters and peak caller (SEACR vs MACS3)
 - [ ] Data storage strategy for v2 outputs (same filesystem? new structure?)
 - [ ] Why does hg38 show near-parity with v1 while ce11 shows 1.5x more peaks?
-- [ ] SRX25595131 outlier investigation (SE spike-in sample)
+- [x] ~~SRX25595131 outlier~~ — resolved: multi-run download issue (see progress log)
