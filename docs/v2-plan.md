@@ -428,6 +428,60 @@ Based on average pipeline times (excluding download):
 | GPU avg pipeline | 16 min | 36 min | 2.3x |
 | GPU speedup | 1.37x | 1.7x | GPU benefits more on larger genomes |
 
+### 2026-03-27: v1 vs v2 Peak Overlap Analysis
+
+Downloaded v1 BED files from chip-atlas.dbcls.jp and compared peak overlap with v2 results using bedtools intersect.
+
+#### ce11 (35 samples with v1 peaks + 10 with v1=0)
+
+| Metric | Value |
+|--------|-------|
+| v1 peaks recovered in v2 | **~90%** average |
+| v2 finds more peaks | 77% of samples (1.6x total peaks) |
+| v1=0 but v2 found peaks | 10 samples (thousands of peaks each) |
+
+**Overlap by experiment type:**
+
+| Type | Avg overlap | Notes |
+|------|------------|-------|
+| RNA polymerase | 97% | Excellent concordance |
+| Histone | 93% | Good, v2 finds more |
+| ATAC-Seq | 88% | v2 finds 2-40x more peaks in high-read samples |
+| TFs and others | 87% | Good concordance, similar counts |
+| DNase-seq | 87% | v2 finds more peaks |
+
+#### hg38 (12 samples with v1 peaks)
+
+| Metric | Value |
+|--------|-------|
+| v1 peaks recovered in v2 | **~77%** average |
+| Samples with >90% overlap | 4/12 (DNase-seq, ATAC-Seq) |
+| Samples with <70% overlap | 2/12 (see outliers below) |
+
+**Overlap by sample:**
+
+| Type | v1 peaks | v2 peaks | Overlap | Notes |
+|------|---------|---------|---------|-------|
+| ATAC-Seq (8M) | 3,316 | 10,657 | 98% | v2 finds 3x more |
+| DNase-seq (50M) | 35,958 | 35,885 | 93% | Nearly identical |
+| DNase-seq (72M) | 51,473 | 55,556 | 95% | v2 slightly more |
+| TFs (21M) | 14,704 | 16,605 | 94% | Good concordance |
+| TFs (52M) | 23,306 | 22,890 | 88% | Good |
+| Histone (26M) | 1,046 | 1,268 | 84% | v2 finds more |
+| RNA pol (20M) | 820 | 1,513 | 80% | v2 finds ~2x more |
+
+**Outliers:**
+- SRX25595131 (Histone, 10M reads, SE): v1=8,797 peaks → v2=201 peaks (2% overlap). This is a spike-in experiment (HeLa S3 with yeast spike-in). The dramatic drop may be due to SE handling differences between Bowtie2/MACS2 and bwa-mem2/MACS3. Needs further investigation.
+- SRX25254554 (TFs, 10M reads): v1=28,075 → v2=20,239 (66% overlap). v2 finds fewer peaks.
+
+#### Interpretation
+
+1. **v2 recovers most v1 peaks** (~90% for ce11, ~77% for hg38) — the core signal is preserved
+2. **v2 generally finds more peaks** — bwa-mem2 maps more reads than Bowtie2, and MACS3 may be more sensitive
+3. **Samples with v1=0 now have peaks in v2** — this is an improvement, not a regression
+4. **Some samples show fewer peaks in v2** — expected given different tools; users can adjust with q-value thresholds
+5. **Overlap varies by experiment type** — RNA polymerase shows the best concordance, ATAC-Seq shows the most new peaks
+
 ---
 
 ## Phase 5: Production Deployment & Migration
