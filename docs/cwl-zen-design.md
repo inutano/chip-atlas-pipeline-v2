@@ -243,6 +243,61 @@ Separate tools, not part of the runner:
 | `cwl-zen-prov` | Generate RO-Crate provenance from completed runs |
 | `cwl-zen-dispatch` | Helper scripts for SLURM/SGE/PBS job submission |
 
+## Why not just use Make?
+
+CWL Zen and Make are philosophically similar — both declare dependencies and run commands. The comparison is instructive:
+
+| Aspect | Makefile | CWL Zen |
+|--------|---------|---------|
+| **Dependency unit** | Files on disk | Typed inputs/outputs (File, string, int) |
+| **Containerization** | None (runs on host) | Built-in (Singularity/Docker per step) |
+| **Portability** | Machine-specific (paths, installed tools) | Portable (containers carry the tools) |
+| **Reproducibility** | Fragile (depends on host environment) | Strong (container versions pinned) |
+| **Type safety** | None (everything is a filename string) | File vs string vs int, optional types, arrays |
+| **Secondary files** | Manual (you track .bai alongside .bam) | Declarative (`secondaryFiles` pattern) |
+| **Parallelism** | `make -j N` (file-level) | `scatter` (data-level: same tool on N samples) |
+| **Intermediate files** | Stay on disk (you add `clean:` targets) | Managed by runner (staging/collection) |
+| **Ecosystem** | Universal, 50 years of tooling | CWL runners, WES API, RO-Crate provenance |
+
+**Same pipeline in Make vs CWL Zen:**
+
+```makefile
+# Makefile — you manage tools, paths, and file associations yourself
+%.bam: %.fastq reference.fa
+	bwa-mem2 mem -t 8 reference.fa $< | samtools sort -o $@
+	samtools index $@
+
+%.peaks: %.bam
+	macs3 callpeak -t $< -n $* -g hs --nomodel
+```
+
+```yaml
+# CWL Zen — containers and typed files, same simplicity
+steps:
+  align:
+    run: bwa-mem2.cwl          # tool + container defined once
+    in:
+      fastq: fastq             # typed: File with .fai secondaryFiles
+      reference: reference
+    out: [bam]                 # bam + .bai travel together
+
+  peaks:
+    run: macs3.cwl
+    in:
+      bam: align/bam
+    out: [peaks]
+```
+
+CWL Zen adds just two things over Make:
+
+1. **Containers per step** — each tool runs in its own isolated, versioned environment. No "works on my machine" problems. Make can't do this without wrapper scripts everywhere.
+
+2. **Typed files with associations** — when you declare `type: File` with `secondaryFiles: [.bai]`, the runner ensures the index travels with the BAM. In Make, you manually track both and hope they stay in sync.
+
+If you don't need containers or typed file associations, a Makefile is enough. But for bioinformatics pipelines where tool version reproducibility and file associations (.bam+.bai, .fa+.fai+.0123+...) are critical, CWL Zen adds just enough structure.
+
+**CWL Zen is a Makefile with containers and typed files.**
+
 ## Relationship to CWL v1.2
 
 CWL Zen documents are a **strict subset** of CWL v1.2. Any CWL Zen document runs on cwltool, Toil, or any compliant CWL runner. The reverse is not true.
