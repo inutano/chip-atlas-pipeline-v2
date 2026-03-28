@@ -20,7 +20,6 @@ $namespaces:
 
 requirements:
   SubworkflowFeatureRequirement: {}
-  InlineJavascriptRequirement: {}
   MultipleInputFeatureRequirement: {}
   StepInputExpressionRequirement: {}
 
@@ -160,7 +159,6 @@ steps:
   # =====================
   bigbed_q05:
     run: ../tools/bedtobigbed.cwl
-    when: $(inputs.bed != null)
     in:
       bed: macs3_q05/narrow_peaks
       chrom_sizes: chrom_sizes
@@ -174,7 +172,6 @@ steps:
   # =====================
   bigbed_q10:
     run: ../tools/bedtobigbed.cwl
-    when: $(inputs.bed != null)
     in:
       bed: macs3_q10/narrow_peaks
       chrom_sizes: chrom_sizes
@@ -188,7 +185,6 @@ steps:
   # =====================
   bigbed_q20:
     run: ../tools/bedtobigbed.cwl
-    when: $(inputs.bed != null)
     in:
       bed: macs3_q20/narrow_peaks
       chrom_sizes: chrom_sizes

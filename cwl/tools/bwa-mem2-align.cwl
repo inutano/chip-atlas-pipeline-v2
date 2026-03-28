@@ -9,7 +9,6 @@ requirements:
   ResourceRequirement:
     coresMin: 8
     ramMin: 16384
-  InlineJavascriptRequirement: {}
 
 hints:
   DockerRequirement:
@@ -52,7 +51,7 @@ arguments:
   - prefix: -t
     valueFrom: $(runtime.cores)
   - prefix: -R
-    valueFrom: $("@RG\\tID:" + inputs.sample_id + "\\tSM:" + inputs.sample_id + "\\tPL:ILLUMINA")
+    valueFrom: "@RG\\tID:$(inputs.sample_id)\\tSM:$(inputs.sample_id)\\tPL:ILLUMINA"
 
 outputs:
   aligned_sam:

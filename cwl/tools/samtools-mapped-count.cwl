@@ -3,40 +3,35 @@ cwlVersion: v1.2
 class: CommandLineTool
 
 label: "samtools view -c - Count mapped reads"
-doc: "Count mapped reads in a BAM file for RPM normalization"
+doc: "Count mapped reads in a BAM file. Outputs count as a text file."
 
 requirements:
   ResourceRequirement:
     coresMin: 2
     ramMin: 2048
-  InlineJavascriptRequirement: {}
+  ShellCommandRequirement: {}
 
 hints:
   DockerRequirement:
     dockerPull: "quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1"
 
-baseCommand: [samtools, view]
-
-stdout: mapped_count.txt
+baseCommand: []
 
 inputs:
   bam:
     type: File
     secondaryFiles:
       - .bai
-    inputBinding:
-      position: 1
     doc: "BAM file to count"
 
 arguments:
-  - -c
-  - -F
-  - "4"
+  - shellQuote: false
+    valueFrom: |
+      samtools view -c -F 4 $(inputs.bam.path) | tr -d '[:space:]' > mapped_count.txt
 
 outputs:
-  count:
-    type: long
+  count_file:
+    type: File
     outputBinding:
       glob: mapped_count.txt
-      loadContents: true
-      outputEval: $(parseInt(self[0].contents.trim()))
+    doc: "Text file containing the mapped read count"

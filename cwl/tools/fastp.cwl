@@ -9,7 +9,6 @@ requirements:
   ResourceRequirement:
     coresMin: 4
     ramMin: 4096
-  InlineJavascriptRequirement: {}
 
 hints:
   DockerRequirement:
@@ -38,13 +37,7 @@ arguments:
   - prefix: --out1
     valueFrom: $(inputs.sample_id)_trimmed_R1.fastq.gz
   - prefix: --out2
-    valueFrom: |
-      ${
-        if (inputs.fastq_rev) {
-          return inputs.sample_id + "_trimmed_R2.fastq.gz";
-        }
-        return null;
-      }
+    valueFrom: $(inputs.sample_id)_trimmed_R2.fastq.gz
   - prefix: --json
     valueFrom: $(inputs.sample_id)_fastp.json
   - prefix: --html

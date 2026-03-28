@@ -5,13 +5,12 @@ class: CommandLineTool
 label: "bedtools genomecov - Generate BedGraph coverage"
 doc: |
   Generate RPM-normalized BedGraph coverage track from BAM file.
-  Matches v1 pipeline approach: bedtools genomecov with -scale for RPM.
+  Reads mapped count from a text file and computes scale factor in shell.
 
 requirements:
   ResourceRequirement:
     coresMin: 1
     ramMin: 4096
-  InlineJavascriptRequirement: {}
   ShellCommandRequirement: {}
 
 hints:
@@ -31,14 +30,14 @@ inputs:
     type: string
     doc: "Sample identifier"
 
-  mapped_read_count:
-    type: long
-    doc: "Number of mapped reads (for RPM normalization scale factor = 1000000/N)"
+  count_file:
+    type: File
+    doc: "Text file containing mapped read count (from samtools-mapped-count)"
 
 arguments:
   - shellQuote: false
     valueFrom: |
-      bedtools genomecov -bg -ibam $(inputs.bam.path) -scale $(1000000 / inputs.mapped_read_count) | sort -k1,1 -k2,2n > $(inputs.sample_id).bedGraph
+      SCALE=\$(awk -v n=\$(cat $(inputs.count_file.path)) 'BEGIN {printf "%.10f", 1000000/n}') && bedtools genomecov -bg -ibam $(inputs.bam.path) -scale "\$SCALE" | sort -k1,1 -k2,2n > $(inputs.sample_id).bedGraph
 
 outputs:
   bedgraph:

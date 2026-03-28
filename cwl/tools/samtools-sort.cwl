@@ -9,7 +9,6 @@ requirements:
   ResourceRequirement:
     coresMin: 4
     ramMin: 4096
-  InlineJavascriptRequirement: {}
   ShellCommandRequirement: {}
 
 hints:
@@ -35,15 +34,11 @@ inputs:
 arguments:
   - shellQuote: false
     valueFrom: |
-      ${
-        var suffix = inputs.by_name ? ".namesorted.bam" : ".sorted.bam";
-        var sort_flag = inputs.by_name ? "-n " : "";
-        var cmd = "samtools sort " + sort_flag + "-@ " + runtime.cores + " -m 1G -o " + inputs.sample_id + suffix + " " + inputs.input_file.path;
-        if (!inputs.by_name) {
-          cmd += " && samtools index " + inputs.sample_id + suffix;
-        }
-        return cmd;
-      }
+      if [ "$(inputs.by_name)" = "true" ]; then
+        samtools sort -n -@ $(runtime.cores) -m 1G -o $(inputs.sample_id).namesorted.bam $(inputs.input_file.path)
+      else
+        samtools sort -@ $(runtime.cores) -m 1G -o $(inputs.sample_id).sorted.bam $(inputs.input_file.path) && samtools index $(inputs.sample_id).sorted.bam
+      fi
 
 outputs:
   sorted_bam:
@@ -52,4 +47,6 @@ outputs:
       - pattern: .bai
         required: false
     outputBinding:
-      glob: "$(inputs.sample_id + (inputs.by_name ? '.namesorted.bam' : '.sorted.bam'))"
+      glob:
+        - "$(inputs.sample_id).sorted.bam"
+        - "$(inputs.sample_id).namesorted.bam"

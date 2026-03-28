@@ -3,13 +3,12 @@ cwlVersion: v1.2
 class: CommandLineTool
 
 label: "bedToBigBed - Convert BED to BigBed"
-doc: "Convert BED file to BigBed format using UCSC tools"
+doc: "Convert BED file to BigBed format using UCSC tools. Handles null input gracefully."
 
 requirements:
   ResourceRequirement:
     coresMin: 1
     ramMin: 2048
-  InlineJavascriptRequirement: {}
   ShellCommandRequirement: {}
 
 hints:
@@ -34,10 +33,13 @@ inputs:
 arguments:
   - shellQuote: false
     valueFrom: |
-      cut -f1-4 $(inputs.bed.path) | sort -k1,1 -k2,2n > sorted.bed && bedToBigBed sorted.bed $(inputs.chrom_sizes.path) $(inputs.sample_id).bb
+      BED="$(inputs.bed.path)"
+      if [ "\$BED" != "null" ] && [ "\$BED" != "" ] && [ -e "\$BED" ]; then
+        cut -f1-4 "\$BED" | sort -k1,1 -k2,2n > sorted.bed && bedToBigBed sorted.bed $(inputs.chrom_sizes.path) $(inputs.sample_id).bb
+      fi
 
 outputs:
   bigbed:
-    type: File
+    type: File?
     outputBinding:
       glob: "*.bb"

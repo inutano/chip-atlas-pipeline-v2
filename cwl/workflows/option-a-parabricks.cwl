@@ -18,7 +18,6 @@ $namespaces:
 
 requirements:
   SubworkflowFeatureRequirement: {}
-  InlineJavascriptRequirement: {}
   MultipleInputFeatureRequirement: {}
   StepInputExpressionRequirement: {}
 
@@ -85,7 +84,7 @@ steps:
     run: ../tools/samtools-mapped-count.cwl
     in:
       bam: fq2bam/dedup_bam
-    out: [count]
+    out: [count_file]
 
   # =====================
   # Step 3: Generate BedGraph coverage (RPM-normalized)
@@ -95,7 +94,7 @@ steps:
     in:
       bam: fq2bam/dedup_bam
       sample_id: sample_id
-      mapped_read_count: count_reads/count
+      count_file: count_reads/count_file
     out: [bedgraph]
 
   # =====================
@@ -168,7 +167,6 @@ steps:
   # =====================
   bigbed_q05:
     run: ../tools/bedtobigbed.cwl
-    when: $(inputs.bed != null)
     in:
       bed: macs3_q05/narrow_peaks
       chrom_sizes: chrom_sizes
@@ -182,7 +180,6 @@ steps:
   # =====================
   bigbed_q10:
     run: ../tools/bedtobigbed.cwl
-    when: $(inputs.bed != null)
     in:
       bed: macs3_q10/narrow_peaks
       chrom_sizes: chrom_sizes
@@ -196,7 +193,6 @@ steps:
   # =====================
   bigbed_q20:
     run: ../tools/bedtobigbed.cwl
-    when: $(inputs.bed != null)
     in:
       bed: macs3_q20/narrow_peaks
       chrom_sizes: chrom_sizes

@@ -8,8 +8,6 @@ doc: |
   and duplicate marking in a single GPU-accelerated step.
   Replaces bwa-mem2 + samtools sort + samtools markdup.
 
-  Usage: pbrun fq2bam --ref <ref> --in-fq <fwd> [<rev>] <RG> --out-bam <bam>
-
 $namespaces:
   cwltool: "http://commonwl.org/cwltool#"
 
@@ -17,7 +15,6 @@ requirements:
   ResourceRequirement:
     coresMin: 8
     ramMin: 32768
-  InlineJavascriptRequirement: {}
   ShellCommandRequirement: {}
 
 hints:
@@ -29,7 +26,7 @@ hints:
     cudaDeviceCountMin: 1
     cudaDeviceCountMax: 4
 
-baseCommand: [pbrun, fq2bam]
+baseCommand: []
 
 inputs:
   genome_fasta:
@@ -41,9 +38,6 @@ inputs:
       - .bwt
       - .pac
       - .sa
-    inputBinding:
-      prefix: --ref
-      position: 1
     doc: "Reference genome FASTA with BWA index files"
 
   fastq_fwd:
@@ -61,29 +55,18 @@ inputs:
   num_gpus:
     type: int?
     default: 1
-    inputBinding:
-      prefix: --num-gpus
-      position: 4
     doc: "Number of GPUs to use"
 
 arguments:
-  - position: 2
+  - shellQuote: false
     valueFrom: |
-      ${
-        var rg = "\"@RG\\tID:" + inputs.sample_id + "\\tSM:" + inputs.sample_id + "\\tPL:ILLUMINA\\tPU:" + inputs.sample_id + "\\tLB:" + inputs.sample_id + "\"";
-        if (inputs.fastq_rev) {
-          return "--in-fq " + inputs.fastq_fwd.path + " " + inputs.fastq_rev.path + " " + rg;
-        } else {
-          return "--in-se-fq " + inputs.fastq_fwd.path + " " + rg;
-        }
-      }
-    shellQuote: false
-  - prefix: --out-bam
-    position: 3
-    valueFrom: $(inputs.sample_id).dedup.bam
-  - prefix: --out-duplicate-metrics
-    position: 5
-    valueFrom: $(inputs.sample_id).dup_metrics.txt
+      RG="@RG\tID:$(inputs.sample_id)\tSM:$(inputs.sample_id)\tPL:ILLUMINA\tPU:$(inputs.sample_id)\tLB:$(inputs.sample_id)"
+      REV="$(inputs.fastq_rev.path)"
+      if [ "\$REV" != "null" ] && [ "\$REV" != "" ] && [ -e "\$REV" ]; then
+        pbrun fq2bam --ref $(inputs.genome_fasta.path) --in-fq $(inputs.fastq_fwd.path) "\$REV" "\$RG" --out-bam $(inputs.sample_id).dedup.bam --out-duplicate-metrics $(inputs.sample_id).dup_metrics.txt --num-gpus $(inputs.num_gpus)
+      else
+        pbrun fq2bam --ref $(inputs.genome_fasta.path) --in-se-fq $(inputs.fastq_fwd.path) "\$RG" --out-bam $(inputs.sample_id).dedup.bam --out-duplicate-metrics $(inputs.sample_id).dup_metrics.txt --num-gpus $(inputs.num_gpus)
+      fi
 
 outputs:
   dedup_bam:

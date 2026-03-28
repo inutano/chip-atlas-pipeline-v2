@@ -9,7 +9,6 @@ requirements:
   ResourceRequirement:
     coresMin: 4
     ramMin: 8192
-  InlineJavascriptRequirement: {}
 
 hints:
   DockerRequirement:

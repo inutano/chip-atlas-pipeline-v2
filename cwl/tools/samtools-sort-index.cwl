@@ -9,7 +9,6 @@ requirements:
   ResourceRequirement:
     coresMin: 4
     ramMin: 4096
-  InlineJavascriptRequirement: {}
   ShellCommandRequirement: {}
 
 hints:
