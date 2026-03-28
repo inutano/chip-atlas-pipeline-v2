@@ -100,12 +100,57 @@ ChIP-Atlas intentionally performs peak calling **without background data** (inpu
 
 ## Infrastructure
 
-- **Primary**: On-prem GPU workstation and HPC cluster
-- **GPUs**: RTX (older), DGX Spark (H200), potentially more powerful machines
-- **RAM**: 128–256 GB per cluster node (smaller on workstation)
+### Benchmark machine (this workstation)
+
+| Component | Spec |
+|-----------|------|
+| CPU | Intel Xeon Gold 6226R @ 2.90GHz |
+| CPU cores | 32 (16 physical × 2 HT) |
+| RAM | 93 GB |
+| GPU | NVIDIA RTX 6000 Ada Generation (48 GB VRAM) |
+| Storage | 3.6 TB NVMe (local) + 3.6 TB HDD ×2 (/data2, /data3) |
+
+All benchmark timings in this document are from this machine.
+
+### Target production environment: NIG Supercomputer 2025
+
+Source: https://sc.ddbj.nig.ac.jp/en/guides/hardware/hardware2025/
+
+| Node type | Count | CPU | Cores/node | RAM/node | GPU |
+|-----------|-------|-----|-----------|---------|-----|
+| Type 1 (CPU) | 50 | AMD EPYC 9654 (96c ×2) | 192 | 1.5 TB | — |
+| Type 2 (CPU) | 28 | AMD EPYC 7702 (64c ×2) | 128 | 512 GB | — |
+| Type 2 (GPU) | 3 | AMD EPYC 9334 (32c ×2) | 64 | 768 GB | 8× NVIDIA L40S |
+| Type 3 (Accel) | 2 | AMD EPYC 7713P (64c) | 64 | 2 TB | 4× PEZY-SC3 |
+
+- **Total CPU cores**: 13,184
+- **Storage**: 13.3 PB Lustre
+- **Network**: InfiniBand HDR100 (100 Gbps), 400 Gbps for GPU nodes
+- **Container**: Singularity/Apptainer available
+
+### Estimated speedup on NIG vs benchmark machine
+
+| Factor | Benchmark machine | NIG Type 1 node | Expected speedup |
+|--------|------------------|-----------------|-----------------|
+| CPU cores (for bwa-mem2) | 32 cores @ 2.9 GHz | 192 cores @ 2.4 GHz | ~3-4x per node (more cores, slightly lower clock) |
+| RAM | 93 GB | 1.5 TB | No bottleneck on NIG |
+| Parallel nodes | 1 | 50 (Type 1) + 28 (Type 2) | 78 samples in parallel |
+| GPU | 1× RTX 6000 Ada | 8× L40S per node (3 nodes) | ~8x per GPU node, 24 GPUs total |
+
+**Throughput estimate for 400K hg38 samples on NIG** (Option B CPU):
+
+| Scenario | Per sample | Parallel | Total time |
+|----------|-----------|----------|------------|
+| Benchmark machine (1 node) | 17 min (ce11) / 61 min (hg38) | 1 | ~46 years |
+| NIG Type 1 (1 node, 192 cores) | ~15-20 min (hg38 est.) | 1 | ~11-15 years |
+| NIG Type 1 (50 nodes) | ~15-20 min | 50 | ~80-110 days |
+| NIG Type 1+2 (78 nodes) | ~15-20 min | 78 | ~50-70 days |
+| NIG GPU (3 nodes × 8 L40S) | ~5-10 min (est.) | 24 | ~12-28 days |
+
+Note: Download time not included. NIG's high-bandwidth network (100 Gbps InfiniBand + fast external connectivity from NII/SINET) should significantly reduce download overhead compared to the benchmark machine.
+
 - **Cloud**: Available as fallback (AWS/GCP)
 - **Containers**: Singularity/Apptainer
-- **Benchmark across hardware configs** — different GPU models, memory sizes
 
 ## Phase 1: Benchmarking & Tool Selection [x]
 
