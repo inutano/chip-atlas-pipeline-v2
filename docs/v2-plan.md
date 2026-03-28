@@ -649,17 +649,64 @@ After Phase 4 validation, decide:
 - **Adopt Option B** if quality improvements justify the differences
 - **Run both** if different use cases need different tradeoffs
 
-### 5.2 Incremental Rollout
+### 5.2 Storage Estimation
 
-1. Process the 10K+ remaining unprocessed samples with chosen option
+#### Per-sample output sizes
+
+| Genome | BigWig (avg) | BED/BigBed (3 thresholds) | Total per sample |
+|--------|-------------|--------------------------|-----------------|
+| hg38 | 278 MB | ~7 MB | ~285 MB |
+| mm10 | 230 MB | ~5 MB | ~235 MB |
+| rn6 | ~200 MB | ~5 MB | ~205 MB |
+| dm6 | ~100 MB | ~3 MB | ~103 MB |
+| ce11 | 78 MB | ~2 MB | ~80 MB |
+| sacCer3 | ~10 MB | ~1 MB | ~11 MB |
+
+#### Total storage by genome (432K samples)
+
+| Genome | Samples | Per sample | Total |
+|--------|---------|-----------|-------|
+| hg38 | 197,044 | 285 MB | ~55 TB |
+| mm10 | 194,162 | 235 MB | ~44 TB |
+| sacCer3 | 16,547 | 11 MB | ~0.2 TB |
+| dm6 | 15,067 | 103 MB | ~1.5 TB |
+| ce11 | 6,862 | 80 MB | ~0.5 TB |
+| rn6 | 2,958 | 205 MB | ~0.6 TB |
+| **Total** | **432,640** | | **~102 TB** |
+
+#### Transition plan
+
+1. **Announce v2 transition** — set 6-month window for users to download v1 data
+2. **During transition (~6 months)**: serve both v1 and v2 data (~204 TB)
+3. **After transition**: archive v1 to Glacier Deep Archive, serve only v2 (~102 TB)
+4. **Provide v1 CWL pipeline** — users who need v1 results can re-run the pipeline themselves (CWL is reproducible)
+
+#### AWS S3 storage costs
+
+| Storage class | 102 TB (v1 or v2) | 204 TB (transition) | Notes |
+|--------------|-------------------|--------------------|----|
+| S3 Standard | $2,346/month ($28K/year) | $4,692/month ($56K/year) | Active serving |
+| S3 Infrequent Access | $1,280/month ($15K/year) | $2,560/month ($31K/year) | Less frequent access |
+| S3 Glacier Deep Archive | **$101/month ($1.2K/year)** | **$202/month ($2.4K/year)** | Cold storage, retrieval takes hours |
+
+**Recommended approach:**
+- **v2 production data**: S3 Standard or host on existing infrastructure (~$28K/year on S3)
+- **v1 archive**: Glacier Deep Archive during transition ($101/month), delete after 6 months
+- **v1 CWL pipeline**: published on GitHub (no storage cost), users re-run if needed
+- **Total annual cost**: ~$29K/year for v2 on S3, or ~$0 if hosted on NIG/DBCLS infrastructure
+
+### 5.3 Incremental Rollout
+
+1. Process the 10K+ remaining unprocessed samples with Option B
 2. Reprocess a subset of existing 400K samples for validation
-3. Full reprocessing if results are satisfactory
+3. Full reprocessing on NIG supercomputer (~50-70 days with 78 CPU nodes)
 
-### 5.3 Update Infrastructure
+### 5.4 Update Infrastructure
 
 - Metadata filtering: rewrite in Python (replace shell scripts)
 - Incremental update logic: detect new SRA accessions, queue for processing
 - Data distribution: same URL structure for backward compatibility
+- Multi-run download: use `download-experiment.sh` to handle SRX→SRR resolution
 
 ## Timeline (rough phases, not time estimates)
 
