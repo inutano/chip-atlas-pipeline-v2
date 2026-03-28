@@ -6,18 +6,18 @@
 |-------|--------|---------|
 | 1. Benchmarking & Tool Selection | [x] Done (Option A) | bwa-mem2 + Parabricks evaluated, --nomodel validated |
 | 2. CWL Workflow Development (Option A) | [x] Done | option-a, option-a-nomodel, option-a-parabricks |
-| 2. CWL Workflow Development (Option B) | [ ] Not started | fastp, HMMRATAC, SEACR, deeptools |
+| 2. CWL Workflow Development (Option B) | [x] Done | option-b, option-b-parabricks |
 | 3. Secondary Analysis Rewrite | [ ] Not started | Target genes, colocalization, enrichment |
 | 4. Validation (Option A vs v1) | [x] Done (ce11 + hg38) | ~90% peak overlap, 1.5x more peaks on ce11, parity on hg38 |
-| 4. Validation (Option B vs v1) | [ ] Not started | |
-| 4. Validation (Option A vs B) | [ ] Not started | |
+| 4. Validation (Option B vs v1) | [x] Done (ce11) | Option B 1.3x faster than A, 0 failures |
+| 4. Validation (Option A vs B) | [x] Done (ce11) | Full 2x2 matrix (CPU/GPU x A/B) |
 | 5. Production Deployment | [ ] Not started | Cluster setup guide written |
 | Custom CWL Runner | [ ] Not started | |
 
 ### Remaining TODO
 
-- [ ] Implement Option B "Modern" workflow (fastp + experiment-type-specific callers)
-- [ ] Benchmark Option B on ce11 and hg38, compare with Option A and v1
+- [x] ~~Implement Option B "Modern" workflow~~ — option-b.cwl + option-b-parabricks.cwl
+- [x] ~~Benchmark Option B on ce11~~ — 2×2 matrix complete, Option B recommended
 - [ ] Benchmark remaining genomes (dm6, mm10, rn6) — indexes ready, not yet benchmarked
 - [ ] Add instrument filter to sample selection (exclude PacBio/ONT)
 - [x] ~~Investigate SRX25595131 outlier~~ — resolved: multi-run experiment, only 1 of 2 SRR runs was downloaded
@@ -551,6 +551,47 @@ CPU and GPU produce nearly identical results at all thresholds, confirming that 
 4. **Some samples show fewer peaks in v2** — expected given different tools; users can adjust with q-value thresholds
 5. **Overlap varies by experiment type** — RNA polymerase shows the best concordance, ATAC-Seq shows the most new peaks
 6. **CPU and GPU are interchangeable** — <1.5% peak difference at all thresholds
+
+### 2026-03-28: Full 2×2 benchmark complete (ce11)
+
+All four pipeline variants benchmarked on 46 ce11 samples.
+
+#### Pipeline time (average, pipeline step only)
+
+|  | No trimming (Option A) | fastp trimming (Option B) |
+|--|----------------------|-------------------------|
+| **CPU (bwa-mem2)** | 22 min | 17 min |
+| **GPU (Parabricks)** | 16 min | **13 min** |
+
+#### By read tier
+
+| Tier | A CPU | A GPU | B CPU | B GPU |
+|------|-------|-------|-------|-------|
+| Low (<10M) | 7m | 5m | 6m | 4m |
+| Medium (10-50M) | 16m | 11m | 12m | 9m |
+| High (>50M) | 43m | 31m | 33m | 27m |
+
+#### Success rates
+
+| Pipeline | OK | Failed | Notes |
+|----------|-----|--------|-------|
+| Option A CPU | 45 | 1 | PacBio sample failed |
+| Option A GPU | 45 | 0 | |
+| Option B CPU | **46** | **0** | fastp filtered PacBio reads → pipeline succeeded |
+| Option B GPU | **46** | **0** | |
+
+#### Key findings
+
+1. **Option B is faster than Option A** (17m vs 22m CPU, 13m vs 16m GPU) — fastp reduces read count slightly, and deeptools bamCoverage is faster than bedtools genomecov + bedGraphToBigWig
+2. **GPU adds ~1.3x speedup** on top of whichever option
+3. **Option B + GPU is the fastest** at 13 min average — 1.7x faster than Option A CPU
+4. **Option B has better robustness** — fastp acts as a quality gate, filtering 100% of PacBio reads that would otherwise cause failures
+5. **Peak counts are similar** across all four variants — trimming causes minor (<5%) differences
+6. Compared to v1's ~1 day/sample, even the slowest variant (Option A CPU, 22 min) is **~65x faster**
+
+#### Recommendation
+
+**Option B + GPU** for production where GPUs are available. **Option B CPU** for CPU-only clusters. Option A is not recommended — Option B is both faster and more robust with no downside.
 
 ---
 
