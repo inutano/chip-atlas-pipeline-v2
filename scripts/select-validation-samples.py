@@ -125,10 +125,18 @@ def main():
                 skipped["bad_stats"] += 1
                 continue
 
-            # Skip zero-read or zero-peak experiments
+            # Skip zero-read experiments
             if stats["num_reads"] == 0:
                 skipped["zero_reads"] += 1
                 continue
+
+            # Instrument filter note:
+            # The title field (col 9) does not reliably contain instrument info.
+            # Non-Illumina samples (PacBio, ONT) are extremely rare in ChIP-Atlas
+            # (<0.01%). The v2 pipeline uses fastp as a quality gate — it filters
+            # out non-Illumina reads (100% filtered for the one PacBio sample
+            # found in testing). No pre-selection filter needed.
+            # If long-read ChIP/ATAC becomes common, add minimap2 as aligner option.
 
             read_tier = classify_read_tier(stats["num_reads"])
             key = (genome, exp_type, read_tier)

@@ -725,6 +725,24 @@ After Phase 4 validation, decide:
 7. [ ] **CWL Zen runner** — Rust implementation (separate repo)
 8. [ ] **Production reprocessing** — 400K+ samples on NIG
 
+## Instrument Filtering & Long Read Support
+
+### Current state (2026-03)
+
+ChIP-Atlas data is overwhelmingly Illumina short-read:
+- ~147K samples with instrument info in title: 99.9% Illumina (HiSeq, NextSeq, NovaSeq, MiSeq)
+- 6 MGI/DNBSEQ samples
+- 0 PacBio/ONT samples (one PacBio Bisulfite-Seq found via SRA XML, not in title)
+
+Long-read ChIP-seq/ATAC-seq (e.g., nanoCUT&Tag) is emerging but not yet in public data at scale.
+
+### Decision
+
+- **Filter out non-Illumina samples** for v2 processing — add instrument check to sample selection
+- **Log non-Illumina samples** to a separate file for monitoring growth
+- **Architecture supports future long reads** — adding `minimap2.cwl` is trivial, pipeline can branch by aligner parameter
+- **Revisit when >100 long-read ChIP/ATAC samples** appear in SRA
+
 ## Open Questions
 
 - [ ] Parabricks licensing on NIG — is L40S supported? Need to test
@@ -734,3 +752,4 @@ After Phase 4 validation, decide:
 - [x] ~~Job scheduler~~ — SLURM (confirmed on NIG)
 - [x] ~~CWL runner language~~ — Rust
 - [x] ~~SRX25595131 outlier~~ — multi-run download issue
+- [x] ~~Instrument filtering~~ — filter non-Illumina, log for monitoring
