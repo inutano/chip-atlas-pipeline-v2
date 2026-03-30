@@ -89,13 +89,25 @@ function init() {
   const params = new URLSearchParams(window.location.search);
   const dataFile = params.get('data');
   if (dataFile) {
+    document.getElementById('loading').textContent = 'Fetching ' + dataFile + '...';
     fetch(dataFile)
-      .then(r => r.json())
-      .then(d => { data = d; render(); })
-      .catch(e => { document.getElementById('loading').textContent = 'Error loading: ' + e; });
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(d => {
+        data = d;
+        try { render(); } catch(e) { document.getElementById('loading').textContent = 'Render error: ' + e.message; document.getElementById('loading').style.display = 'block'; }
+      })
+      .catch(e => { document.getElementById('loading').textContent = 'Fetch error: ' + e.message; document.getElementById('loading').style.display = 'block'; });
   } else {
     document.getElementById('loading').textContent = 'No data specified. Use ?data=file.json';
   }
+}
+
+function getWindowData() {
+  const kb = document.getElementById('window').value;
+  return data[`window_${kb}kb`] || {total_genes: 0, genes: []};
 }
 
 function render() {
@@ -103,12 +115,6 @@ function render() {
   document.getElementById('table').style.display = 'table';
 
   document.getElementById('title').textContent = `Target Genes: ${data.experiment_id}`;
-  document.getElementById('meta').innerHTML =
-    `<span>${data.genome}</span>` +
-    `<span>${data.experiment_type}</span>` +
-    `<span>${data.antigen}</span>` +
-    `<span>${data.cell_type}</span>` +
-    `<span>${data.total_genes} genes</span>`;
 
   // Set up download links
   const jsonBlob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
@@ -120,6 +126,7 @@ function render() {
   // Event listeners
   document.getElementById('search').addEventListener('input', updateTable);
   document.getElementById('minScore').addEventListener('input', updateTable);
+  document.getElementById('window').addEventListener('change', updateTable);
   document.querySelectorAll('th[data-sort]').forEach(th => {
     th.addEventListener('click', () => {
       const col = th.dataset.sort;
@@ -134,8 +141,16 @@ function updateTable() {
   const search = document.getElementById('search').value.toLowerCase();
   const minScore = parseFloat(document.getElementById('minScore').value) || 0;
   const tbody = document.getElementById('tbody');
+  const windowData = getWindowData();
 
-  let genes = data.genes.filter(g =>
+  document.getElementById('meta').innerHTML =
+    `<span>${data.genome}</span>` +
+    `<span>${data.experiment_type}</span>` +
+    `<span>${data.antigen}</span>` +
+    `<span>${data.cell_type}</span>` +
+    `<span>${windowData.total_genes} genes</span>`;
+
+  let genes = windowData.genes.filter(g =>
     g.avg_score >= minScore &&
     (!search || g.symbol.toLowerCase().includes(search))
   );
@@ -150,7 +165,7 @@ function updateTable() {
   });
 
   // Render (limit to 500 for performance)
-  const maxScore = Math.max(...data.genes.map(g => g.avg_score));
+  const maxScore = Math.max(...windowData.genes.map(g => g.avg_score));
   const shown = genes.slice(0, 500);
 
   tbody.innerHTML = shown.map(g => {
@@ -168,7 +183,7 @@ function updateTable() {
 
   document.getElementById('count').textContent =
     `Showing ${shown.length} of ${genes.length} genes` +
-    (genes.length < data.genes.length ? ` (filtered from ${data.genes.length})` : '');
+    (genes.length < windowData.total_genes ? ` (filtered from ${windowData.total_genes})` : '');
 
   // TSV download
   const tsv = 'gene_symbol\tn_peaks\tavg_score\tnearest_tss_distance\n' +
