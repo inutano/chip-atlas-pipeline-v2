@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChIP-Atlas Target Genes</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }
+  h1 { font-size: 1.4em; margin-bottom: 8px; }
+  .meta { color: #666; font-size: 0.9em; margin-bottom: 16px; }
+  .meta span { background: #e8f0fe; padding: 2px 8px; border-radius: 3px; margin-right: 6px; }
+  .controls { margin-bottom: 12px; display: flex; gap: 12px; align-items: center; }
+  .controls input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; }
+  .controls select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; }
+  .controls label { font-size: 0.85em; color: #666; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+  th { background: #f5f5f5; text-align: left; padding: 8px; border-bottom: 2px solid #ddd; cursor: pointer; user-select: none; }
+  th:hover { background: #e8e8e8; }
+  td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+  tr:hover { background: #f8f9fa; }
+  .score-bar { display: inline-block; height: 12px; background: #4285f4; border-radius: 2px; vertical-align: middle; }
+  .count { color: #999; font-size: 0.85em; margin-top: 8px; }
+  .download { margin-top: 12px; }
+  .download a { color: #4285f4; text-decoration: none; font-size: 0.85em; }
+  .download a:hover { text-decoration: underline; }
+  #loading { text-align: center; padding: 40px; color: #999; }
+</style>
+</head>
+<body>
+
+<h1 id="title">ChIP-Atlas Target Genes</h1>
+<div class="meta" id="meta"></div>
+
+<div class="controls">
+  <div>
+    <label>Search gene:</label>
+    <input type="text" id="search" placeholder="e.g. hlh-1, unc-54">
+  </div>
+  <div>
+    <label>Window:</label>
+    <select id="window">
+      <option value="5" selected>± 5 kb</option>
+      <option value="1">± 1 kb</option>
+      <option value="10">± 10 kb</option>
+    </select>
+  </div>
+  <div>
+    <label>Min score:</label>
+    <input type="number" id="minScore" value="0" min="0" step="100">
+  </div>
+</div>
+
+<div id="loading">Loading data...</div>
+<table id="table" style="display:none">
+  <thead>
+    <tr>
+      <th data-sort="symbol">Gene</th>
+      <th data-sort="n_peaks">Peaks</th>
+      <th data-sort="avg_score">Avg Score</th>
+      <th data-sort="nearest_tss_distance">Nearest TSS</th>
+      <th>Score</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+<div class="count" id="count"></div>
+<div class="download">
+  <a id="downloadJson" href="#">Download JSON</a> |
+  <a id="downloadTsv" href="#">Download TSV</a>
+</div>
+
+<script>
+let data = null;
+let sortCol = 'avg_score';
+let sortAsc = false;
+
+// Load JSON — either from embedded data or external file
+function init() {
+  // Check for embedded data
+  const embedded = document.getElementById('embedded-data');
+  if (embedded) {
+    data = JSON.parse(embedded.textContent);
+    render();
+    return;
+  }
+
+  // Load from URL parameter: ?data=SRX12345678.json
+  const params = new URLSearchParams(window.location.search);
+  const dataFile = params.get('data');
+  if (dataFile) {
+    fetch(dataFile)
+      .then(r => r.json())
+      .then(d => { data = d; render(); })
+      .catch(e => { document.getElementById('loading').textContent = 'Error loading: ' + e; });
+  } else {
+    document.getElementById('loading').textContent = 'No data specified. Use ?data=file.json';
+  }
+}
+
+function render() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('table').style.display = 'table';
+
+  document.getElementById('title').textContent = `Target Genes: ${data.experiment_id}`;
+  document.getElementById('meta').innerHTML =
+    `<span>${data.genome}</span>` +
+    `<span>${data.experiment_type}</span>` +
+    `<span>${data.antigen}</span>` +
+    `<span>${data.cell_type}</span>` +
+    `<span>${data.total_genes} genes</span>`;
+
+  // Set up download links
+  const jsonBlob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  document.getElementById('downloadJson').href = URL.createObjectURL(jsonBlob);
+  document.getElementById('downloadJson').download = `${data.experiment_id}_target_genes.json`;
+
+  updateTable();
+
+  // Event listeners
+  document.getElementById('search').addEventListener('input', updateTable);
+  document.getElementById('minScore').addEventListener('input', updateTable);
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (sortCol === col) sortAsc = !sortAsc;
+      else { sortCol = col; sortAsc = col === 'symbol'; }
+      updateTable();
+    });
+  });
+}
+
+function updateTable() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const minScore = parseFloat(document.getElementById('minScore').value) || 0;
+  const tbody = document.getElementById('tbody');
+
+  let genes = data.genes.filter(g =>
+    g.avg_score >= minScore &&
+    (!search || g.symbol.toLowerCase().includes(search))
+  );
+
+  // Sort
+  genes.sort((a, b) => {
+    let va = a[sortCol], vb = b[sortCol];
+    if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  // Render (limit to 500 for performance)
+  const maxScore = Math.max(...data.genes.map(g => g.avg_score));
+  const shown = genes.slice(0, 500);
+
+  tbody.innerHTML = shown.map(g => {
+    const barWidth = Math.max(2, (g.avg_score / maxScore) * 120);
+    const dist = g.nearest_tss_distance;
+    const distStr = Math.abs(dist) >= 1000 ? `${(dist/1000).toFixed(1)}kb` : `${dist}bp`;
+    return `<tr>
+      <td><strong>${g.symbol}</strong></td>
+      <td>${g.n_peaks}</td>
+      <td>${g.avg_score}</td>
+      <td>${distStr}</td>
+      <td><span class="score-bar" style="width:${barWidth}px"></span></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('count').textContent =
+    `Showing ${shown.length} of ${genes.length} genes` +
+    (genes.length < data.genes.length ? ` (filtered from ${data.genes.length})` : '');
+
+  // TSV download
+  const tsv = 'gene_symbol\tn_peaks\tavg_score\tnearest_tss_distance\n' +
+    genes.map(g => `${g.symbol}\t${g.n_peaks}\t${g.avg_score}\t${g.nearest_tss_distance}`).join('\n');
+  const tsvBlob = new Blob([tsv], {type: 'text/tab-separated-values'});
+  document.getElementById('downloadTsv').href = URL.createObjectURL(tsvBlob);
+  document.getElementById('downloadTsv').download = `${data.experiment_id}_target_genes.tsv`;
+}
+
+init();
+</script>
+</body>
+</html>
