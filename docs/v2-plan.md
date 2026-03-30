@@ -4,29 +4,35 @@
 
 | Phase | Status | Summary |
 |-------|--------|---------|
-| 1. Benchmarking & Tool Selection | [x] Done (Option A) | bwa-mem2 + Parabricks evaluated, --nomodel validated |
-| 2. CWL Workflow Development (Option A) | [x] Done | option-a, option-a-nomodel, option-a-parabricks |
-| 2. CWL Workflow Development (Option B) | [x] Done | option-b, option-b-parabricks |
-| 3. Secondary Analysis Rewrite | [ ] Not started | Target genes, colocalization, enrichment |
-| 4. Validation (Option A vs v1) | [x] Done (ce11 + hg38) | ~90% peak overlap, 1.5x more peaks on ce11, parity on hg38 |
-| 4. Validation (Option B vs v1) | [x] Done (ce11) | Option B 1.3x faster than A, 0 failures |
-| 4. Validation (Option A vs B) | [x] Done (ce11) | Full 2x2 matrix (CPU/GPU x A/B) |
-| 5. Production Deployment | [ ] Not started | Cluster setup guide written |
-| Custom CWL Runner | [ ] Not started | |
+| 1. Benchmarking & Tool Selection | [x] Done | bwa-mem2 + Parabricks evaluated, --nomodel validated |
+| 2. CWL Workflow Development | [x] Done | Option A (3 variants) + Option B (2 variants), CWL Zen refactored |
+| 3. Secondary Analysis | [x] Mostly done | Target genes + colocalization implemented, enrichment remaining |
+| 4. Validation | [x] Done | 2×2 matrix (ce11), Option A vs v1 (ce11 + hg38), peak overlap analysis |
+| 5. Production Deployment | [ ] In progress | NIG setup script ready, awaiting test run |
+| CWL Zen Runner | [ ] Design done | Spec + lint tool complete, Rust implementation not started |
 
 ### Remaining TODO
 
-- [x] ~~Implement Option B "Modern" workflow~~ — option-b.cwl + option-b-parabricks.cwl
-- [x] ~~Benchmark Option B on ce11~~ — 2×2 matrix complete, Option B recommended
-- [ ] Benchmark remaining genomes (dm6, mm10, rn6) — indexes ready, not yet benchmarked
-- [ ] Add instrument filter to sample selection (exclude PacBio/ONT)
-- [x] ~~Investigate SRX25595131 outlier~~ — resolved: multi-run experiment, only 1 of 2 SRR runs was downloaded
-- [ ] Integrate fast-download.sh (aria2c + ENA/DDBJ) into all benchmark scripts
-- [ ] Rewrite secondary analyses (target genes, colocalization, enrichment) in CWL
-- [ ] Test on shared HPC cluster (cluster setup guide written)
-- [ ] Develop custom CWL runner
-- [ ] Process 10K+ remaining unprocessed samples
-- [ ] Full reprocessing decision after Option A vs B comparison
+**Next steps:**
+- [ ] Run NIG supercomputer benchmark (script ready: `scripts/nig-setup-and-benchmark.sh`)
+- [ ] Implement enrichment analysis (third secondary analysis, query-time operation)
+- [ ] Add instrument filter to sample selection (quick fix, exclude PacBio/ONT)
+
+**Future:**
+- [ ] CWL Zen runner implementation (Rust, separate repo: [cwl-zen](https://github.com/inutano/cwl-zen))
+- [ ] CUT&Tag support (SEACR peak caller)
+- [ ] Benchmark remaining genomes (dm6, mm10, rn6) — can run on NIG
+- [ ] Process 10K+ remaining unprocessed samples on NIG
+- [ ] Full 400K+ sample reprocessing
+
+**Resolved:**
+- [x] ~~Option A vs B comparison~~ — Option B recommended (faster, more robust)
+- [x] ~~SRX25595131 outlier~~ — multi-run download issue, fixed with `download-experiment.sh`
+- [x] ~~CWL JavaScript elimination~~ — all 20 CWL files JS-free (CWL Zen compatible)
+- [x] ~~Target genes analysis~~ — JSON + HTML template, demo on GitHub Pages
+- [x] ~~Colocalization analysis~~ — H/M/L scoring + HTML template, demo on GitHub Pages
+- [x] ~~Fast download~~ — aria2c + ENA/DDBJ routing tested (2.5x faster)
+- [x] ~~CWL runner language choice~~ — Rust
 
 ---
 
@@ -282,7 +288,7 @@ chip-atlas-pipeline-v2/
 - Designed for throughput at scale (400K+ samples)
 - Language TBD (Rust? Go? Python?)
 
-## Phase 3: Secondary Analysis Rewrite [ ]
+## Phase 3: Secondary Analysis Rewrite [x] Target Genes + Colo / [ ] Enrichment
 
 ### 3.1 Target Gene Analysis
 
@@ -708,23 +714,23 @@ After Phase 4 validation, decide:
 - Data distribution: same URL structure for backward compatibility
 - Multi-run download: use `download-experiment.sh` to handle SRX→SRR resolution
 
-## Timeline (rough phases, not time estimates)
+## Timeline
 
-1. [x] **Benchmarking** — evaluate aligners (bwa-mem2, Parabricks), validate --nomodel
-2. [x] **CWL development (Option A)** — option-a, option-a-nomodel, option-a-parabricks
-3. [ ] **CWL development (Option B)** — fastp, HMMRATAC, SEACR, deeptools
-4. [ ] **Custom runner** — develop minimal CWL runner (can parallel with #3)
-5. [ ] **Secondary analyses** — rewrite in Python + CWL
-6. [x] **Validation (Option A)** — A vs v1 on ce11 + hg38
-7. [ ] **Validation (Option B)** — B vs v1, A vs B
-8. [ ] **Decision & Production** — choose option, process remaining samples
+1. [x] **Benchmarking** — bwa-mem2/Parabricks evaluated, --nomodel validated, 2×2 matrix complete
+2. [x] **CWL workflows** — Option A (3 variants) + Option B (2 variants), all CWL Zen (JS-free)
+3. [x] **Validation** — A vs v1 (ce11+hg38), A vs B (ce11), peak overlap analysis, multi-threshold
+4. [x] **Secondary analyses** — target genes + colocalization (scripts + templates + demo pages)
+5. [ ] **NIG supercomputer test** — setup script ready, awaiting run
+6. [ ] **Enrichment analysis** — third secondary analysis
+7. [ ] **CWL Zen runner** — Rust implementation (separate repo)
+8. [ ] **Production reprocessing** — 400K+ samples on NIG
 
 ## Open Questions
 
-- [ ] Which job scheduler is on the HPC cluster? (SLURM assumed)
-- [ ] Parabricks licensing — is it available, or need to acquire?
-- [ ] Custom CWL runner language choice
-- [ ] CUT&Tag-specific parameters and peak caller (SEACR vs MACS3)
-- [ ] Data storage strategy for v2 outputs (same filesystem? new structure?)
-- [ ] Why does hg38 show near-parity with v1 while ce11 shows 1.5x more peaks?
-- [x] ~~SRX25595131 outlier~~ — resolved: multi-run download issue (see progress log)
+- [ ] Parabricks licensing on NIG — is L40S supported? Need to test
+- [ ] CUT&Tag peak caller — SEACR vs MACS3 for CUT&Tag data
+- [ ] Data storage strategy — host v2 on existing DBCLS infra or S3?
+- [ ] Why hg38 shows near-parity with v1 while ce11 shows 1.5x more peaks
+- [x] ~~Job scheduler~~ — SLURM (confirmed on NIG)
+- [x] ~~CWL runner language~~ — Rust
+- [x] ~~SRX25595131 outlier~~ — multi-run download issue

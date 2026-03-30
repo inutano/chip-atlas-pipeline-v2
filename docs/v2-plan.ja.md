@@ -4,30 +4,35 @@
 
 | フェーズ | 状態 | 概要 |
 |---------|------|------|
-| 1. ベンチマーク＆ツール選定 | [x] 完了（Option A） | bwa-mem2 + Parabricks評価済、--nomodel検証済 |
-| 2. CWLワークフロー開発（Option A） | [x] 完了 | option-a, option-a-nomodel, option-a-parabricks |
-| 2. CWLワークフロー開発（Option B） | [x] 完了 | option-b, option-b-parabricks |
-| 3. 二次解析の書き直し | [ ] 未着手 | ターゲット遺伝子、共局在、エンリッチメント |
-| 4. 検証（Option A vs v1） | [x] 完了（ce11 + hg38） | ピーク約90%回収、ce11で1.5倍多く検出、hg38で同等 |
-| 4. 検証（Option B vs v1） | [x] 完了（ce11） | Option BはAより1.3倍高速、失敗0 |
-| 4. 検証（Option A vs B） | [x] 完了（ce11） | 2×2マトリックス（CPU/GPU × A/B） |
-| 5. 本番デプロイ | [ ] 未着手 | クラスターセットアップガイド作成済 |
-| カスタムCWLランナー | [ ] 未着手 | CWL Zen設計書作成済 |
+| 1. ベンチマーク＆ツール選定 | [x] 完了 | bwa-mem2 + Parabricks評価済、2×2マトリックス完了 |
+| 2. CWLワークフロー開発 | [x] 完了 | Option A（3バリアント）+ Option B（2バリアント）、CWL Zen対応 |
+| 3. 二次解析 | [x] ほぼ完了 | ターゲット遺伝子 + 共局在実装済、エンリッチメント未着手 |
+| 4. 検証 | [x] 完了 | 2×2マトリックス（ce11）、A vs v1（ce11+hg38）、ピークオーバーラップ解析 |
+| 5. 本番デプロイ | [ ] 進行中 | NIG設定スクリプト準備済、テスト実行待ち |
+| CWL Zenランナー | [ ] 設計完了 | 仕様書 + lintツール完成、Rust実装未着手 |
 
 ### 残りのTODO
 
-- [x] ~~Option B「Modern」ワークフロー実装~~ — option-b.cwl + option-b-parabricks.cwl
-- [x] ~~Option Bをce11でベンチマーク~~ — 2×2マトリックス完了、Option B推奨
-- [x] ~~SRX25595131外れ値の調査~~ — 解決済：マルチラン実験で2つのSRRのうち1つのみダウンロードしていた
-- [ ] 残りのゲノム（dm6, mm10, rn6）のベンチマーク — インデックスは構築済
-- [ ] hg38でOption Bベンチマーク
+**次のステップ:**
+- [ ] 遺伝研スパコンでベンチマーク実行（スクリプト準備済: `scripts/nig-setup-and-benchmark.sh`）
+- [ ] エンリッチメント解析実装（3つ目の二次解析）
 - [ ] サンプル選定にインストゥルメントフィルタ追加（PacBio/ONT除外）
-- [ ] fast-download.sh（aria2c + ENA/DDBJ）を全ベンチマークスクリプトに統合
-- [ ] 二次解析（ターゲット遺伝子、共局在、エンリッチメント）をCWLで書き直し
-- [ ] 共有HPCクラスターでのテスト（セットアップガイド作成済）
-- [ ] カスタムCWLランナー（CWL Zen）開発
+
+**将来:**
+- [ ] CWL Zenランナー実装（Rust、別リポジトリ: [cwl-zen](https://github.com/inutano/cwl-zen)）
+- [ ] CUT&Tagサポート（SEACRピークコーラー）
+- [ ] 残りのゲノム（dm6, mm10, rn6）ベンチマーク — 遺伝研で実行可能
 - [ ] 未処理1万件以上のサンプル処理
-- [ ] 本番パイプライン選択後に全面再処理
+- [ ] 40万件以上の全面再処理
+
+**解決済:**
+- [x] ~~Option A vs B比較~~ — Option B推奨（高速かつ堅牢）
+- [x] ~~SRX25595131外れ値~~ — マルチランダウンロード問題、`download-experiment.sh`で修正
+- [x] ~~CWL JavaScript除去~~ — 全20ファイルJS不使用（CWL Zen対応）
+- [x] ~~ターゲット遺伝子解析~~ — JSON + HTMLテンプレート、GitHub Pagesでデモ
+- [x] ~~共局在解析~~ — H/M/Lスコアリング + HTMLテンプレート、GitHub Pagesでデモ
+- [x] ~~高速ダウンロード~~ — aria2c + ENA/DDBJルーティング（2.5倍高速）
+- [x] ~~CWLランナー言語選択~~ — Rust
 
 ---
 
