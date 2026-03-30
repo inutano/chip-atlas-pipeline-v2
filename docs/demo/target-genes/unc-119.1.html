@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChIP-Atlas Target Genes</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #333; padding: 16px; font-size: 14px; }
+  h1 { font-size: 1.3em; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 0.85em; margin-bottom: 12px; }
+  .meta { margin-bottom: 10px; }
+  .meta span { background: #e8f0fe; padding: 2px 8px; border-radius: 3px; margin-right: 6px; font-size: 0.85em; }
+  .window-nav { margin-bottom: 10px; font-size: 0.85em; }
+  .window-nav a { color: #4285f4; text-decoration: none; margin-right: 12px; padding: 3px 10px; border-radius: 3px; }
+  .window-nav a:hover { background: #e8f0fe; }
+  .window-nav a.active { background: #4285f4; color: #fff; }
+  .controls { margin-bottom: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .controls input, .controls select { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85em; }
+  .controls label { font-size: 0.8em; color: #666; }
+  .matrix-wrap { overflow-x: auto; max-height: 75vh; overflow-y: auto; }
+  table { border-collapse: collapse; font-size: 0.75em; }
+  th { background: #f5f5f5; padding: 4px 6px; border: 1px solid #ddd; position: sticky; top: 0; z-index: 2; white-space: nowrap; cursor: pointer; user-select: none; }
+  th:hover { background: #e0e0e0; }
+  th.gene-col { position: sticky; left: 0; z-index: 3; background: #eee; min-width: 80px; }
+  th.string-col { min-width: 50px; }
+  th .sort-arrow { font-size: 0.7em; margin-left: 2px; }
+  td { padding: 3px 5px; border: 1px solid #eee; text-align: center; min-width: 40px; }
+  td.gene-cell { text-align: left; position: sticky; left: 0; background: #fff; z-index: 1; }
+  td.gene-cell a { color: #333; text-decoration: none; font-style: italic; }
+  td.gene-cell a:hover { color: #4285f4; text-decoration: underline; }
+  td.avg-cell { font-weight: bold; }
+  td.string-cell a { color: #4285f4; text-decoration: none; font-size: 0.85em; }
+  td.string-cell a:hover { text-decoration: underline; }
+  .exp-header { writing-mode: vertical-lr; text-orientation: mixed; font-size: 0.7em; max-height: 140px; overflow: hidden; }
+  .count { color: #999; font-size: 0.8em; margin-top: 6px; }
+  .download { margin-top: 8px; font-size: 0.85em; }
+  .download a { color: #4285f4; text-decoration: none; margin-right: 12px; }
+  .download a:hover { text-decoration: underline; }
+  #loading { text-align: center; padding: 40px; color: #999; }
+  .legend { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75em; color: #666; margin-bottom: 8px; }
+  .legend-bar { height: 12px; width: 120px; border-radius: 2px; }
+  .info { font-size: 0.8em; color: #888; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<h1 id="title">Target Genes</h1>
+<div class="subtitle" id="subtitle">Binding scores of MACS3 peak calls near transcription start sites</div>
+
+<div class="meta" id="meta"></div>
+
+<div class="window-nav" id="windowNav">
+  Distance from TSS:
+</div>
+
+<div class="info">
+  <div class="legend">
+    Score: <span>0</span>
+    <span class="legend-bar" style="background: linear-gradient(to right, #ffffff, #c6dbef, #4292c6, #d62728);"></span>
+    <span>1000+</span>
+  </div>
+</div>
+
+<div class="download" id="downloads">
+  <a id="downloadTsv" href="#">Download TSV</a>
+  <a id="downloadJson" href="#">Download JSON</a>
+</div>
+
+<div class="controls">
+  <div>
+    <label>Search gene:</label>
+    <input type="text" id="search" placeholder="e.g. TP53, hlh-1">
+  </div>
+  <div>
+    <label>Min avg score:</label>
+    <input type="number" id="minScore" value="0" min="0" step="50">
+  </div>
+  <div>
+    <label>Show:</label>
+    <select id="maxGenes">
+      <option value="100">100 genes</option>
+      <option value="500" selected>500 genes</option>
+      <option value="1000">1000 genes</option>
+      <option value="99999">All</option>
+    </select>
+  </div>
+</div>
+
+<div id="loading">Loading data...</div>
+<div class="matrix-wrap" id="matrixWrap" style="display:none">
+  <table id="matrix"></table>
+</div>
+<div class="count" id="count"></div>
+<script>
+let data = null;
+let sortCol = 'avg';
+let sortAsc = false;
+let sortExpId = null;
+
+// Color scale matching v1: white → blue → red
+function scoreColor(score) {
+  if (score <= 0) return '#ffffff';
+  const s = Math.min(score, 1000);
+  if (s <= 250) {
+    const t = s / 250;
+    return `rgb(${Math.round(255-57*t)},${Math.round(255-36*t)},${Math.round(255-16*t)})`;
+  } else if (s <= 500) {
+    const t = (s - 250) / 250;
+    return `rgb(${Math.round(198-132*t)},${Math.round(219-73*t)},${Math.round(239-41*t)})`;
+  } else if (s <= 750) {
+    const t = (s - 500) / 250;
+    return `rgb(${Math.round(66+148*t)},${Math.round(146-107*t)},${Math.round(198-159*t)})`;
+  } else {
+    const t = (s - 750) / 250;
+    return `rgb(${Math.round(214)},${Math.round(39)},${Math.round(39)})`;
+  }
+}
+
+function textColor(score) {
+  return score > 600 ? '#fff' : '#333';
+}
+
+// STRING DB URL for gene-antigen interaction
+function stringUrl(gene, antigen, genome) {
+  const org = {hg38:'9606', mm10:'10090', ce11:'6239', dm6:'7227', rn6:'10116', sacCer3:'4932'};
+  const taxid = org[genome] || '9606';
+  return `https://string-db.org/network/${taxid}/${gene}`;
+}
+
+// NCBI Gene URL
+function geneUrl(gene, genome) {
+  const org = {hg38:'Homo+sapiens', mm10:'Mus+musculus', ce11:'Caenorhabditis+elegans', dm6:'Drosophila+melanogaster'};
+  const orgName = org[genome] || '';
+  return `https://www.ncbi.nlm.nih.gov/gene/?term=${gene}+${orgName}`;
+}
+
+function init() {
+  // Load from embedded data
+  const embedded = document.getElementById('embedded-data');
+  if (embedded) {
+    data = JSON.parse(embedded.textContent);
+    try { render(); } catch(e) { showError('Error: ' + e.message); console.error(e); }
+    return;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const dataFile = params.get('data');
+  if (dataFile) {
+    // Loading embedded data...
+    fetch(dataFile)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(d => { data = d; try { render(); } catch(e) { showError('Error: ' + e.message); console.error(e); } })
+      .catch(e => showError('Load failed: ' + e.message));
+  } else {
+    document.getElementById('loading').textContent = 'Use ?data=ANTIGEN.5.json';
+  }
+}
+
+function showError(msg) {
+  document.getElementById('loading').textContent = msg;
+  document.getElementById('loading').style.display = 'block';
+}
+
+function render() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('matrixWrap').style.display = 'block';
+
+  const antigen = data.antigen;
+  const genome = data.genome;
+  const wkb = data.window_kb;
+
+  document.getElementById('title').textContent = `Target Genes: ${antigen}`;
+  document.getElementById('meta').innerHTML =
+    `<span>${genome}</span>` +
+    `<span>${antigen}</span>` +
+    `<span>${data.total_genes} genes</span>` +
+    `<span>${data.experiments.length} experiments</span>`;
+
+  // Window navigation links
+  const safeName = antigen.replace(/\//g, '_').replace(/ /g, '_');
+  const navHtml = [1, 5, 10].map(kb => {
+    const cls = kb === wkb ? 'active' : '';
+    return `<a href="?data=${safeName}.${kb}.json" class="${cls}">\u00b1 ${kb} kb</a>`;
+  }).join('');
+  document.getElementById('windowNav').innerHTML = 'Distance from TSS: ' + navHtml;
+
+  // Downloads
+  const jsonBlob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  document.getElementById('downloadJson').href = URL.createObjectURL(jsonBlob);
+  document.getElementById('downloadJson').download = `${safeName}.${wkb}.json`;
+
+  updateMatrix();
+
+  document.getElementById('search').addEventListener('input', updateMatrix);
+  document.getElementById('minScore').addEventListener('input', updateMatrix);
+  document.getElementById('maxGenes').addEventListener('change', updateMatrix);
+}
+
+function sortBy(col, expId) {
+  if (col === sortCol && expId === sortExpId) {
+    sortAsc = !sortAsc;
+  } else {
+    sortCol = col;
+    sortExpId = expId;
+    sortAsc = false;
+  }
+  updateMatrix();
+}
+
+function updateMatrix() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const minScore = parseFloat(document.getElementById('minScore').value) || 0;
+  const maxGenes = parseInt(document.getElementById('maxGenes').value) || 500;
+  const exps = data.experiments;
+
+  let genes = data.genes.filter(g =>
+    g.avg_score >= minScore &&
+    (!search || g.symbol.toLowerCase().includes(search))
+  );
+
+  // Sort
+  genes.sort((a, b) => {
+    let va, vb;
+    if (sortCol === 'gene') {
+      va = a.symbol.toLowerCase(); vb = b.symbol.toLowerCase();
+    } else if (sortCol === 'avg') {
+      va = a.avg_score; vb = b.avg_score;
+    } else if (sortCol === 'exp' && sortExpId) {
+      va = a.scores[sortExpId] || 0; vb = b.scores[sortExpId] || 0;
+    } else {
+      va = a.avg_score; vb = b.avg_score;
+    }
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  const shown = genes.slice(0, maxGenes);
+  const arrow = sortAsc ? '\u25b2' : '\u25bc';
+
+  // Header
+  let html = '<thead><tr>';
+  html += `<th class="gene-col" onclick="sortBy('gene')">Gene${sortCol==='gene'?`<span class="sort-arrow">${arrow}</span>`:''}</th>`;
+  html += `<th onclick="sortBy('avg')">${data.antigen}: Average${sortCol==='avg'?`<span class="sort-arrow">${arrow}</span>`:''}</th>`;
+  for (const exp of exps) {
+    const isSorted = sortCol === 'exp' && sortExpId === exp.id;
+    html += `<th onclick="sortBy('exp','${exp.id}')"><div class="exp-header">${exp.id}: ${exp.cell_type}${isSorted?`<span class="sort-arrow">${arrow}</span>`:''}</div></th>`;
+  }
+  html += `<th class="string-col">STRING</th>`;
+  html += '</tr></thead><tbody>';
+
+  // Rows
+  for (const gene of shown) {
+    html += '<tr>';
+    // Gene name — italic, linked to NCBI Gene
+    html += `<td class="gene-cell"><a href="${geneUrl(gene.symbol, data.genome)}" target="_blank"><i>${gene.symbol}</i></a></td>`;
+    // Average score
+    const avgBg = scoreColor(gene.avg_score);
+    html += `<td class="avg-cell" style="background:${avgBg};color:${textColor(gene.avg_score)}">${Math.round(gene.avg_score)}</td>`;
+    // Per-experiment scores
+    for (const exp of exps) {
+      const score = gene.scores[exp.id] || 0;
+      const bg = scoreColor(score);
+      const txt = score > 0 ? Math.round(score) : '';
+      html += `<td style="background:${bg};color:${textColor(score)}" title="${gene.symbol} | ${exp.id} (${exp.cell_type}): ${score}">${txt}</td>`;
+    }
+    // STRING link
+    html += `<td class="string-cell"><a href="${stringUrl(gene.symbol, data.antigen, data.genome)}" target="_blank">\u{1f517}</a></td>`;
+    html += '</tr>';
+  }
+  html += '</tbody>';
+
+  document.getElementById('matrix').innerHTML = html;
+  document.getElementById('count').textContent =
+    `Showing ${shown.length} of ${genes.length} genes` +
+    (genes.length < data.total_genes ? ` (filtered from ${data.total_genes})` : '');
+
+  // TSV download
+  const header = ['gene_symbol', `${data.antigen}_average`].concat(exps.map(e => `${e.id}:${e.cell_type}`)).concat(['STRING']);
+  const tsv = header.join('\t') + '\n' +
+    genes.map(g => {
+      const row = [g.symbol, g.avg_score]
+        .concat(exps.map(e => g.scores[e.id] || 0))
+        .concat([stringUrl(g.symbol, data.antigen, data.genome)]);
+      return row.join('\t');
+    }).join('\n');
+  const tsvBlob = new Blob([tsv], {type: 'text/tab-separated-values'});
+  document.getElementById('downloadTsv').href = URL.createObjectURL(tsvBlob);
+  document.getElementById('downloadTsv').download = `${data.antigen}.${data.window_kb}.tsv`;
+}
+
+init();
+</script>
+<script id="embedded-data" type="application/json">
+{"antigen": "unc-119", "genome": "ce11", "window_kb": 1, "total_genes": 180, "experiments": [{"id": "SRX26261231", "cell_type": "Embryo", "cell_type_class": "Late embryo"}, {"id": "SRX26261229", "cell_type": "Embryo", "cell_type_class": "Late embryo"}], "genes": [{"symbol": "fbxa-75", "avg_score": 18199.5, "scores": {"SRX26261231": 13434.0, "SRX26261229": 22965.0}}, {"symbol": "clec-9", "avg_score": 12916.0, "scores": {"SRX26261231": 7765.0, "SRX26261229": 18067.0}}, {"symbol": "Y80D4G.2", "avg_score": 10297.5, "scores": {"SRX26261231": 6767.0, "SRX26261229": 13828.0}}, {"symbol": "Y62E10A.3", "avg_score": 8930.0, "scores": {"SRX26261231": 7294.0, "SRX26261229": 10566.0}}, {"symbol": "elk-2", "avg_score": 8778.5, "scores": {"SRX26261231": 10865.0, "SRX26261229": 6692.0}}, {"symbol": "C26H9A.3", "avg_score": 8741.0, "scores": {"SRX26261231": 8696.0, "SRX26261229": 8786.0}}, {"symbol": "Y57G11C.8", "avg_score": 7931.5, "scores": {"SRX26261231": 8439.0, "SRX26261229": 7424.0}}, {"symbol": "sre-47", "avg_score": 6519.0, "scores": {"SRX26261231": 5074.0, "SRX26261229": 7964.0}}, {"symbol": "rgs-8.2", "avg_score": 4921.0, "scores": {"SRX26261231": 3062.0, "SRX26261229": 6780.0}}, {"symbol": "Y1A5A.1", "avg_score": 4817.0, "scores": {"SRX26261231": 3276.0, "SRX26261229": 6358.0}}, {"symbol": "C36E8.6", "avg_score": 4817.0, "scores": {"SRX26261231": 3276.0, "SRX26261229": 6358.0}}, {"symbol": "Y62H9A.7", "avg_score": 4577.5, "scores": {"SRX26261231": 0, "SRX26261229": 9155.0}}, {"symbol": "K08D8.6", "avg_score": 4565.0, "scores": {"SRX26261231": 4498.0, "SRX26261229": 4632.0}}, {"symbol": "K08D8.1", "avg_score": 4565.0, "scores": {"SRX26261231": 4498.0, "SRX26261229": 4632.0}}, {"symbol": "trf-2", "avg_score": 4450.5, "scores": {"SRX26261231": 4998.0, "SRX26261229": 3903.0}}, {"symbol": "Y23H5B.3", "avg_score": 3791.0, "scores": {"SRX26261231": 2266.0, "SRX26261229": 5316.0}}, {"symbol": "fbxa-221", "avg_score": 3555.0, "scores": {"SRX26261231": 3205.0, "SRX26261229": 3905.0}}, {"symbol": "Y34F4.1", "avg_score": 3529.0, "scores": {"SRX26261231": 3614.0, "SRX26261229": 3444.0}}, {"symbol": "asp-19", "avg_score": 3448.0, "scores": {"SRX26261231": 2194.0, "SRX26261229": 4702.0}}, {"symbol": "Y51B9A.5", "avg_score": 2608.5, "scores": {"SRX26261231": 2216.0, "SRX26261229": 3001.0}}, {"symbol": "ZK1053.2", "avg_score": 2339.0, "scores": {"SRX26261231": 2688.0, "SRX26261229": 1990.0}}, {"symbol": "Y8A9A.2", "avg_score": 2020.5, "scores": {"SRX26261231": 2208.0, "SRX26261229": 1833.0}}, {"symbol": "srh-246", "avg_score": 1249.5, "scores": {"SRX26261231": 0, "SRX26261229": 2499.0}}, {"symbol": "C55C3.8", "avg_score": 1180.5, "scores": {"SRX26261231": 786.0, "SRX26261229": 1575.0}}, {"symbol": "Y106G6E.8", "avg_score": 1163.0, "scores": {"SRX26261231": 1355.0, "SRX26261229": 971.0}}, {"symbol": "clec-223", "avg_score": 1071.0, "scores": {"SRX26261231": 830.0, "SRX26261229": 1312.0}}, {"symbol": "rgs-8.1", "avg_score": 975.5, "scores": {"SRX26261231": 0, "SRX26261229": 1951.0}}, {"symbol": "age-1", "avg_score": 872.5, "scores": {"SRX26261231": 838.0, "SRX26261229": 907.0}}, {"symbol": "C53C11.4", "avg_score": 861.0, "scores": {"SRX26261231": 803.0, "SRX26261229": 919.0}}, {"symbol": "Y47H10A.4", "avg_score": 785.0, "scores": {"SRX26261231": 365.0, "SRX26261229": 1205.0}}, {"symbol": "K12H4.6", "avg_score": 635.0, "scores": {"SRX26261231": 0, "SRX26261229": 1270.0}}, {"symbol": "spcs-3", "avg_score": 635.0, "scores": {"SRX26261231": 0, "SRX26261229": 1270.0}}, {"symbol": "K12H4.5", "avg_score": 635.0, "scores": {"SRX26261231": 0, "SRX26261229": 1270.0}}, {"symbol": "K12H4.3", "avg_score": 635.0, "scores": {"SRX26261231": 0, "SRX26261229": 1270.0}}, {"symbol": "pck-2", "avg_score": 584.0, "scores": {"SRX26261231": 479.0, "SRX26261229": 689.0}}, {"symbol": "frm-7", "avg_score": 562.5, "scores": {"SRX26261231": 0, "SRX26261229": 1125.0}}, {"symbol": "F55C5.17", "avg_score": 562.5, "scores": {"SRX26261231": 0, "SRX26261229": 1125.0}}, {"symbol": "Y105C5A.10", "avg_score": 558.0, "scores": {"SRX26261231": 488.0, "SRX26261229": 628.0}}, {"symbol": "nhr-141", "avg_score": 503.0, "scores": {"SRX26261231": 147.0, "SRX26261229": 859.0}}, {"symbol": "cpt-3", "avg_score": 461.0, "scores": {"SRX26261231": 556.0, "SRX26261229": 366.0}}, {"symbol": "Y41E3.13", "avg_score": 445.5, "scores": {"SRX26261231": 523.0, "SRX26261229": 368.0}}, {"symbol": "oac-12", "avg_score": 435.0, "scores": {"SRX26261231": 338.0, "SRX26261229": 532.0}}, {"symbol": "irld-1", "avg_score": 432.5, "scores": {"SRX26261231": 119.0, "SRX26261229": 746.0}}, {"symbol": "sre-23", "avg_score": 338.0, "scores": {"SRX26261231": 0, "SRX26261229": 676.0}}, {"symbol": "C17H11.4", "avg_score": 334.0, "scores": {"SRX26261231": 0, "SRX26261229": 668.0}}, {"symbol": "srx-125", "avg_score": 320.0, "scores": {"SRX26261231": 0, "SRX26261229": 640.0}}, {"symbol": "Y52D5A.2", "avg_score": 256.0, "scores": {"SRX26261231": 246.0, "SRX26261229": 266.0}}, {"symbol": "eel-1", "avg_score": 228.5, "scores": {"SRX26261231": 0, "SRX26261229": 457.0}}, {"symbol": "T13C5.6", "avg_score": 219.5, "scores": {"SRX26261231": 0, "SRX26261229": 439.0}}, {"symbol": "C14F11.7", "avg_score": 219.5, "scores": {"SRX26261231": 0, "SRX26261229": 439.0}}, {"symbol": "M02F4.2", "avg_score": 219.0, "scores": {"SRX26261231": 0, "SRX26261229": 438.0}}, {"symbol": "Y43F4A.4", "avg_score": 218.5, "scores": {"SRX26261231": 0, "SRX26261229": 437.0}}, {"symbol": "C04A11.5", "avg_score": 218.5, "scores": {"SRX26261231": 0, "SRX26261229": 437.0}}, {"symbol": "mrps-28", "avg_score": 218.0, "scores": {"SRX26261231": 0, "SRX26261229": 436.0}}, {"symbol": "spd-5", "avg_score": 217.0, "scores": {"SRX26261231": 0, "SRX26261229": 434.0}}, {"symbol": "npp-6", "avg_score": 217.0, "scores": {"SRX26261231": 0, "SRX26261229": 434.0}}, {"symbol": "twk-5", "avg_score": 206.0, "scores": {"SRX26261231": 0, "SRX26261229": 412.0}}, {"symbol": "sec-15", "avg_score": 198.5, "scores": {"SRX26261231": 0, "SRX26261229": 397.0}}, {"symbol": "C28G1.2", "avg_score": 198.5, "scores": {"SRX26261231": 0, "SRX26261229": 397.0}}, {"symbol": "col-85", "avg_score": 192.5, "scores": {"SRX26261231": 0, "SRX26261229": 385.0}}, {"symbol": "nrde-2", "avg_score": 187.5, "scores": {"SRX26261231": 0, "SRX26261229": 375.0}}, {"symbol": "atad-3", "avg_score": 187.5, "scores": {"SRX26261231": 0, "SRX26261229": 375.0}}, {"symbol": "str-52", "avg_score": 187.0, "scores": {"SRX26261231": 0, "SRX26261229": 374.0}}, {"symbol": "srbc-20", "avg_score": 187.0, "scores": {"SRX26261231": 0, "SRX26261229": 374.0}}, {"symbol": "ears-2", "avg_score": 182.5, "scores": {"SRX26261231": 0, "SRX26261229": 365.0}}, {"symbol": "T07A9.10", "avg_score": 182.5, "scores": {"SRX26261231": 0, "SRX26261229": 365.0}}, {"symbol": "Y53F4B.7", "avg_score": 182.0, "scores": {"SRX26261231": 159.0, "SRX26261229": 205.0}}, {"symbol": "vps-39", "avg_score": 177.5, "scores": {"SRX26261231": 0, "SRX26261229": 355.0}}, {"symbol": "Y53F4B.26", "avg_score": 176.5, "scores": {"SRX26261231": 0, "SRX26261229": 353.0}}, {"symbol": "ints-8", "avg_score": 173.0, "scores": {"SRX26261231": 0, "SRX26261229": 346.0}}, {"symbol": "pph-5", "avg_score": 171.5, "scores": {"SRX26261231": 148.0, "SRX26261229": 195.0}}, {"symbol": "D1046.2", "avg_score": 169.5, "scores": {"SRX26261231": 0, "SRX26261229": 339.0}}, {"symbol": "cfim-2", "avg_score": 169.5, "scores": {"SRX26261231": 0, "SRX26261229": 339.0}}, {"symbol": "pot-3", "avg_score": 167.0, "scores": {"SRX26261231": 188.0, "SRX26261229": 146.0}}, {"symbol": "W07G1.1", "avg_score": 163.5, "scores": {"SRX26261231": 169.0, "SRX26261229": 158.0}}, {"symbol": "mlcd-1", "avg_score": 160.0, "scores": {"SRX26261231": 0, "SRX26261229": 320.0}}, {"symbol": "rps-24", "avg_score": 157.0, "scores": {"SRX26261231": 0, "SRX26261229": 314.0}}, {"symbol": "cye-1", "avg_score": 156.5, "scores": {"SRX26261231": 0, "SRX26261229": 313.0}}, {"symbol": "D2045.2", "avg_score": 154.5, "scores": {"SRX26261231": 0, "SRX26261229": 309.0}}, {"symbol": "atx-2", "avg_score": 154.5, "scores": {"SRX26261231": 0, "SRX26261229": 309.0}}, {"symbol": "mdt-8", "avg_score": 154.0, "scores": {"SRX26261231": 0, "SRX26261229": 308.0}}, {"symbol": "Y62F5A.12", "avg_score": 154.0, "scores": {"SRX26261231": 0, "SRX26261229": 308.0}}, {"symbol": "col-181", "avg_score": 149.0, "scores": {"SRX26261231": 0, "SRX26261229": 298.0}}, {"symbol": "wrt-3", "avg_score": 145.5, "scores": {"SRX26261231": 0, "SRX26261229": 291.0}}, {"symbol": "ptc-1", "avg_score": 143.0, "scores": {"SRX26261231": 0, "SRX26261229": 286.0}}, {"symbol": "klp-6", "avg_score": 141.5, "scores": {"SRX26261231": 0, "SRX26261229": 283.0}}, {"symbol": "K08F11.1", "avg_score": 141.5, "scores": {"SRX26261231": 0, "SRX26261229": 283.0}}, {"symbol": "snx-17", "avg_score": 138.0, "scores": {"SRX26261231": 0, "SRX26261229": 276.0}}, {"symbol": "nhr-255", "avg_score": 138.0, "scores": {"SRX26261231": 0, "SRX26261229": 276.0}}, {"symbol": "mpk-2", "avg_score": 134.5, "scores": {"SRX26261231": 0, "SRX26261229": 269.0}}, {"symbol": "ets-5", "avg_score": 131.0, "scores": {"SRX26261231": 0, "SRX26261229": 262.0}}, {"symbol": "T26C11.2", "avg_score": 126.5, "scores": {"SRX26261231": 79.0, "SRX26261229": 174.0}}, {"symbol": "egl-17", "avg_score": 124.5, "scores": {"SRX26261231": 0, "SRX26261229": 249.0}}, {"symbol": "unc-85", "avg_score": 118.5, "scores": {"SRX26261231": 0, "SRX26261229": 237.0}}, {"symbol": "gcy-33", "avg_score": 117.5, "scores": {"SRX26261231": 0, "SRX26261229": 235.0}}, {"symbol": "F57F5.1", "avg_score": 117.5, "scores": {"SRX26261231": 0, "SRX26261229": 235.0}}, {"symbol": "srh-19", "avg_score": 117.5, "scores": {"SRX26261231": 0, "SRX26261229": 235.0}}, {"symbol": "W02D3.13", "avg_score": 114.0, "scores": {"SRX26261231": 0, "SRX26261229": 228.0}}, {"symbol": "W02D3.4", "avg_score": 114.0, "scores": {"SRX26261231": 0, "SRX26261229": 228.0}}, {"symbol": "T02E1.2", "avg_score": 113.5, "scores": {"SRX26261231": 0, "SRX26261229": 227.0}}, {"symbol": "mog-4", "avg_score": 113.5, "scores": {"SRX26261231": 0, "SRX26261229": 227.0}}, {"symbol": "supr-1", "avg_score": 112.0, "scores": {"SRX26261231": 0, "SRX26261229": 224.0}}, {"symbol": "dnj-28", "avg_score": 112.0, "scores": {"SRX26261231": 0, "SRX26261229": 224.0}}, {"symbol": "T27A3.8", "avg_score": 110.5, "scores": {"SRX26261231": 0, "SRX26261229": 221.0}}, {"symbol": "rnf-113", "avg_score": 110.5, "scores": {"SRX26261231": 0, "SRX26261229": 221.0}}, {"symbol": "K01G5.10", "avg_score": 110.5, "scores": {"SRX26261231": 0, "SRX26261229": 221.0}}, {"symbol": "tasp-1", "avg_score": 110.5, "scores": {"SRX26261231": 0, "SRX26261229": 221.0}}, {"symbol": "K11H12.1", "avg_score": 107.5, "scores": {"SRX26261231": 0, "SRX26261229": 215.0}}, {"symbol": "rpl-15", "avg_score": 107.5, "scores": {"SRX26261231": 0, "SRX26261229": 215.0}}, {"symbol": "K11H12.8", "avg_score": 107.5, "scores": {"SRX26261231": 0, "SRX26261229": 215.0}}, {"symbol": "W01D2.3", "avg_score": 106.5, "scores": {"SRX26261231": 0, "SRX26261229": 213.0}}, {"symbol": "F14F7.5", "avg_score": 105.5, "scores": {"SRX26261231": 0, "SRX26261229": 211.0}}, {"symbol": "E04F6.6", "avg_score": 104.0, "scores": {"SRX26261231": 0, "SRX26261229": 208.0}}, {"symbol": "pcrg-1", "avg_score": 104.0, "scores": {"SRX26261231": 0, "SRX26261229": 208.0}}, {"symbol": "M01F1.9", "avg_score": 104.0, "scores": {"SRX26261231": 0, "SRX26261229": 208.0}}, {"symbol": "kvs-3", "avg_score": 104.0, "scores": {"SRX26261231": 0, "SRX26261229": 208.0}}, {"symbol": "C01C4.3", "avg_score": 104.0, "scores": {"SRX26261231": 0, "SRX26261229": 208.0}}, {"symbol": "haf-9", "avg_score": 100.5, "scores": {"SRX26261231": 0, "SRX26261229": 201.0}}, {"symbol": "fut-3", "avg_score": 100.0, "scores": {"SRX26261231": 0, "SRX26261229": 200.0}}, {"symbol": "ift-43", "avg_score": 100.0, "scores": {"SRX26261231": 0, "SRX26261229": 200.0}}, {"symbol": "mdt-26", "avg_score": 100.0, "scores": {"SRX26261231": 0, "SRX26261229": 200.0}}, {"symbol": "F44E7.4", "avg_score": 98.0, "scores": {"SRX26261231": 0, "SRX26261229": 196.0}}, {"symbol": "wdr-83", "avg_score": 97.0, "scores": {"SRX26261231": 0, "SRX26261229": 194.0}}, {"symbol": "vps-51", "avg_score": 94.5, "scores": {"SRX26261231": 0, "SRX26261229": 189.0}}, {"symbol": "lin-35", "avg_score": 94.5, "scores": {"SRX26261231": 0, "SRX26261229": 189.0}}, {"symbol": "F59C6.18", "avg_score": 94.5, "scores": {"SRX26261231": 0, "SRX26261229": 189.0}}, {"symbol": "nlp-4", "avg_score": 94.5, "scores": {"SRX26261231": 0, "SRX26261229": 189.0}}, {"symbol": "T28B4.1", "avg_score": 94.5, "scores": {"SRX26261231": 0, "SRX26261229": 189.0}}, {"symbol": "C04A2.15", "avg_score": 91.5, "scores": {"SRX26261231": 0, "SRX26261229": 183.0}}, {"symbol": "algn-7", "avg_score": 91.5, "scores": {"SRX26261231": 0, "SRX26261229": 183.0}}, {"symbol": "rab-7", "avg_score": 90.5, "scores": {"SRX26261231": 0, "SRX26261229": 181.0}}, {"symbol": "W03C9.5", "avg_score": 90.5, "scores": {"SRX26261231": 0, "SRX26261229": 181.0}}, {"symbol": "mex-1", "avg_score": 90.5, "scores": {"SRX26261231": 0, "SRX26261229": 181.0}}, {"symbol": "snx-13", "avg_score": 88.5, "scores": {"SRX26261231": 0, "SRX26261229": 177.0}}, {"symbol": "snr-1", "avg_score": 88.5, "scores": {"SRX26261231": 0, "SRX26261229": 177.0}}, {"symbol": "fmo-2", "avg_score": 81.5, "scores": {"SRX26261231": 0, "SRX26261229": 163.0}}, {"symbol": "C04C11.25", "avg_score": 81.5, "scores": {"SRX26261231": 0, "SRX26261229": 163.0}}, {"symbol": "duo-3", "avg_score": 81.0, "scores": {"SRX26261231": 0, "SRX26261229": 162.0}}, {"symbol": "sws-1", "avg_score": 80.0, "scores": {"SRX26261231": 0, "SRX26261229": 160.0}}, {"symbol": "mrps-35", "avg_score": 80.0, "scores": {"SRX26261231": 0, "SRX26261229": 160.0}}, {"symbol": "B0284.3", "avg_score": 79.0, "scores": {"SRX26261231": 0, "SRX26261229": 158.0}}, {"symbol": "tba-7", "avg_score": 79.0, "scores": {"SRX26261231": 0, "SRX26261229": 158.0}}, {"symbol": "F55A11.6", "avg_score": 79.0, "scores": {"SRX26261231": 0, "SRX26261229": 158.0}}, {"symbol": "sor-3", "avg_score": 79.0, "scores": {"SRX26261231": 0, "SRX26261229": 158.0}}, {"symbol": "F28H6.7", "avg_score": 79.0, "scores": {"SRX26261231": 0, "SRX26261229": 158.0}}, {"symbol": "W09G10.9", "avg_score": 71.5, "scores": {"SRX26261231": 0, "SRX26261229": 143.0}}, {"symbol": "Y50D4C.5", "avg_score": 69.0, "scores": {"SRX26261231": 0, "SRX26261229": 138.0}}, {"symbol": "Y75B12B.11", "avg_score": 68.5, "scores": {"SRX26261231": 0, "SRX26261229": 137.0}}, {"symbol": "unc-58", "avg_score": 67.5, "scores": {"SRX26261231": 0, "SRX26261229": 135.0}}, {"symbol": "gst-26", "avg_score": 67.0, "scores": {"SRX26261231": 0, "SRX26261229": 134.0}}, {"symbol": "gst-27", "avg_score": 67.0, "scores": {"SRX26261231": 0, "SRX26261229": 134.0}}, {"symbol": "cyc-2.1", "avg_score": 66.0, "scores": {"SRX26261231": 0, "SRX26261229": 132.0}}, {"symbol": "rpl-20", "avg_score": 66.0, "scores": {"SRX26261231": 0, "SRX26261229": 132.0}}, {"symbol": "Y17G9B.5", "avg_score": 66.0, "scores": {"SRX26261231": 0, "SRX26261229": 132.0}}, {"symbol": "ZK1248.17", "avg_score": 61.5, "scores": {"SRX26261231": 0, "SRX26261229": 123.0}}, {"symbol": "H41C03.3", "avg_score": 61.5, "scores": {"SRX26261231": 0, "SRX26261229": 123.0}}, {"symbol": "H39E23.3", "avg_score": 60.0, "scores": {"SRX26261231": 120.0, "SRX26261229": 0}}, {"symbol": "sup-35", "avg_score": 59.0, "scores": {"SRX26261231": 0, "SRX26261229": 118.0}}, {"symbol": "Y48A6C.4", "avg_score": 59.0, "scores": {"SRX26261231": 0, "SRX26261229": 118.0}}, {"symbol": "egg-5", "avg_score": 57.5, "scores": {"SRX26261231": 0, "SRX26261229": 115.0}}, {"symbol": "sri-34", "avg_score": 56.0, "scores": {"SRX26261231": 0, "SRX26261229": 112.0}}, {"symbol": "C09E7.7", "avg_score": 55.5, "scores": {"SRX26261231": 0, "SRX26261229": 111.0}}, {"symbol": "spe-15", "avg_score": 54.5, "scores": {"SRX26261231": 0, "SRX26261229": 109.0}}, {"symbol": "ZK1321.4", "avg_score": 53.5, "scores": {"SRX26261231": 0, "SRX26261229": 107.0}}, {"symbol": "rocf-1", "avg_score": 53.5, "scores": {"SRX26261231": 0, "SRX26261229": 107.0}}, {"symbol": "pqn-71", "avg_score": 53.5, "scores": {"SRX26261231": 0, "SRX26261229": 107.0}}, {"symbol": "F55B11.5", "avg_score": 51.0, "scores": {"SRX26261231": 0, "SRX26261229": 102.0}}, {"symbol": "tpra-1", "avg_score": 48.5, "scores": {"SRX26261231": 0, "SRX26261229": 97.0}}, {"symbol": "Y70C5C.1", "avg_score": 48.5, "scores": {"SRX26261231": 0, "SRX26261229": 97.0}}, {"symbol": "Y42A5A.5", "avg_score": 47.5, "scores": {"SRX26261231": 0, "SRX26261229": 95.0}}, {"symbol": "mdf-2", "avg_score": 43.5, "scores": {"SRX26261231": 0, "SRX26261229": 87.0}}, {"symbol": "wrb-1", "avg_score": 41.0, "scores": {"SRX26261231": 0, "SRX26261229": 82.0}}, {"symbol": "Y50D4A.6", "avg_score": 41.0, "scores": {"SRX26261231": 0, "SRX26261229": 82.0}}, {"symbol": "mrps-21", "avg_score": 39.5, "scores": {"SRX26261231": 0, "SRX26261229": 79.0}}, {"symbol": "F29B9.11", "avg_score": 39.5, "scores": {"SRX26261231": 0, "SRX26261229": 79.0}}, {"symbol": "jmjd-1.2", "avg_score": 39.5, "scores": {"SRX26261231": 0, "SRX26261229": 79.0}}, {"symbol": "unc-43", "avg_score": 37.0, "scores": {"SRX26261231": 74.0, "SRX26261229": 0}}, {"symbol": "Y43C5B.2", "avg_score": 37.0, "scores": {"SRX26261231": 74.0, "SRX26261229": 0}}, {"symbol": "T01D3.3", "avg_score": 35.5, "scores": {"SRX26261231": 0, "SRX26261229": 71.0}}, {"symbol": "clec-122", "avg_score": 35.5, "scores": {"SRX26261231": 71.0, "SRX26261229": 0}}]}
+</script>
+</body>
+</html>

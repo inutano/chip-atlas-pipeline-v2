@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChIP-Atlas Colocalization</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #333; padding: 16px; font-size: 14px; }
+  h1 { font-size: 1.3em; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 0.85em; margin-bottom: 12px; }
+  .meta { margin-bottom: 10px; }
+  .meta span { background: #e8f0fe; padding: 2px 8px; border-radius: 3px; margin-right: 6px; font-size: 0.85em; }
+  .download { margin-bottom: 10px; font-size: 0.85em; }
+  .download a { color: #4285f4; text-decoration: none; margin-right: 12px; }
+  .download a:hover { text-decoration: underline; }
+  .controls { margin-bottom: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .controls input { padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85em; }
+  .controls label { font-size: 0.8em; color: #666; }
+  .matrix-wrap { overflow-x: auto; max-height: 75vh; overflow-y: auto; }
+  table { border-collapse: collapse; font-size: 0.75em; }
+  th { background: #f5f5f5; padding: 4px 6px; border: 1px solid #ddd; position: sticky; top: 0; z-index: 2; cursor: pointer; user-select: none; }
+  th:hover { background: #e0e0e0; }
+  th.partner-col { position: sticky; left: 0; z-index: 3; background: #eee; min-width: 120px; }
+  td { padding: 3px 5px; border: 1px solid #eee; text-align: center; min-width: 36px; }
+  td.partner-cell { text-align: left; position: sticky; left: 0; background: #fff; z-index: 1; font-size: 0.85em; }
+  td.partner-cell .antigen { font-weight: bold; }
+  td.partner-cell .cell-type { color: #888; font-size: 0.85em; }
+  .hh { background: #d32f2f; color: #fff; }
+  .hm { background: #ef5350; color: #fff; }
+  .mm { background: #ff8a65; color: #fff; }
+  .hl { background: #ffcc02; color: #333; }
+  .ml { background: #fff59d; color: #333; }
+  .ll { background: #e8f5e9; color: #333; }
+  .nd { background: #f5f5f5; color: #ccc; }
+  .legend { margin-bottom: 10px; font-size: 0.8em; }
+  .legend span { display: inline-block; padding: 2px 8px; margin-right: 4px; border-radius: 2px; }
+  .count { color: #999; font-size: 0.8em; margin-top: 6px; }
+  #loading { text-align: center; padding: 40px; color: #999; }
+  .string-cell a { color: #4285f4; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<h1 id="title">Colocalization</h1>
+<div class="subtitle">Co-binding partners based on peak score distribution overlap</div>
+<div class="meta" id="meta"></div>
+
+<div class="download">
+  <a id="downloadTsv" href="#">Download TSV</a>
+  <a id="downloadJson" href="#">Download JSON</a>
+</div>
+
+<div class="legend">
+  Score legend:
+  <span class="hh">H-H (9)</span>
+  <span class="hm">H-M (6)</span>
+  <span class="mm">M-M (4)</span>
+  <span class="hl">H-L (3)</span>
+  <span class="ml">M-L (2)</span>
+  <span class="ll">L-L (1)</span>
+  <span class="nd">N.D.</span>
+</div>
+
+<div class="controls">
+  <div>
+    <label>Search antigen:</label>
+    <input type="text" id="search" placeholder="e.g. CTCF, H3K4me3">
+  </div>
+  <div>
+    <label>Min score:</label>
+    <input type="number" id="minScore" value="0" min="0" max="9" step="1">
+  </div>
+</div>
+
+<div id="loading">Loading data...</div>
+<div class="matrix-wrap" id="matrixWrap" style="display:none">
+  <table id="matrix"></table>
+</div>
+<div class="count" id="count"></div>
+
+<script>
+let data = null;
+let sortCol = 'score';
+let sortAsc = false;
+
+function scoreClass(score) {
+  if (score >= 8) return 'hh';
+  if (score >= 5) return 'hm';
+  if (score >= 3.5) return 'mm';
+  if (score >= 2.5) return 'hl';
+  if (score >= 1.5) return 'ml';
+  if (score >= 0.5) return 'll';
+  return 'nd';
+}
+
+function scoreLabel(score) {
+  if (score >= 8) return 'H-H';
+  if (score >= 5) return 'H-M';
+  if (score >= 3.5) return 'M-M';
+  if (score >= 2.5) return 'H-L';
+  if (score >= 1.5) return 'M-L';
+  if (score >= 0.5) return 'L-L';
+  return 'N.D.';
+}
+
+function stringUrl(gene, genome) {
+  const org = {hg38:'9606', mm10:'10090', ce11:'6239', dm6:'7227', rn6:'10116', sacCer3:'4932'};
+  return `https://string-db.org/network/${org[genome]||'9606'}/${gene}`;
+}
+
+function init() {
+  // Load from embedded data
+  const embedded = document.getElementById('embedded-data');
+  if (embedded) {
+    data = JSON.parse(embedded.textContent);
+    try { render(); } catch(e) { showError('Error: ' + e.message); console.error(e); }
+    return;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const dataFile = params.get('data');
+  if (dataFile) {
+    // Loading embedded data...
+    fetch(dataFile)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(d => { data = d; try { render(); } catch(e) { showError('Error: ' + e.message); console.error(e); } })
+      .catch(e => showError('Load failed: ' + e.message));
+  } else {
+    document.getElementById('loading').textContent = 'Use ?data=SRX12345678.json';
+  }
+}
+
+function showError(msg) {
+  document.getElementById('loading').textContent = msg;
+  document.getElementById('loading').style.display = 'block';
+}
+
+function render() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('matrixWrap').style.display = 'block';
+
+  document.getElementById('title').textContent = `Colocalization: ${data.query_antigen}`;
+  document.getElementById('meta').innerHTML =
+    `<span>${data.genome}</span>` +
+    `<span>${data.query_antigen}</span>` +
+    `<span>${data.query_cell_type}</span>` +
+    `<span>${data.cell_type_class}</span>` +
+    `<span>${data.query_experiment}</span>` +
+    `<span>${data.n_partners} partners</span>`;
+
+  const jsonBlob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  document.getElementById('downloadJson').href = URL.createObjectURL(jsonBlob);
+  document.getElementById('downloadJson').download = `${data.query_experiment}_colo.json`;
+
+  updateMatrix();
+
+  document.getElementById('search').addEventListener('input', updateMatrix);
+  document.getElementById('minScore').addEventListener('input', updateMatrix);
+}
+
+function updateMatrix() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const minScore = parseFloat(document.getElementById('minScore').value) || 0;
+
+  let partners = data.partners.filter(p =>
+    p.coloc_score >= minScore &&
+    (!search || p.antigen.toLowerCase().includes(search) || p.experiment_id.toLowerCase().includes(search))
+  );
+
+  partners.sort((a, b) => sortAsc ? a.coloc_score - b.coloc_score : b.coloc_score - a.coloc_score);
+
+  let html = '<thead><tr>';
+  html += '<th class="partner-col">Partner</th>';
+  html += '<th>Score</th>';
+  html += '<th>Category</th>';
+  html += '<th>Shared bins</th>';
+  html += '<th>STRING</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const p of partners) {
+    const cls = scoreClass(p.coloc_score);
+    const label = scoreLabel(p.coloc_score);
+    html += '<tr>';
+    html += `<td class="partner-cell"><span class="antigen">${p.antigen}</span><br><span class="cell-type">${p.experiment_id}: ${p.cell_type}</span></td>`;
+    html += `<td class="${cls}">${p.coloc_score.toFixed(1)}</td>`;
+    html += `<td class="${cls}">${label}</td>`;
+    html += `<td>${p.shared_bins}</td>`;
+    html += `<td class="string-cell"><a href="${stringUrl(p.antigen, data.genome)}" target="_blank">\u{1f517}</a></td>`;
+    html += '</tr>';
+  }
+  html += '</tbody>';
+
+  document.getElementById('matrix').innerHTML = html;
+  document.getElementById('count').textContent = `Showing ${partners.length} of ${data.n_partners} partners`;
+
+  // TSV
+  const tsv = 'partner_antigen\texperiment_id\tcell_type\tcoloc_score\tcategory\tshared_bins\n' +
+    partners.map(p => `${p.antigen}\t${p.experiment_id}\t${p.cell_type}\t${p.coloc_score}\t${scoreLabel(p.coloc_score)}\t${p.shared_bins}`).join('\n');
+  const tsvBlob = new Blob([tsv], {type: 'text/tab-separated-values'});
+  document.getElementById('downloadTsv').href = URL.createObjectURL(tsvBlob);
+  document.getElementById('downloadTsv').download = `${data.query_experiment}_colo.tsv`;
+}
+
+init();
+</script>
+<script id="embedded-data" type="application/json">
+{"query_experiment": "SRX11322245", "query_antigen": "H3K9me3", "query_cell_type": "Adult", "cell_type_class": "Young adult", "genome": "ce11", "n_partners": 8, "partners": [{"experiment_id": "SRX4085441", "antigen": "DNase-Seq", "cell_type": "Adult", "coloc_score": 5.53, "shared_bins": 172, "pair_counts": {"L-M": 17, "H-H": 40, "M-M": 48, "H-M": 55, "H-L": 12}}, {"experiment_id": "SRX4085443", "antigen": "DNase-Seq", "cell_type": "Adult", "coloc_score": 5.52, "shared_bins": 195, "pair_counts": {"H-M": 49, "L-M": 24, "H-H": 50, "M-M": 69, "H-L": 3}}, {"experiment_id": "SRX1674099", "antigen": "RNA polymerase II", "cell_type": "Adult", "coloc_score": 5.41, "shared_bins": 244, "pair_counts": {"L-M": 31, "L-L": 21, "H-M": 54, "H-H": 74, "M-M": 55, "H-L": 9}}, {"experiment_id": "SRX4085442", "antigen": "DNase-Seq", "cell_type": "Adult", "coloc_score": 4.98, "shared_bins": 221, "pair_counts": {"H-M": 59, "L-M": 33, "H-H": 38, "M-M": 79, "L-L": 7, "H-L": 5}}, {"experiment_id": "SRX1674101", "antigen": "RNA polymerase II", "cell_type": "Adult", "coloc_score": 4.97, "shared_bins": 181, "pair_counts": {"H-L": 12, "H-M": 47, "L-L": 14, "L-M": 27, "M-M": 43, "H-H": 38}}, {"experiment_id": "SRX1674100", "antigen": "RNA polymerase II", "cell_type": "Adult", "coloc_score": 4.82, "shared_bins": 177, "pair_counts": {"L-M": 33, "H-M": 37, "L-L": 18, "M-M": 34, "H-H": 41, "H-L": 14}}, {"experiment_id": "SRX4085432", "antigen": "DNase-Seq", "cell_type": "Adult", "coloc_score": 4.68, "shared_bins": 224, "pair_counts": {"H-L": 4, "H-H": 38, "M-M": 73, "H-M": 51, "L-M": 38, "L-L": 20}}, {"experiment_id": "SRX4085433", "antigen": "DNase-Seq", "cell_type": "Adult", "coloc_score": 4.46, "shared_bins": 200, "pair_counts": {"H-H": 28, "L-M": 37, "M-M": 51, "H-M": 53, "H-L": 7, "L-L": 24}}]}
+</script>
+</body>
+</html>

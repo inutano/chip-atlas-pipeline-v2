@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChIP-Atlas v2 — Secondary Analysis Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #333; max-width: 800px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 1.5em; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 0.9em; margin-bottom: 24px; }
+  h2 { font-size: 1.1em; margin-top: 20px; margin-bottom: 8px; color: #1a73e8; }
+  .note { font-size: 0.85em; color: #888; margin-bottom: 12px; }
+  ul { list-style: none; padding: 0; }
+  li { margin-bottom: 6px; }
+  a { color: #1a73e8; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .tag { background: #e8f0fe; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; color: #555; margin-left: 4px; }
+  .section { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .info { font-size: 0.85em; color: #666; margin-top: 20px; padding-top: 12px; border-top: 1px solid #eee; }
+  h3 { font-size: 0.95em; color: #444; margin: 12px 0 6px; }
+</style>
+</head>
+<body>
+
+<h1>ChIP-Atlas v2 — Secondary Analysis Demo</h1>
+<div class="subtitle">Prototype pages for review — ce11 (C. elegans), 45 experiments, self-contained HTML</div>
+
+<div class="section">
+<h2>Target Genes</h2>
+<div class="note">Genes near ChIP/ATAC/DNase peaks. Matrix: genes x experiments, color-coded by MACS3 score.</div>
+
+<h3>Histone Marks</h3>
+<ul>
+  <li><a href="target-genes/H3K27ac.5.html">H3K27ac</a> <span class="tag">2 exp</span> <span class="tag">8,159 genes</span></li>
+  <li><a href="target-genes/H4K20me1.5.html">H4K20me1</a> <span class="tag">3 exp</span> <span class="tag">1,911 genes</span></li>
+  <li><a href="target-genes/H4K5ac.5.html">H4K5ac</a> <span class="tag">1 exp</span> <span class="tag">11,380 genes</span></li>
+  <li><a href="target-genes/H3.5.html">H3</a> <span class="tag">1 exp</span> <span class="tag">3,043 genes</span></li>
+  <li><a href="target-genes/H3K27me3.5.html">H3K27me3</a> <span class="tag">1 exp</span> <span class="tag">545 genes</span></li>
+  <li><a href="target-genes/H3K9me3.5.html">H3K9me3</a> <span class="tag">1 exp</span> <span class="tag">619 genes</span></li>
+</ul>
+
+<h3>Transcription Factors</h3>
+<ul>
+  <li><a href="target-genes/grh-1.5.html">grh-1</a> <span class="tag">3 exp</span> <span class="tag">5,946 genes</span></li>
+  <li><a href="target-genes/sma-4.5.html">sma-4</a> <span class="tag">3 exp</span> <span class="tag">1,028 genes</span></li>
+  <li><a href="target-genes/fkh-7.5.html">fkh-7</a> <span class="tag">1 exp</span> <span class="tag">743 genes</span></li>
+  <li><a href="target-genes/unc-119.5.html">unc-119</a> <span class="tag">2 exp</span> <span class="tag">826 genes</span></li>
+</ul>
+
+<h3>Other</h3>
+<ul>
+  <li><a href="target-genes/RNA_polymerase_II.5.html">RNA polymerase II</a> <span class="tag">9 exp</span> <span class="tag">14,998 genes</span></li>
+  <li><a href="target-genes/ATAC-Seq.5.html">ATAC-Seq</a> <span class="tag">9 exp</span> <span class="tag">17,999 genes</span></li>
+  <li><a href="target-genes/DNase-Seq.5.html">DNase-Seq</a> <span class="tag">9 exp</span> <span class="tag">15,816 genes</span></li>
+</ul>
+</div>
+
+<div class="section">
+<h2>Colocalization</h2>
+<div class="note">Co-binding partners in the same cell type class. Scored by H/M/L peak overlap.</div>
+
+<h3>RNA polymerase</h3>
+<ul>
+  <li><a href="colocalization/SRX1674099.html">SRX1674099 — RNA pol II, L3 larvae</a> <span class="tag">8 partners</span></li>
+  <li><a href="colocalization/SRX1674100.html">SRX1674100 — RNA pol II, L3 larvae</a> <span class="tag">8 partners</span></li>
+  <li><a href="colocalization/SRX21762562.html">SRX21762562 — RNA pol II, L3 larvae</a> <span class="tag">8 partners</span></li>
+</ul>
+
+<h3>Histone</h3>
+<ul>
+  <li><a href="colocalization/SRX11322245.html">SRX11322245 — H3K9me3, L4 larvae</a> <span class="tag">8 partners</span></li>
+  <li><a href="colocalization/SRX17392621.html">SRX17392621 — H4K5ac, L3 larvae</a> <span class="tag">5 partners</span></li>
+  <li><a href="colocalization/SRX20276924.html">SRX20276924 — H3, Young adult</a> <span class="tag">8 partners</span></li>
+</ul>
+
+<h3>ATAC/DNase</h3>
+<ul>
+  <li><a href="colocalization/SRX20276866.html">SRX20276866 — ATAC-Seq, Young adult</a> <span class="tag">8 partners</span></li>
+  <li><a href="colocalization/SRX4085404.html">SRX4085404 — DNase-Seq, Larvae</a> <span class="tag">8 partners</span></li>
+</ul>
+</div>
+
+<div class="info">
+  <strong>About:</strong> Self-contained HTML pages generated from v2 pipeline results (Option B, ce11, 45 samples).
+  Each page has data embedded — no external server needed. One HTML template serves all experiments.
+  <br><br>
+  <strong>Repo:</strong> <a href="https://github.com/inutano/chip-atlas-pipeline-v2">github.com/inutano/chip-atlas-pipeline-v2</a>
+</div>
+
+</body>
+</html>
