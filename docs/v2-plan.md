@@ -6,7 +6,7 @@
 |-------|--------|---------|
 | 1. Benchmarking & Tool Selection | [x] Done | bwa-mem2 + Parabricks evaluated, --nomodel validated |
 | 2. CWL Workflow Development | [x] Done | Option A (3 variants) + Option B (2 variants), CWL Zen refactored |
-| 3. Secondary Analysis | [x] Mostly done | Target genes + colocalization implemented, enrichment remaining |
+| 3. Secondary Analysis | [x] Done | Target genes + colocalization (static JSON) + enrichment (compiled BED) |
 | 4. Validation | [x] Done | 2×2 matrix (ce11), Option A vs v1 (ce11 + hg38), peak overlap analysis |
 | 5. Production Deployment | [ ] In progress | NIG setup script ready, awaiting test run |
 | CWL Zen Runner | [ ] Design done | Spec + lint tool complete, Rust implementation not started |
@@ -15,7 +15,7 @@
 
 **Next steps:**
 - [ ] Run NIG supercomputer benchmark (script ready: `scripts/nig-setup-and-benchmark.sh`)
-- [ ] Implement enrichment analysis (third secondary analysis, query-time operation)
+- [x] ~~Enrichment analysis~~ — compiled BED + bedtools intersect, <1 sec per query
 - [ ] Add instrument filter to sample selection (quick fix, exclude PacBio/ONT)
 
 **Future:**
@@ -288,7 +288,7 @@ chip-atlas-pipeline-v2/
 - Designed for throughput at scale (400K+ samples)
 - Language TBD (Rust? Go? Python?)
 
-## Phase 3: Secondary Analysis Rewrite [x] Target Genes + Colo / [ ] Enrichment
+## Phase 3: Secondary Analysis Rewrite [x]
 
 ### 3.1 Target Gene Analysis
 

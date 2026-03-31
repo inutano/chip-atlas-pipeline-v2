@@ -1,275 +1,132 @@
-# Secondary Analysis Plan
+# Secondary Analysis: Implementation Summary
 
 ## Overview
 
-The v1 pipeline produces three types of secondary analyses from peak call results:
+Three secondary analyses aggregate peak call results across experiments. All are implemented and tested on ce11.
 
-1. **Target Genes** — which genes are near each peak (peak-TSS overlap)
-2. **Colocalization** — which transcription factors bind together in the same cell type
-3. **Enrichment (In Silico ChIP)** — are user-provided regions enriched for specific peaks
+| Analysis | Input | Output | Serving | Query speed |
+|----------|-------|--------|---------|-------------|
+| Target genes | Per-experiment peaks + TSS | JSON per antigen | Static HTML (GitHub Pages) | Instant (client-side) |
+| Colocalization | Peaks from same cell class | JSON per experiment | Static HTML (GitHub Pages) | Instant (client-side) |
+| Enrichment | User BED + compiled peaks | JSON result | Interactive (backend) | <1 sec |
 
-v1 pre-computes all combinations and generates static HTML/TSV. This is rigid and expensive to recompute. v2 should produce structured data that enables both static export and dynamic queries.
+**Demo:** https://inutano.github.io/chip-atlas-pipeline-v2/demo/
 
-## Data Architecture
+## 1. Target Genes
 
-### Per-sample outputs (from primary pipeline)
+**Question:** What genes are near the peaks for a given antigen?
 
-Already produced by v2:
-- BigWig (.bw) — coverage tracks
-- narrowPeak (.narrowPeak) — peak calls at 3 q-value thresholds
-- BigBed (.bb) — peak tracks for browsers
+**Approach:**
+1. `bedtools window` at ±1/5/10 kb between each experiment's peaks and gene TSS positions
+2. Aggregate overlaps per antigen (all experiments for H3K27ac, all for CTCF, etc.)
+3. Output as JSON: genes × experiments matrix with MACS scores
+4. One HTML template renders any JSON with search, sort, filter, column sorting, TSV/JSON download
 
-### Aggregated data (new in v2)
-
-| Data | Format | Content |
-|------|--------|---------|
-| Peak-TSS overlaps | SQLite | Every peak × nearby TSS within ±1/5/10 kb |
-| Colocalization scores | SQLite | Pairwise TF binding correlation per cell type |
-| Sample metadata | SQLite | experimentList with standardized antigen/cell type |
-| Peak index | SQLite | All peaks across all samples, queryable by region |
-
-### Why SQLite
-
-- Single file per genome — no database server, portable, shippable
-- Users can download and query locally
-- Web app queries via thin API wrapper
-- Can export to static TSV/HTML for backward compatibility
-- Well-supported everywhere (Python, R, command line, browsers via sql.js)
-
-## Analysis 1: Target Genes
-
-### What it does
-
-For each experiment's peaks, find protein-coding genes whose TSS falls within a window (±1 kb, ±5 kb, ±10 kb).
-
-### v1 approach
-- `bedtools window` per experiment
-- Filter for NM_ RefSeq (protein-coding)
-- Integrate STRING protein interaction scores
-- Output: static TSV and HTML per antigen × cell type
-
-### v2 approach
-
-**Step 1: Prepare reference data (once per genome)**
-
+**Data flow:**
 ```
-genes.tsv — protein-coding gene list with TSS coordinates
-  columns: gene_id, gene_symbol, chrom, tss_position, strand
-  source: UCSC refFlat → filter NM_ → deduplicate TSS
+narrowPeak files → bedtools window × genes_tss.bed → per-experiment overlap TSV
+→ aggregate by antigen → per-antigen JSON → HTML template
 ```
 
-**Step 2: CWL tool — peak-tss-overlap**
+**v1 comparison:**
+- v1: pre-generated static HTML per antigen × cell type, with STRING integration
+- v2: one HTML template + JSON data files, STRING links per gene, window navigation (±1/5/10 kb)
 
+**Scripts:**
+- `scripts/prepare-gene-reference.py` — UCSC refFlat → TSS BED (protein-coding, deduplicated)
+- `scripts/peak-tss-overlap.sh` — bedtools window for one experiment
+- `scripts/generate-antigen-target-json.py` — aggregate overlaps into per-antigen JSON
+- `scripts/generate-demo-pages.py` — embed JSON into self-contained HTML
+
+**Storage (estimated):**
+- ~4 MB per antigen JSON (±5kb, average)
+- hg38: ~2000 antigens × 3 windows × 4 MB = ~24 GB total
+
+## 2. Colocalization
+
+**Question:** What transcription factors co-bind in the same cell type?
+
+**Approach:**
+1. For each experiment, classify peak scores into H/M/L using Gaussian-fitted Z-scores
+2. Compare all pairs of experiments within the same cell type class
+3. Score 9 pairwise H/M/L combinations (H-H=9, H-M=6, M-M=4, etc.)
+4. Output as JSON per experiment with ranked partners
+
+**Data flow:**
 ```
-Input:  narrowPeak (from primary pipeline) + genes.tsv
-Output: overlaps.tsv
-  columns: peak_chrom, peak_start, peak_end, peak_score,
-           gene_symbol, tss_distance, window_size
-```
-
-Implementation: `bedtools window` with ±1/5/10 kb, one pass per window size.
-
-**Step 3: Load into SQLite**
-
-```sql
-CREATE TABLE peak_tss_overlap (
-  experiment_id TEXT,
-  peak_chrom TEXT,
-  peak_start INTEGER,
-  peak_end INTEGER,
-  peak_score REAL,
-  gene_symbol TEXT,
-  tss_distance INTEGER,
-  window_kb INTEGER    -- 1, 5, or 10
-);
-
-CREATE INDEX idx_experiment ON peak_tss_overlap(experiment_id);
-CREATE INDEX idx_gene ON peak_tss_overlap(gene_symbol);
-CREATE INDEX idx_window ON peak_tss_overlap(window_kb);
-```
-
-**Queries this enables:**
-
-```sql
--- "What genes does H3K4me3 target in HeLa cells?"
-SELECT gene_symbol, AVG(peak_score) as mean_score, COUNT(*) as n_experiments
-FROM peak_tss_overlap
-JOIN metadata ON experiment_id = metadata.accession
-WHERE metadata.antigen = 'H3K4me3'
-  AND metadata.cell_type = 'HeLa'
-  AND window_kb = 5
-GROUP BY gene_symbol
-ORDER BY mean_score DESC;
-
--- "What experiments have peaks near TP53?"
-SELECT experiment_id, peak_score, tss_distance
-FROM peak_tss_overlap
-WHERE gene_symbol = 'TP53'
-  AND window_kb = 10
-ORDER BY peak_score DESC;
+narrowPeak files → Gaussian fit → Z-score classification (H/M/L)
+→ pairwise comparison within cell class → per-experiment JSON → HTML template
 ```
 
-## Analysis 2: Colocalization
+**v1 comparison:**
+- v1: custom Java tool (`coloCA.jar`), STRING integration, static HTML
+- v2: Python implementation (same algorithm), STRING links, color-coded H/M/L categories
 
-### What it does
+**Scripts:**
+- `scripts/compute-colocalization.py` — pairwise scoring with H/M/L classification
 
-Identify transcription factors that co-bind in the same cell type. If TF-A and TF-B both have peaks in the same genomic regions in the same cell type, they are "colocalized."
+**Storage:**
+- ~10 KB per experiment JSON
+- hg38: 200K experiments × 10 KB = ~2 GB total
 
-### v1 approach
-- Fit MACS2 scores to Gaussian distribution
-- Assign Z-score groups: H (>0.5), M (-0.5 to 0.5), L (<-0.5)
-- Score 9 pairwise H/M/L combinations
-- Custom Java tool (`coloCA.jar`)
-- Integrate STRING scores
-- Output: static HTML matrices per cell type
+## 3. Enrichment (In Silico ChIP)
 
-### v2 approach
+**Question:** Are the user's genomic regions enriched for peaks from specific experiments?
 
-**Step 1: CWL tool — colocalization-score**
+This is ChIP-Atlas's unique interactive feature — no other database offers this at scale.
 
+**Approach:**
+1. Build one **compiled BED file** per genome containing ALL peaks from all experiments, annotated with experiment ID, antigen, and cell type
+2. User uploads a BED file
+3. `bedtools intersect` against the compiled BED — one operation, exact peak boundaries
+4. Count overlaps per experiment, Fisher's exact test with BH correction
+5. Return ranked experiments by enrichment significance
+
+**Data flow:**
 ```
-Input:  All narrowPeak files for a given cell type
-Output: pairwise_scores.tsv
-  columns: antigen_a, antigen_b, colocalization_score,
-           n_shared_peaks, jaccard_index
-```
+All narrowPeak files → compiled BED (sorted, annotated)
 
-Implementation: Python script using same algorithm as v1 (Gaussian fit → Z-scores → pairwise scoring), but output as structured data instead of HTML.
-
-**Step 2: Load into SQLite**
-
-```sql
-CREATE TABLE colocalization (
-  cell_type TEXT,
-  antigen_a TEXT,
-  antigen_b TEXT,
-  coloc_score REAL,
-  n_shared_peaks INTEGER,
-  jaccard_index REAL
-);
-
-CREATE INDEX idx_coloc_cell ON colocalization(cell_type);
-CREATE INDEX idx_coloc_antigen ON colocalization(antigen_a, antigen_b);
+User query:
+  user.bed → bedtools intersect × compiled BED → count per experiment
+  → Fisher's exact test → BH correction → ranked JSON result
 ```
 
-**Queries this enables:**
+**Why compiled BED (not binned index):**
+- Exact peak boundaries — no resolution loss
+- bedtools intersect is fast even on large files (<1 sec for ce11, ~5-10 sec estimated for hg38)
+- One sorted file per genome — simple, no database
+- Same statistics as v1 (Fisher's test on exact overlaps)
 
-```sql
--- "What co-binds with MYC in K562 cells?"
-SELECT antigen_b, coloc_score, n_shared_peaks
-FROM colocalization
-WHERE cell_type = 'K562'
-  AND antigen_a = 'MYC'
-ORDER BY coloc_score DESC;
-```
+**v1 comparison:**
+- v1: bedtools intersect per experiment (slow at 400K scale), static HTML for FANTOM5/GWAS
+- v2: single compiled BED, one intersect operation, real-time results
 
-## Analysis 3: Enrichment (In Silico ChIP)
+**Scripts:**
+- `scripts/enrichment-analysis.py` — compiled BED builder + Fisher's test + BH correction
 
-### What it does
+**Storage:**
+- ce11 (45 experiments): 9 MB compiled BED
+- hg38 (197K experiments, estimated): ~12 GB compiled BED
 
-Given user-provided genomic regions (BED), test whether they are enriched for peaks from specific experiments. Answers: "Are my GWAS hits enriched for H3K27ac in liver?"
+**Performance (tested on ce11):**
+- 100 query regions × 172K peaks: <1 second
+- hg38 estimate: 5-10 seconds per query
 
-### v1 approach
-- `bedtools intersect` for overlap
-- Fisher's exact test with BH correction
-- Pre-computed for FANTOM5 and GWAS catalog
-- Output: static HTML
+## Storage Summary
 
-### v2 approach
+| Data | ce11 (45 exp) | hg38 (197K exp, est.) |
+|------|--------------|----------------------|
+| Target genes JSON | 56 MB | ~24 GB |
+| Colocalization JSON | 0.5 MB | ~2 GB |
+| Compiled BED (enrichment) | 9 MB | ~12 GB |
+| Primary outputs (BigWig + peaks) | — | ~55 TB |
 
-**This is fundamentally a query-time operation** — users provide regions, the system tests against all experiments. Pre-computation is only for known region sets (FANTOM5, GWAS catalog).
+Secondary analysis adds <40 GB on top of the ~55 TB primary data for hg38 — negligible.
 
-**Step 1: Build a peak index**
+## Architecture Decision
 
-```sql
-CREATE TABLE peak_index (
-  experiment_id TEXT,
-  chrom TEXT,
-  start INTEGER,
-  end INTEGER,
-  score REAL,
-  q_threshold TEXT  -- '05', '10', '20'
-);
+**Static files for target genes + colocalization.** Pre-generate JSON data, serve with one HTML template per analysis type. No backend needed — works from any CDN, S3, or GitHub Pages.
 
-CREATE INDEX idx_peak_region ON peak_index(chrom, start, end);
-CREATE INDEX idx_peak_exp ON peak_index(experiment_id);
-```
+**Interactive service for enrichment.** User uploads BED, server runs bedtools intersect against compiled BED, returns JSON. Needs a lightweight backend, but the query itself is just one bedtools command.
 
-This enables fast region overlap queries without bedtools.
-
-**Step 2: Enrichment API / tool**
-
-```
-Input:  user BED regions + peak_index database
-Output: enrichment results
-  columns: experiment_id, antigen, cell_type,
-           n_overlap, n_total_peaks, n_total_regions,
-           fold_enrichment, p_value, q_value
-```
-
-Implementation: SQLite range queries for overlap, scipy for Fisher's test.
-
-**Trade-off: SQLite vs bedtools for overlap**
-
-For pre-computed enrichment (FANTOM5, GWAS), bedtools is fine — run once, store results.
-For dynamic user queries, SQLite with R-tree index could be fast enough for interactive use, but for millions of peaks × thousands of regions, bedtools is still faster. A hybrid approach:
-- Store peaks in SQLite for metadata queries
-- Use bedtools (or a bedtools-like Rust tool) for the actual overlap computation
-- Store results back in SQLite
-
-## Implementation Plan
-
-### Phase 1: Target Genes (highest value, simplest)
-
-1. Write CWL tool: `peak-tss-overlap.cwl`
-2. Write reference data prep script (UCSC refFlat → genes.tsv per genome)
-3. Write SQLite loader script
-4. Test on ce11 + hg38 benchmark samples
-5. Write example queries
-
-### Phase 2: Colocalization
-
-1. Port v1 algorithm from Java to Python
-2. Write CWL tool: `colocalization-score.cwl`
-3. Write SQLite loader
-4. Test on ce11 samples (need multiple experiments per cell type)
-
-### Phase 3: Enrichment
-
-1. Build peak index in SQLite
-2. Write enrichment calculation tool
-3. Pre-compute for FANTOM5 and GWAS catalog
-4. Design query API for dynamic enrichment
-
-### Phase 4: Integration
-
-1. SQLite database schema for all three analyses
-2. Export scripts for backward-compatible TSV/HTML
-3. API wrapper for web app
-4. Documentation
-
-## Database Schema (unified)
-
-One SQLite file per genome:
-
-```
-chip_atlas_{genome}.db
-├── metadata          — experiment info (accession, antigen, cell_type, ...)
-├── peak_tss_overlap  — target gene results
-├── colocalization    — co-binding scores
-├── peak_index        — all peaks (for enrichment queries)
-└── enrichment_precomputed — FANTOM5, GWAS results
-```
-
-Estimated sizes:
-- hg38: ~200K experiments × ~1000 peaks avg × 3 thresholds = ~600M rows in peak_index
-- With SQLite compression and indexing: ~50-100 GB per genome
-- Could be split into per-threshold databases to reduce size
-
-## Open Questions
-
-- [ ] Should we support BED → SQLite conversion as a CWL step, or as a post-pipeline script?
-- [ ] STRING database integration — download latest or pin a version?
-- [ ] Peak index: store all peaks or only q05 (most permissive)?
-- [ ] SQLite per genome or one big database?
-- [ ] Should the enrichment tool be a CWL tool or a standalone web service?
+This matches v1's architecture (static for target/colo, interactive for enrichment) while modernizing the data format (JSON instead of pre-rendered HTML) and the delivery mechanism (one template + data instead of thousands of static pages).
