@@ -16,7 +16,7 @@
 **Next steps:**
 - [ ] Run NIG supercomputer benchmark (script ready: `scripts/nig-setup-and-benchmark.sh`)
 - [x] ~~Enrichment analysis~~ — compiled BED + bedtools intersect, <1 sec per query
-- [ ] Add instrument filter to sample selection (quick fix, exclude PacBio/ONT)
+- [x] ~~Add instrument filter to sample selection~~ — regex on title field, excluded instruments logged
 
 **Future:**
 - [ ] CWL Zen runner implementation (Rust, separate repo: [cwl-zen](https://github.com/inutano/cwl-zen))

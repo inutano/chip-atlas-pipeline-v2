@@ -19,6 +19,21 @@ import re
 import sys
 from collections import defaultdict
 
+# Instrument patterns to exclude (case-insensitive).
+# PacBio/ONT are the primary targets; SOLiD uses incompatible color-space reads.
+# Note: the title field doesn't reliably contain instrument info — fastp in
+# Option B serves as a safety net by filtering non-short-read data at runtime.
+EXCLUDED_INSTRUMENT_PATTERNS = re.compile(
+    r"""
+    \b(?:
+        PacBio | Pacific\s+Biosciences | Sequel | Revio |   # PacBio
+        Nanopore | MinION | GridION | PromethION |          # Oxford Nanopore
+        SOLiD                                               # ABI SOLiD (color-space)
+    )\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
 TARGET_GENOMES = {"hg38", "mm10", "rn6", "dm6", "ce11", "sacCer3"}
 
 TARGET_TYPES = {
@@ -97,6 +112,7 @@ def main():
     # Read and filter
     strata = defaultdict(list)
     skipped = defaultdict(int)
+    excluded_instruments = []
 
     with open(args.input, "r", encoding="utf-8") as f:
         reader = csv.reader(f, delimiter="\t")
@@ -130,13 +146,16 @@ def main():
                 skipped["zero_reads"] += 1
                 continue
 
-            # Instrument filter note:
-            # The title field (col 9) does not reliably contain instrument info.
-            # Non-Illumina samples (PacBio, ONT) are extremely rare in ChIP-Atlas
-            # (<0.01%). The v2 pipeline uses fastp as a quality gate — it filters
-            # out non-Illumina reads (100% filtered for the one PacBio sample
-            # found in testing). No pre-selection filter needed.
-            # If long-read ChIP/ATAC becomes common, add minimap2 as aligner option.
+            # Instrument filter: exclude PacBio/ONT/SOLiD samples.
+            # The title field is unreliable (<0.01% detectable), but fastp in
+            # Option B catches undetected cases at runtime.
+            title = row[8] if len(row) > 8 else ""
+            if EXCLUDED_INSTRUMENT_PATTERNS.search(title):
+                skipped["non_illumina"] += 1
+                excluded_instruments.append(
+                    {"accession": accession, "genome": genome, "title": title}
+                )
+                continue
 
             read_tier = classify_read_tier(stats["num_reads"])
             key = (genome, exp_type, read_tier)
@@ -206,6 +225,17 @@ def main():
                     print(f"  {genome} / {exp_type} / {tier}")
 
     print(f"\nSkipped rows: {dict(skipped)}")
+
+    if excluded_instruments:
+        excl_path = args.output.replace(".tsv", "-excluded-instruments.tsv")
+        with open(excl_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(
+                f, fieldnames=["accession", "genome", "title"], delimiter="\t"
+            )
+            writer.writeheader()
+            writer.writerows(excluded_instruments)
+        print(f"\nExcluded instruments ({len(excluded_instruments)} samples): {excl_path}")
+
     print(f"\nOutput written to: {args.output}")
 
 

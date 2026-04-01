@@ -7,3 +7,5 @@ test-run/*/*.bam.bai
 test-run/*/*.fa
 test-run/*/*.fa.*
 test-run/*/output/
+test-run/*/output-*/
+test-run/*/bwa-index/
