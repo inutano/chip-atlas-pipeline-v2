@@ -97,6 +97,39 @@ run_tool() {
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
 # ============================================================
+# Optional: preload reference genome index to /dev/shm (shared memory)
+# ============================================================
+SHM_REF=""
+SHM_SIZE=$(df /dev/shm 2>/dev/null | awk 'NR==2 {print $4}')
+REF_SIZE=$(du -sk "$GENOME_FA".bwt.2bit.64 2>/dev/null | cut -f1)
+LOCK="/dev/shm/.chipatlasv2-ref-$(basename "$GENOME_FA").lock"
+
+if [ -n "$SHM_SIZE" ] && [ -n "$REF_SIZE" ] && [ "$SHM_SIZE" -gt $((REF_SIZE * 3)) ] 2>/dev/null; then
+  SHM_DIR="/dev/shm/chipatlasv2-$(basename "$GENOME_FA" .fa)"
+  if [ -f "$SHM_DIR/$(basename "$GENOME_FA").bwt.2bit.64" ]; then
+    log "Reference already in /dev/shm, reusing"
+    SHM_REF="$SHM_DIR/$(basename "$GENOME_FA")"
+  elif (set -o noclobber; echo $$ > "$LOCK") 2>/dev/null; then
+    log "Preloading reference to /dev/shm (~$((REF_SIZE / 1024 / 1024))GB)..."
+    mkdir -p "$SHM_DIR"
+    cp "$GENOME_FA" "$GENOME_FA".{0123,amb,ann,bwt.2bit.64,pac,fai} "$SHM_DIR/" 2>/dev/null && \
+      SHM_REF="$SHM_DIR/$(basename "$GENOME_FA")" && \
+      log "Reference loaded to /dev/shm" || \
+      log "Failed to load to /dev/shm, using original path"
+    rm -f "$LOCK"
+  else
+    log "Another job is loading reference to /dev/shm, waiting..."
+    while [ -f "$LOCK" ]; do sleep 2; done
+    if [ -f "$SHM_DIR/$(basename "$GENOME_FA").bwt.2bit.64" ]; then
+      SHM_REF="$SHM_DIR/$(basename "$GENOME_FA")"
+    fi
+  fi
+fi
+
+# Use /dev/shm reference if available, otherwise original
+ACTIVE_REF="${SHM_REF:-$GENOME_FA}"
+
+# ============================================================
 # Step 1: Piped alignment — fastp → bwa-mem2 → sort → fixmate → sort → markdup
 # ============================================================
 log "Step 1: Piped alignment pipeline (fastp → bwa-mem2 → samtools chain)"
@@ -118,7 +151,7 @@ FASTP_CMD="$FASTP_CMD --stdout --json $OUTDIR/${SAMPLE_ID}_fastp.json --html $OU
 STEP1_START=$(date +%s)
 
 eval "$FASTP_CMD" 2>"$OUTDIR/fastp.stderr" \
-  | run_tool "$IMG_BWAMEM2" bwa-mem2 mem -t "$ALIGN_THREADS" -R "$RG" -p "$GENOME_FA" - 2>/dev/null \
+  | run_tool "$IMG_BWAMEM2" bwa-mem2 mem -t "$ALIGN_THREADS" -R "$RG" -p "$ACTIVE_REF" - 2>/dev/null \
   | run_tool "$IMG_SAMTOOLS" samtools sort -n -@ "$SORT_THREADS" -m "$SORT_MEM" - \
   | run_tool "$IMG_SAMTOOLS" samtools fixmate -m - - \
   | run_tool "$IMG_SAMTOOLS" samtools sort -@ "$SORT_THREADS" -m "$SORT_MEM" - \
