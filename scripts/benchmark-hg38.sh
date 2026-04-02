@@ -105,11 +105,6 @@ YAML
 fastq_rev:
   class: File
   path: ${cache_dir}/${srr}_2.fastq
-format: BAMPE
-YAML
-  else
-    cat >> "$input_yml" <<YAML
-format: BAM
 YAML
   fi
 

@@ -133,11 +133,6 @@ if [ -f "$FASTQ_DIR/\${SRR}_2.fastq" ]; then
 fastq_rev:
   class: File
   path: $FASTQ_DIR/\${SRR}_2.fastq
-format: BAMPE
-YAML
-else
-  cat >> "$WORK_DIR/input.yml" <<YAML
-format: BAM
 YAML
 fi
 

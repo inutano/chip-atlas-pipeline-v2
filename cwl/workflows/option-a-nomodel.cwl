@@ -51,7 +51,7 @@ inputs:
   format:
     type: string?
     default: "BAM"
-    doc: "MACS3 input format (BAM for single-end, BAMPE for paired-end)"
+    doc: "MACS3 input format. Always use BAM (single-read mode) — BAMPE requires properly-paired fragments which fails on mixed/mislabeled data. With --nomodel --extsize 200, BAM mode is consistent across SE and PE samples."
 
 steps:
   # =====================
