@@ -33,6 +33,7 @@ SAMPLES_TSV="$REPO_DIR/data/validation-samples.tsv"
 
 # SLURM settings
 PARTITION="${SLURM_PARTITION:-epyc}"
+ACCOUNT="${SLURM_ACCOUNT:-}"
 CPUS_PER_TASK=16
 MEM_PER_CPU="8g"
 TIME_LIMIT="0-12:00:00"
@@ -183,7 +184,7 @@ rm -rf "$WORK_DIR"
 echo "=== Done: $accession ==="
 JOBSCRIPT
 
-  sbatch "$WORK_DIR/run.sh" 2>&1
+  sbatch ${ACCOUNT:+--account=$ACCOUNT} "$WORK_DIR/run.sh" 2>&1
 done
 
 log "=============================="
