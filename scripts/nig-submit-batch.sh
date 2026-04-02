@@ -162,7 +162,12 @@ YAML
 echo "[PIPELINE] Running ${WORKFLOW_NAME}..."
 PIPE_START=\$(date +%s)
 
-cwltool --udocker --outdir "$OUT_DIR" "$WORKFLOW" "$WORK_DIR/input.yml" 2>&1 | tee "$OUT_DIR/cwltool.log" | tail -10
+# Use node-local NVMe for intermediates (3x faster I/O than Lustre)
+LOCAL_TMP="/data1/cwltool-\$SLURM_JOB_ID"
+mkdir -p "\$LOCAL_TMP"
+cwltool --udocker --tmpdir-prefix "\$LOCAL_TMP/tmp/" --tmp-outdir-prefix "\$LOCAL_TMP/out/" \
+  --outdir "$OUT_DIR" "$WORKFLOW" "$WORK_DIR/input.yml" 2>&1 | tee "$OUT_DIR/cwltool.log" | tail -10
+rm -rf "\$LOCAL_TMP"
 
 PIPE_END=\$(date +%s)
 PIPE_SEC=\$((PIPE_END - PIPE_START))
