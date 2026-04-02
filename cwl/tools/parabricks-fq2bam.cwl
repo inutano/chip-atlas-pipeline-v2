@@ -16,6 +16,23 @@ requirements:
     coresMin: 8
     ramMin: 32768
   ShellCommandRequirement: {}
+  InitialWorkDirRequirement:
+    listing:
+      - entryname: run-fq2bam.sh
+        entry: |
+          #!/bin/bash
+          set -eo pipefail
+          REF="$1"
+          FWD="$2"
+          SID="$3"
+          NGPU="$4"
+          REV="$5"
+          RG="@RG\tID:$SID\tSM:$SID\tPL:ILLUMINA\tPU:$SID\tLB:$SID"
+          if [ -n "$REV" ] && [ -e "$REV" ]; then
+            pbrun fq2bam --ref "$REF" --in-fq "$FWD" "$REV" "$RG" --out-bam "$SID".dedup.bam --out-duplicate-metrics "$SID".dup_metrics.txt --num-gpus "$NGPU"
+          else
+            pbrun fq2bam --ref "$REF" --in-se-fq "$FWD" "$RG" --out-bam "$SID".dedup.bam --out-duplicate-metrics "$SID".dup_metrics.txt --num-gpus "$NGPU"
+          fi
 
 hints:
   DockerRequirement:
@@ -26,7 +43,7 @@ hints:
     cudaDeviceCountMin: 1
     cudaDeviceCountMax: 4
 
-baseCommand: []
+baseCommand: [bash, run-fq2bam.sh]
 
 inputs:
   genome_fasta:
@@ -38,35 +55,34 @@ inputs:
       - .bwt
       - .pac
       - .sa
+    inputBinding:
+      position: 1
     doc: "Reference genome FASTA with BWA index files"
 
   fastq_fwd:
     type: File
+    inputBinding:
+      position: 2
     doc: "Forward read FASTQ"
-
-  fastq_rev:
-    type: File?
-    doc: "Reverse read FASTQ (omit for single-end)"
 
   sample_id:
     type: string
+    inputBinding:
+      position: 3
     doc: "Sample identifier for read group and output naming"
 
   num_gpus:
     type: int?
     default: 1
+    inputBinding:
+      position: 4
     doc: "Number of GPUs to use"
 
-arguments:
-  - shellQuote: false
-    valueFrom: |
-      RG="@RG\tID:$(inputs.sample_id)\tSM:$(inputs.sample_id)\tPL:ILLUMINA\tPU:$(inputs.sample_id)\tLB:$(inputs.sample_id)"
-      REV="$(inputs.fastq_rev.path)"
-      if [ "\$REV" != "null" ] && [ "\$REV" != "" ] && [ -e "\$REV" ]; then
-        pbrun fq2bam --ref $(inputs.genome_fasta.path) --in-fq $(inputs.fastq_fwd.path) "\$REV" "\$RG" --out-bam $(inputs.sample_id).dedup.bam --out-duplicate-metrics $(inputs.sample_id).dup_metrics.txt --num-gpus $(inputs.num_gpus)
-      else
-        pbrun fq2bam --ref $(inputs.genome_fasta.path) --in-se-fq $(inputs.fastq_fwd.path) "\$RG" --out-bam $(inputs.sample_id).dedup.bam --out-duplicate-metrics $(inputs.sample_id).dup_metrics.txt --num-gpus $(inputs.num_gpus)
-      fi
+  fastq_rev:
+    type: File?
+    inputBinding:
+      position: 5
+    doc: "Reverse read FASTQ (omit for single-end)"
 
 outputs:
   dedup_bam:
