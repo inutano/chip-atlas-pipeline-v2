@@ -57,6 +57,19 @@ if [ ! -f "$TIMING_LOG" ]; then
   printf "accession\tgenome\texperiment_type\tnum_reads\tdownload_sec\tpipeline_sec\ttotal_sec\tslurm_job_id\ttimestamp\n" > "$TIMING_LOG"
 fi
 
+# Pre-resolve all SRX→SRR mappings via TogoID (bulk, avoids NCBI rate limits)
+SRX_SRR_MAP="$DATA_DIR/srx-srr-map-${GENOME}.tsv"
+ACCESSIONS=$(tail -n +2 "$SAMPLES_TSV" | awk -F'\t' -v g="$GENOME" '$2==g {print $1}' | paste -sd,)
+log "Resolving SRX→SRR for ${GENOME} via TogoID..."
+curl -sf --max-time 60 "https://api.togoid.dbcls.jp/convert?ids=${ACCESSIONS}&route=sra_experiment,sra_run&report=pair" \
+  | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+for pair in data['results']:
+    print(pair[0] + '\t' + pair[1])
+" > "$SRX_SRR_MAP"
+log "Resolved $(wc -l < "$SRX_SRR_MAP") SRX→SRR pairs"
+
 SUBMITTED=0
 SKIPPED=0
 
@@ -99,8 +112,12 @@ echo "Node: \$(hostname)"
 echo "CPUs: \$SLURM_CPUS_PER_TASK"
 
 # --- Download ---
-echo "[DOWNLOAD] Resolving SRR for $accession..."
-SRR=\$(curl -s "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=sra&id=${accession}&rettype=xml" | grep -oP '[DES]RR[0-9]{7,}' | sort -u | head -1)
+echo "[DOWNLOAD] Looking up SRR for $accession..."
+SRR=\$(grep "^${accession}	" "$DATA_DIR/srx-srr-map-$GENOME.tsv" | head -1 | cut -f2)
+if [ -z "\$SRR" ]; then
+  echo "ERROR: No SRR mapping found for $accession"
+  exit 1
+fi
 echo "SRR: \$SRR"
 
 DL_START=\$(date +%s)
