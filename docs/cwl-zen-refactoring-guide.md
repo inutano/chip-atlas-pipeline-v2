@@ -153,14 +153,32 @@ arguments:
       }
 ```
 
-**After (unconditional argument):**
+**After (shell conditional, same pattern as SE/PE in parabricks-fq2bam.cwl):**
 ```yaml
+requirements:
+  ShellCommandRequirement: {}
+baseCommand: []
 arguments:
-  - prefix: --out2
-    valueFrom: $(inputs.sample_id)_trimmed_R2.fastq.gz
+  - shellQuote: false
+    valueFrom: |
+      REV="$(inputs.fastq_rev.path)"
+      if [ "\$REV" != "null" ] && [ "\$REV" != "" ] && [ -e "\$REV" ]; then
+        fastp --in1 $(inputs.fastq_fwd.path) --in2 "\$REV" \
+          --out1 $(inputs.sample_id)_trimmed_R1.fastq.gz \
+          --out2 $(inputs.sample_id)_trimmed_R2.fastq.gz \
+          --json $(inputs.sample_id)_fastp.json \
+          --html $(inputs.sample_id)_fastp.html \
+          --thread $(runtime.cores)
+      else
+        fastp --in1 $(inputs.fastq_fwd.path) \
+          --out1 $(inputs.sample_id)_trimmed_R1.fastq.gz \
+          --json $(inputs.sample_id)_fastp.json \
+          --html $(inputs.sample_id)_fastp.html \
+          --thread $(runtime.cores)
+      fi
 ```
 
-**Rule:** If the tool gracefully ignores the argument when not applicable (e.g., fastp ignores `--out2` when no `--in2` is given), just pass it unconditionally. Make the output `File?` so it returns null when no file is produced. Test this behavior with the specific tool.
+**Rule:** Do NOT assume tools gracefully ignore inapplicable arguments — fastp errors on `--out2` without `--in2`. Use `ShellCommandRequirement` with an if/else, testing `$(inputs.optional_file.path)` against `"null"` (CWL resolves null `File?` paths to the string `"null"`).
 
 ### 5. `parseInt()` / `outputEval` with JS Functions
 

@@ -9,24 +9,21 @@ requirements:
   ResourceRequirement:
     coresMin: 4
     ramMin: 4096
+  ShellCommandRequirement: {}
 
 hints:
   DockerRequirement:
     dockerPull: "quay.io/biocontainers/fastp:0.23.4--h5f740d0_0"
 
-baseCommand: [fastp]
+baseCommand: []
 
 inputs:
   fastq_fwd:
     type: File
-    inputBinding:
-      prefix: --in1
     doc: "Forward read FASTQ"
 
   fastq_rev:
     type: File?
-    inputBinding:
-      prefix: --in2
     doc: "Reverse read FASTQ (omit for single-end)"
 
   sample_id:
@@ -34,16 +31,23 @@ inputs:
     doc: "Sample identifier for output naming"
 
 arguments:
-  - prefix: --out1
-    valueFrom: $(inputs.sample_id)_trimmed_R1.fastq.gz
-  - prefix: --out2
-    valueFrom: $(inputs.sample_id)_trimmed_R2.fastq.gz
-  - prefix: --json
-    valueFrom: $(inputs.sample_id)_fastp.json
-  - prefix: --html
-    valueFrom: $(inputs.sample_id)_fastp.html
-  - prefix: --thread
-    valueFrom: $(runtime.cores)
+  - shellQuote: false
+    valueFrom: |
+      REV="$(inputs.fastq_rev.path)"
+      if [ "\$REV" != "null" ] && [ "\$REV" != "" ] && [ -e "\$REV" ]; then
+        fastp --in1 $(inputs.fastq_fwd.path) --in2 "\$REV" \
+          --out1 $(inputs.sample_id)_trimmed_R1.fastq.gz \
+          --out2 $(inputs.sample_id)_trimmed_R2.fastq.gz \
+          --json $(inputs.sample_id)_fastp.json \
+          --html $(inputs.sample_id)_fastp.html \
+          --thread $(runtime.cores)
+      else
+        fastp --in1 $(inputs.fastq_fwd.path) \
+          --out1 $(inputs.sample_id)_trimmed_R1.fastq.gz \
+          --json $(inputs.sample_id)_fastp.json \
+          --html $(inputs.sample_id)_fastp.html \
+          --thread $(runtime.cores)
+      fi
 
 outputs:
   trimmed_fwd:
