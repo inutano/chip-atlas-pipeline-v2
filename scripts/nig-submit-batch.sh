@@ -180,6 +180,8 @@ printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \\
 # --- Cleanup large intermediates ---
 rm -f "$OUT_DIR"/*.bam "$OUT_DIR"/*.bam.bai
 rm -rf "$WORK_DIR"
+# Clean cached FASTQ to save disk (can re-download if needed)
+rm -f "$FASTQ_DIR/\${SRR}"*.fastq "$FASTQ_DIR/\${SRR}"*.fastq.gz
 
 echo "=== Done: $accession ==="
 JOBSCRIPT
