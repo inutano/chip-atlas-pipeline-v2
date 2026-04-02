@@ -1,383 +1,267 @@
 # ChIP-Atlas Pipeline v2: Benchmark Results
 
-## 1. Overview
+## Summary
 
-This document summarizes the benchmark results for ChIP-Atlas Pipeline v2, which replaces decade-old bioinformatics tools with modern equivalents to dramatically reduce processing time (from ~1 day/sample to ~15-20 minutes) while preserving result quality.
+ChIP-Atlas Pipeline v2 replaces decade-old tools with modern equivalents. Two implementations were benchmarked on the NIG supercomputer (6 dedicated AMD EPYC nodes, 128 cores each):
 
-### Pipelines tested
+- **Option B CWL** — modular CWL workflow, each tool runs as a separate step with intermediate files
+- **Option B Fast** — optimized single-pass pipeline, piped processing with no intermediate files
 
-| Pipeline | Description |
-|----------|-------------|
-| **Option A "Fast Classic"** | Same processing steps as v1 (no QC, no trimming, single peak caller), with modern tool replacements (bwa-mem2, MACS3, samtools latest) |
-| **Option B "Modern"** | Adds fastp QC/trimming and uses deeptools bamCoverage instead of bedtools genomecov + bedGraphToBigWig |
+Key results on 54 hg38 validation samples (289 to 314M reads):
 
-Each option was tested in two modes:
-
-| Mode | Aligner | Notes |
-|------|---------|-------|
-| **CPU** | bwa-mem2 | Default pipeline |
-| **GPU** | Parabricks fq2bam | GPU-accelerated alignment + sort + dedup |
-
-### Genomes benchmarked
-
-| Genome | Size | Samples tested |
-|--------|------|----------------|
-| sacCer3 | ~12 MB | 1 (initial test) |
-| ce11 | ~100 MB | 46 (full benchmark) |
-| hg38 | ~3 GB | 18 (full benchmark) |
-
-### Tool versions
-
-| Tool | Version |
-|------|---------|
-| bwa-mem2 | 2.2.1 |
-| Parabricks | 4.3.1 |
-| MACS3 | 3.0.4 |
-| samtools | 1.19.2 |
-| bedtools | 2.31.1 |
-| fastp | latest (Option B) |
-| UCSC tools | 482 |
+| Metric | v1 pipeline | Option B CWL (16 cores) | Option B Fast (32 cores) |
+|--------|------------|------------------------|--------------------------|
+| Avg total time (10-50M reads) | ~1 day | 57 min | **20 min** |
+| Avg total time (50-100M reads) | ~1 day | 93 min | **38 min** |
+| Peak disk per sample | unknown | ~60 GB | **~18 GB** |
+| 300M+ read samples | untested | crashes (disk quota) | **~146 min** |
 
 ---
 
-## 2. Infrastructure
+## 1. Test Environment
 
-### Benchmark machine (workstation)
+### NIG Supercomputer — Kumamoto dedicated partition
 
 | Component | Spec |
 |-----------|------|
-| CPU | Intel Xeon Gold 6226R @ 2.90GHz |
-| CPU cores | 32 (16 physical x 2 HT) |
+| Nodes | 6 × Type 2 (CPU-optimized) |
+| CPU | AMD EPYC 7702 (64 cores × 2) per node |
+| Cores | 128 per node, 768 total |
+| RAM | 512 GB per node |
+| Storage | Lustre (shared, 954 GB user quota) + NVMe /data1 (1.5 TB local per node) |
+| Container runtime | Apptainer 1.4.5 |
+| CWL runner | cwltool 3.1.20240112164112 |
+
+### Earlier workstation benchmarks
+
+| Component | Spec |
+|-----------|------|
+| CPU | Intel Xeon Gold 6226R @ 2.90 GHz, 32 cores |
+| GPU | NVIDIA RTX 6000 Ada (48 GB VRAM) |
 | RAM | 93 GB |
-| GPU | NVIDIA RTX 6000 Ada Generation (48 GB VRAM) |
-| Storage | 3.6 TB NVMe (local) + 3.6 TB HDD x2 (/data2, /data3) |
 
-All benchmark timings in this document are from this machine.
+### Pipeline tools
 
-### Target production environment: NIG Supercomputer 2025
+| Tool | Version | Purpose |
+|------|---------|---------|
+| fastp | 0.23.4 | QC + adapter trimming |
+| bwa-mem2 | 2.2.1 | Alignment (AVX-512) |
+| samtools | 1.19.2 | Sort, fixmate, markdup |
+| MACS3 | 3.0.4 | Peak calling (--nomodel --extsize 200, format=BAM) |
+| deeptools | 3.5.6 | bamCoverage → BigWig |
+| bedToBigBed | 482 | BED → BigBed conversion |
 
-Source: https://sc.ddbj.nig.ac.jp/en/guides/hardware/hardware2025/
+### Validation sample set
 
-| Node type | Count | CPU | Cores/node | RAM/node | GPU |
-|-----------|-------|-----|-----------|---------|-----|
-| Type 1 (CPU) | 50 | AMD EPYC 9654 (96c x2) | 192 | 1.5 TB | -- |
-| Type 2 (CPU) | 28 | AMD EPYC 7702 (64c x2) | 128 | 512 GB | -- |
-| Type 2 (GPU) | 3 | AMD EPYC 9334 (32c x2) | 64 | 768 GB | 8x NVIDIA L40S |
-| Type 3 (Accel) | 2 | AMD EPYC 7713P (64c) | 64 | 2 TB | 4x PEZY-SC3 |
-
-- **Total CPU cores**: 13,184
-- **Storage**: 13.3 PB Lustre
-- **Network**: InfiniBand HDR100 (100 Gbps), 400 Gbps for GPU nodes
-- **Container**: Singularity/Apptainer available
-
-### Estimated speedup on NIG vs benchmark machine
-
-| Factor | Benchmark machine | NIG Type 1 node | Expected speedup |
-|--------|------------------|-----------------|-----------------|
-| CPU cores (for bwa-mem2) | 32 cores @ 2.9 GHz | 192 cores @ 2.4 GHz | ~3-4x per node (more cores, slightly lower clock) |
-| RAM | 93 GB | 1.5 TB | No bottleneck on NIG |
-| Parallel nodes | 1 | 50 (Type 1) + 28 (Type 2) | 78 samples in parallel |
-| GPU | 1x RTX 6000 Ada | 8x L40S per node (3 nodes) | ~8x per GPU node, 24 GPUs total |
+54 hg38 samples from `data/validation-samples.tsv`, stratified by:
+- 6 experiment types: ATAC-Seq, Bisulfite-Seq, DNase-seq, Histone, RNA polymerase, TFs and others
+- 3 read count tiers: Low (<10M), Medium (10-50M), High (>50M)
+- 3 samples per stratum (where available)
 
 ---
 
-## 3. ce11 Benchmark Results
+## 2. NIG Benchmark: Option B CWL (Step-by-Step)
 
-### Benchmark scope
+CWL workflow with 13 separate steps, each running in its own container via cwltool + Apptainer. 16 cores per job, NVMe scratch for cwltool intermediates.
 
-46 ce11 samples (6 experiment types x 3 read tiers x ~3 samples), 1 PacBio sample excluded.
+### Processing time by read tier
 
-### Three pipelines tested (Option A)
+| Read tier | Samples | Avg download | Avg pipeline | Avg total |
+|-----------|--------:|-------------|-------------|-----------|
+| Low (<10M) | 17 | 27s | 11 min | 12 min |
+| Medium (10-50M) | 18 | 8.6 min | 49 min | 57 min |
+| High (50-100M) | 13 | 8.6 min | 84 min | 93 min |
+| Very high (>100M) | 3 | 16 min | 117 min | 133 min |
+| **300M+ (Bisulfite-Seq)** | **3** | **—** | **FAILED** | **>10 hours, disk quota** |
+| **Overall (excl. 300M+)** | **51** | **5.3 min** | **48 min** | **53 min** |
 
-| Pipeline | Workflow | Description |
-|----------|----------|-------------|
-| CPU (default) | `option-a.cwl` | bwa-mem2, MACS3 with model building |
-| CPU (nomodel) | `option-a-nomodel.cwl` | bwa-mem2, MACS3 with `--nomodel --extsize 200` |
-| GPU (Parabricks) | `option-a-parabricks.cwl` | Parabricks fq2bam, MACS3 with `--nomodel` |
+### Processing time by experiment type
 
-### Success rates
+| Type | Samples | Avg download | Avg pipeline | Avg total |
+|------|--------:|-------------|-------------|-----------|
+| Bisulfite-Seq (excl. 300M+) | 6 | 4.2 min | 27 min | 31 min |
+| DNase-seq | 9 | 8.3 min | 33 min | 41 min |
+| ATAC-Seq | 9 | 5.6 min | 62 min | 68 min |
+| RNA polymerase | 9 | 4.3 min | 49 min | 54 min |
+| TFs and others | 9 | 1.8 min | 52 min | 54 min |
+| Histone | 9 | 10.2 min | 53 min | 63 min |
 
-| Pipeline | OK | Failed | Notes |
-|----------|-----|--------|-------|
-| CPU (default) | 34 | 12 | 6 MACS3 model failures, 4 SE naming, 1 sort glob, 1 PacBio |
-| CPU (nomodel) | 45 | 1 | Only PacBio sample failed |
-| GPU (Parabricks) | 45 | 0 | All passed after SE fix (`--in-se-fq`) |
+### Failures
 
-**Conclusion**: `--nomodel --extsize 200` eliminates all MACS3 model-building failures with no loss of accuracy.
-
-### Processing time (pipeline only, excluding download)
-
-| Read Tier | Samples | CPU (nomodel) | GPU (Parabricks) | Speedup |
-|-----------|---------|---------------|-------------------|---------|
-| Low (<10M) | 15 | 7 min | 5 min | 1.25x |
-| Medium (10-50M) | 15 | 16 min | 11 min | 1.47x |
-| High (>50M) | 15 | 43 min | 31 min | 1.37x |
-| **Overall** | **45** | **22 min** | **16 min** | **1.37x** |
-
-Compared to v1's ~1 day/sample, the v2 pipeline is **~65x faster** (CPU) to **~90x faster** (GPU) on ce11.
-
-### Peak count comparison
-
-**nomodel vs default model (CPU, q 1e-05)**:
-- ATAC-Seq, DNase-seq, Histone, TFs: **identical peaks** (0 difference)
-- RNA polymerase: **<2% difference** (minor, due to estimated vs fixed fragment size)
-- `--nomodel` is safe to use as the default
-
-**CPU vs GPU (q 1e-05)**:
-- 45 samples compared
-- **0.9% total peak count difference** (171,677 vs 173,185)
-- Most samples differ by +/-1-15 peaks
-- bwa-mem2 and Parabricks (BWA-MEM) produce essentially identical results
+| Issue | Samples | Cause |
+|-------|---------|-------|
+| Disk quota exceeded | 3 | 300M+ read Bisulfite-Seq, intermediate files exceeded 954 GB Lustre quota |
+| NCBI e-utils timeout | 12 (retry 1) | Concurrent API rate-limiting (fixed with TogoID bulk resolution) |
+| Docker permission denied | 5 (retry 1) | fasterq-dump fallback used Docker (fixed with Apptainer fallback) |
 
 ---
 
-## 4. hg38 Benchmark Results
+## 3. NIG Benchmark: Option B Fast (Piped)
 
-### Benchmark scope
+Optimized single-pass pipeline with three key optimizations:
 
-18 hg38 samples (1 per experiment type x read tier), both CPU and GPU pipelines run in parallel. All using Option A "Fast Classic" with `--nomodel`.
+1. **Pipe-through**: `fastp | bwa-mem2 | samtools sort | fixmate | sort | markdup` — no intermediate files written to disk
+2. **Parallel post-markdup**: bamCoverage and MACS3 run concurrently
+3. **Single MACS3**: one call at q=1e-05, then awk filter for 1e-10 and 1e-20 (replaces 3 separate calls)
 
-### Processing time
+32 cores per job, Apptainer containers, NVMe scratch. Data from 30/54 completed samples.
 
-| Read Tier | Samples | CPU (nomodel) | GPU (Parabricks) | Speedup |
-|-----------|---------|---------------|-------------------|---------|
-| Low (<10M) | 6 | 7 min | 5 min | 1.4x |
-| Medium (10-50M) | 6 | 60 min | 31 min | 1.9x |
-| High (>50M) | 6 | 118 min | 72 min | 1.6x |
-| **Overall** | **18** | **61 min** | **36 min** | **1.7x** |
+### Processing time by read tier
 
-GPU speedup is larger on hg38 (1.7x) than ce11 (1.37x) -- GPU acceleration benefits more from larger genomes.
+| Read tier | Samples | Avg download | Avg pipeline | Avg total | vs CWL speedup |
+|-----------|--------:|-------------|-------------|-----------|---------------|
+| Low (<10M) | 8 | 12s | 1 min | 1 min | **12x** |
+| Medium (10-50M) | 8 | 3.8 min | 24 min | 28 min | **2.0x** |
+| High (50-100M) | 11 | 2.7 min | 33 min | 36 min | **2.6x** |
+| Very high (>100M) | 2 | 3.5 min | 39 min | 43 min | **3.1x** |
+| **300M+ (Bisulfite-Seq)** | **1** | **0s (cached)** | **146 min** | **146 min** | **did not crash** |
+| **Overall** | **30** | **2.1 min** | **20 min** | **22 min** | **2.4x** |
 
-Notable outliers:
-- Bisulfite-Seq 45M reads: CPU 91 min vs GPU **8 min** (10.2x speedup)
-- Bisulfite-Seq 314M reads: CPU 214 min vs GPU **67 min** (3.1x speedup)
-- Some samples showed CPU faster than GPU (ATAC-Seq 59M, Histone 123M) -- likely due to GPU/CPU resource contention from running both benchmarks in parallel
+### Processing time by experiment type (available data)
 
-### Peak count comparison (CPU vs GPU, q 1e-05)
+| Type | Samples | Avg download | Avg pipeline | Avg total | vs CWL |
+|------|--------:|-------------|-------------|-----------|--------|
+| Bisulfite-Seq | 7 | 1.9 min | 28 min | 30 min | 1.0x |
+| DNase-seq | 9 | 1.2 min | 12 min | 14 min | **2.9x** |
+| ATAC-Seq | 9 | 1.7 min | 27 min | 29 min | **2.3x** |
+| Histone | 5 | 1.4 min | 13 min | 15 min | **4.2x** |
 
-- 14 samples compared (1 GPU output missing)
-- **0.8% total peak count difference** (168,493 CPU vs 167,069 GPU)
-- Most samples differ by <1%, consistent with ce11 results
-- One outlier: SRX26159220 (TFs) differed by ~1,500 peaks (7%)
+### Per-sample comparison: CWL vs Fast (32t) on matching samples
 
-### Comparison: ce11 vs hg38 scaling
-
-| Metric | ce11 (100MB genome) | hg38 (3GB genome) | Ratio |
-|--------|--------------------|--------------------|-------|
-| CPU avg pipeline | 22 min | 61 min | 2.8x |
-| GPU avg pipeline | 16 min | 36 min | 2.3x |
-| GPU speedup | 1.37x | 1.7x | GPU benefits more on larger genomes |
+| Sample | Type | Reads | CWL total | Fast total | Speedup |
+|--------|------|------:|-----------|-----------|---------|
+| SRX23943860 | DNase-seq | 21K | 4m | 1m | 5.4x |
+| SRX25139080 | Bisulfite-Seq | 221K | 4m | 1m | 4.2x |
+| SRX25595131 | Histone | 10M | 7m | 2m | 4.0x |
+| SRX26303596 | Bisulfite-Seq | 35M | 51m | 30m | 1.7x |
+| SRX26398645 | ATAC-Seq | 42M | 77m | 41m | 1.9x |
+| SRX24388472 | DNase-seq | 47M | 51m | 15m | 3.4x |
+| SRX26398647 | ATAC-Seq | 60M | 106m | 47m | 2.3x |
+| SRX26084217 | Histone | 67M | 111m | 43m | 2.6x |
+| SRX24388481 | DNase-seq | 74M | 64m | 24m | 2.7x |
+| SRX26240695 | Bisulfite-Seq | 314M | **CRASHED** | **146m** | **--** |
 
 ---
 
-## 5. 2x2 Comparison: Option A vs B x CPU vs GPU (ce11)
+## 4. Disk and I/O Efficiency
 
-All four pipeline variants benchmarked on 46 ce11 samples.
+### Peak disk usage during processing (per sample, 60M reads hg38)
 
-### Pipeline time (average, pipeline step only)
+| Stage | CWL step-by-step | Fast piped |
+|-------|-----------------|-----------|
+| Input FASTQs | 12 GB | 12 GB |
+| Trimmed FASTQs | 11 GB | 0 (piped) |
+| SAM (uncompressed) | 30 GB | 0 (piped) |
+| Name-sorted BAM | 8 GB | 0 (piped) |
+| Fixmate BAM | 8 GB | 0 (piped) |
+| Coord-sorted BAM | 8 GB | 0 (piped) |
+| Dedup BAM | 6 GB | 6 GB |
+| **Peak total** | **~60 GB** | **~18 GB** |
+
+### Aggregate I/O and storage impact
+
+| Metric | CWL step-by-step | Fast piped | Reduction |
+|--------|-----------------|-----------|-----------|
+| Peak disk per sample | ~60 GB | ~18 GB | **3.3x** |
+| Total I/O per sample (read+write) | ~120 GB | ~36 GB | **3.3x** |
+| 8 concurrent jobs per node | ~480 GB | ~144 GB | **3.3x** |
+| 300M read sample | ~400 GB (crashes) | ~120 GB (succeeds) | **--** |
+
+The piped approach is essential for samples >100M reads, where step-by-step intermediate files can exceed the Lustre user quota (954 GB).
+
+---
+
+## 5. Download Performance
+
+Data downloaded via `fast-download.sh` with source-aware routing:
+- SRR/ERR → ENA mirror (aria2c, 8 parallel connections)
+- DRR → DDBJ (aria2c, cached fastqlist)
+- Fallback → fasterq-dump via Apptainer
+
+SRX→SRR accession resolution via TogoID bulk API (togoid.dbcls.jp).
+
+### Download time by read tier (NIG)
+
+| Read tier | Avg download time | Notes |
+|-----------|------------------|-------|
+| <1M | 12s | Negligible |
+| 1-10M | 30s | Fast |
+| 10-50M | 4-9 min | Depends on source mirror |
+| 50-100M | 3-9 min | Variable, ENA latency |
+| 100M+ | 3-16 min | Large files, network dependent |
+
+Download time averages ~10% of total processing time for medium samples, up to ~25% for samples where the network is slow.
+
+---
+
+## 6. Earlier Workstation Benchmarks
+
+### Option A vs B × CPU vs GPU (ce11, 46 samples)
+
+Tested on the workstation (Xeon Gold 6226R, 32 cores, RTX 6000 Ada GPU).
+
+#### Pipeline time (average, pipeline step only)
 
 |  | No trimming (Option A) | fastp trimming (Option B) |
 |--|----------------------|-------------------------|
 | **CPU (bwa-mem2)** | 22 min | 17 min |
 | **GPU (Parabricks)** | 16 min | **13 min** |
 
-### By read tier
+#### Recommendation
 
-| Tier | A CPU | A GPU | B CPU | B GPU |
-|------|-------|-------|-------|-------|
-| Low (<10M) | 7m | 5m | 6m | 4m |
-| Medium (10-50M) | 16m | 11m | 12m | 9m |
-| High (>50M) | 43m | 31m | 33m | 27m |
+**Option B** for production — faster and more robust than Option A (fastp filters problematic reads that cause MACS3 failures). GPU (Parabricks) provides ~1.3x additional speedup where available.
 
-### Success rates
+### v1 vs v2 Peak Overlap
 
-| Pipeline | OK | Failed | Notes |
-|----------|-----|--------|-------|
-| Option A CPU | 45 | 1 | PacBio sample failed |
-| Option A GPU | 45 | 0 | |
-| Option B CPU | **46** | **0** | fastp filtered PacBio reads; pipeline succeeded |
-| Option B GPU | **46** | **0** | |
+| Genome | v1 peaks recovered in v2 | v2 finds more peaks |
+|--------|-------------------------|-------------------|
+| ce11 (35 samples) | ~90% | Yes (1.5x at q=1e-05) |
+| hg38 (12 samples) | ~77% | Near-parity at q=1e-05 |
 
-### Key findings
-
-1. **Option B is faster than Option A** (17m vs 22m CPU, 13m vs 16m GPU) -- fastp reduces read count slightly, and deeptools bamCoverage is faster than bedtools genomecov + bedGraphToBigWig
-2. **GPU adds ~1.3x speedup** on top of whichever option
-3. **Option B + GPU is the fastest** at 13 min average -- 1.7x faster than Option A CPU
-4. **Option B has better robustness** -- fastp acts as a quality gate, filtering 100% of PacBio reads that would otherwise cause failures
-5. **Peak counts are similar** across all four variants -- trimming causes minor (<5%) differences
-6. Compared to v1's ~1 day/sample, even the slowest variant (Option A CPU, 22 min) is **~65x faster**
-
-### Recommendation
-
-**Option B + GPU** for production where GPUs are available. **Option B CPU** for CPU-only clusters. Option A is not recommended -- Option B is both faster and more robust with no downside.
+CPU and GPU produce nearly identical peak calls (<1.5% difference at all thresholds).
 
 ---
 
-## 6. v1 vs v2 Peak Overlap Analysis
+## 7. Production Throughput Estimates
 
-Downloaded v1 BED files from chip-atlas.dbcls.jp and compared peak overlap with v2 Option A results using bedtools intersect.
+### hg38 read count distribution (197K samples)
 
-### ce11 (35 samples with v1 peaks + 10 with v1=0)
+| Read tier | Samples | % |
+|-----------|--------:|----:|
+| <1M | 23,791 | 12.1% |
+| 1-10M | 24,784 | 12.6% |
+| **10-50M** | **106,166** | **54.0%** |
+| 50-100M | 29,801 | 15.1% |
+| 100-200M | 7,531 | 3.8% |
+| 200-300M | 2,151 | 1.1% |
+| 300M+ | 2,512 | 1.3% |
 
-| Metric | Value |
-|--------|-------|
-| v1 peaks recovered in v2 | **~90%** average |
-| v2 finds more peaks | 77% of samples (1.6x total peaks) |
-| v1=0 but v2 found peaks | 10 samples (thousands of peaks each) |
+### Estimated reprocessing time (hg38, 197K samples, including downloads)
 
-**Overlap by experiment type:**
+| Pipeline | 6 kumamoto nodes (48 parallel) | 78 NIG nodes (624 parallel) |
+|----------|-------------------------------|---------------------------|
+| Option B CWL (step-by-step) | 184 days | 14 days |
+| **Option B Fast (piped)** | **~85 days** | **~7 days** |
 
-| Type | Avg overlap | Notes |
-|------|------------|-------|
-| RNA polymerase | 97% | Excellent concordance |
-| Histone | 93% | Good, v2 finds more |
-| ATAC-Seq | 88% | v2 finds 2-40x more peaks in high-read samples |
-| TFs and others | 87% | Good concordance, similar counts |
-| DNase-seq | 87% | v2 finds more peaks |
+### All genomes (845K samples)
 
-### hg38 (12 samples with v1 peaks)
+| Pipeline | 6 kumamoto nodes | 78 NIG nodes |
+|----------|-----------------|-------------|
+| Option B CWL | 728 days | 56 days |
+| **Option B Fast** | **~350 days** | **~27 days** |
 
-| Metric | Value |
-|--------|-------|
-| v1 peaks recovered in v2 | **~77%** average |
-| Samples with >90% overlap | 4/12 (DNase-seq, ATAC-Seq) |
-| Samples with <70% overlap | 2/12 (see outliers below) |
-
-**Overlap by sample:**
-
-| Type | v1 peaks | v2 peaks | Overlap | Notes |
-|------|---------|---------|---------|-------|
-| ATAC-Seq (8M) | 3,316 | 10,657 | 98% | v2 finds 3x more |
-| DNase-seq (50M) | 35,958 | 35,885 | 93% | Nearly identical |
-| DNase-seq (72M) | 51,473 | 55,556 | 95% | v2 slightly more |
-| TFs (21M) | 14,704 | 16,605 | 94% | Good concordance |
-| TFs (52M) | 23,306 | 22,890 | 88% | Good |
-| Histone (26M) | 1,046 | 1,268 | 84% | v2 finds more |
-| RNA pol (20M) | 820 | 1,513 | 80% | v2 finds ~2x more |
-
-**Outliers:**
-- ~~SRX25595131 (Histone, 10M reads, SE): v1=8,797 peaks, v2=201 peaks~~ **RESOLVED**: This experiment has **2 SRR runs** (SRR30125615: 3M reads + SRR30125616: 7M reads) but the benchmark only downloaded the first run (30% of data). After downloading and concatenating both runs: **v2=6,633 peaks** -- consistent with v1's 8,797 (~25% difference from tool changes, not a bug). **Fix**: `download-experiment.sh` now resolves all runs per experiment and concatenates FASTQs, matching v1's behavior.
-- SRX25254554 (TFs, 10M reads): v1=28,075, v2=20,239 (66% overlap). v2 finds fewer peaks.
-
-### Multi-threshold comparison (q 1e-05, 1e-10, 1e-20)
-
-**v1 vs v2 CPU peak count ratio across all thresholds:**
-
-| Genome | q05 (v2/v1) | q10 (v2/v1) | q20 (v2/v1) |
-|--------|------------|------------|------------|
-| ce11 (35 samples) | 1.5x | 1.5x | 1.7x |
-| hg38 (11 samples, excl. outlier) | 1.0x | 0.9x | 0.8x |
-
-- ce11: v2 consistently finds **more peaks at all thresholds**, with the ratio increasing at stricter cutoffs -- v2's additional peaks are high-confidence
-- hg38: v2 and v1 are **near-parity at q05**, with v2 finding slightly fewer at stricter thresholds
-- The difference between genomes may reflect aligner-specific behavior on different genome structures (ce11 ~100MB vs hg38 ~3GB)
-
-**v2 CPU vs GPU consistency across thresholds:**
-
-| Threshold | ce11 (45 samples) | hg38 (18 samples) |
-|-----------|------------------|-------------------|
-| q05 | 0.8% diff | 0.8% diff |
-| q10 | 1.1% diff | -- |
-| q20 | 1.3% diff | -- |
-
-CPU and GPU produce nearly identical results at all thresholds, confirming that the choice of aligner (bwa-mem2 vs Parabricks BWA-MEM) has minimal impact on peak calling.
-
-### Interpretation
-
-1. **v2 recovers most v1 peaks** (~90% for ce11, ~77% for hg38) -- the core signal is preserved
-2. **v2 finds more peaks on ce11** (1.5x) but is **near-parity on hg38** -- the v1-v2 difference is genome-dependent
-3. **Samples with v1=0 now have peaks in v2** -- this is an improvement, not a regression (10 ce11 samples)
-4. **Some samples show fewer peaks in v2** -- expected given different tools; users can adjust with q-value thresholds
-5. **Overlap varies by experiment type** -- RNA polymerase shows the best concordance, ATAC-Seq shows the most new peaks
-6. **CPU and GPU are interchangeable** -- <1.5% peak difference at all thresholds
+Note: The CWL step-by-step pipeline cannot process the 2,512 hg38 samples with >300M reads (crashes on disk quota). The fast piped pipeline handles these successfully.
 
 ---
 
-## 7. Download Performance
+## 8. Key Decisions and Fixes
 
-| Method | Speed | Notes |
-|--------|-------|-------|
-| fasterq-dump (NCBI) | Baseline | Single-threaded SRA conversion |
-| aria2c + ENA | **2.5x faster** | 8 parallel HTTP connections, pre-generated FASTQ |
-| aria2c + DDBJ | Available for DRR | Uses cached fastqlist for path lookup |
-
-Download routing by accession prefix: DRR -> DDBJ -> ENA -> fasterq-dump, SRR/ERR -> ENA -> fasterq-dump.
-
----
-
-## 8. Issues Found and Fixed
-
-### sacCer3 initial testing (2026-03-20)
-
-| Issue | Fix |
-|-------|-----|
-| `samtools markdup` requires `fixmate -m` first | Added name-sort -> fixmate -> coord-sort flow |
-| CWL `float` type truncates tiny q-values (1e-10, 1e-20) to 0 | Changed to `string` type |
-| Several Biocontainers Docker image tags didn't exist | Verified and fixed all tags |
-| Parabricks requires `PU` and `LB` fields in read group | Added to fq2bam tool |
-
-### ce11 benchmark (2026-03-25)
-
-| Issue | Fix |
-|-------|-----|
-| MACS3 model building fails on low-signal samples | Added `--nomodel --extsize 200` |
-| Single-end FASTQ naming (`SRR.fastq` vs `SRR_1.fastq`) | Flexible FASTQ detection in scripts |
-| Parabricks SE reads need `--in-se-fq` not `--in-fq` | Conditional argument in CWL tool |
-| ENA `_subreads.fastq` naming for PacBio data | Flexible FASTQ detection + exclude PacBio from validation |
-| CWL `float` truncates small q-values | Changed to `string` type |
-| MACS3 `xls` output missing when no peaks found | Made output optional (`File?`) |
-
-### hg38 benchmark (2026-03-27)
-
-| Issue | Fix |
-|-------|-----|
-| SRX25595131 outlier: multi-run experiment only downloaded first run | `download-experiment.sh` now resolves all runs per experiment and concatenates FASTQs |
-
-### Data quality observation
-
-SRX2170085 (ce11, Bisulfite-Seq) is a **PacBio RS II** sample mislabeled in SRA metadata. It has 4.5% mapping rate against a short-read index. **Resolution**: instrument filter added to the v2 sample selection to exclude PacBio/ONT samples.
-
----
-
-## 9. Throughput Estimates for Production
-
-### Processing time estimates for full ChIP-Atlas reprocessing (hg38)
-
-Based on average pipeline times (excluding download), using Option B CPU (17 min for ce11, estimated ~15-20 min on NIG for hg38):
-
-| Scenario | Per sample | Parallel | Total time |
-|----------|-----------|----------|------------|
-| Benchmark machine (1 node) | 17 min (ce11) / 61 min (hg38) | 1 | ~46 years |
-| NIG Type 1 (1 node, 192 cores) | ~15-20 min (hg38 est.) | 1 | ~11-15 years |
-| NIG Type 1 (50 nodes) | ~15-20 min | 50 | ~80-110 days |
-| NIG Type 1+2 (78 nodes) | ~15-20 min | 78 | ~50-70 days |
-| NIG GPU (3 nodes x 8 L40S) | ~5-10 min (est.) | 24 | ~12-28 days |
-
-Note: Download time not included. NIG's high-bandwidth network (100 Gbps InfiniBand + fast external connectivity from NII/SINET) should significantly reduce download overhead compared to the benchmark machine.
-
-### Scaling reference: ce11 vs hg38
-
-| Scenario | Per sample | 200K hg38 samples | With download |
-|----------|-----------|-------------------|---------------|
-| CPU (1 node, 8 cores) | 61 min | ~23 years | + download time |
-| GPU (1 node, 1 GPU) | 36 min | ~14 years | + download time |
-| CPU cluster (10 nodes) | 61 min | ~2.3 years | + download time |
-| GPU cluster (10 GPUs) | 36 min | ~1.4 years | + download time |
-| CPU cluster (100 nodes) | 61 min | ~84 days | + download time |
-
-**Conclusion**: Processing at scale requires significant parallelism. A cluster with 100+ CPU nodes or 10+ GPU nodes is needed for a reasonable reprocessing timeline. The recommended deployment target is the NIG supercomputer with 78 CPU nodes (~50-70 days for 400K samples).
-
----
-
-## Initial Test Results (sacCer3)
-
-First test run on sacCer3 (SRX22049197, H3K4me3, ~950K reads):
-
-| Threshold | v1 (MACS2 + Bowtie2) | v2 bwa-mem2 | v2 Parabricks |
-|-----------|---------------------|-------------|---------------|
-| q 1e-05   | 429                 | 539         | 539           |
-| q 1e-10   | --                  | 396         | 397           |
-| q 1e-20   | --                  | 286         | 286           |
-
-- bwa-mem2 and Parabricks produce nearly identical results (+/-1 peak)
-- v2 finds ~25% more peaks than v1 at q 1e-05 (expected: bwa-mem2 is more sensitive than Bowtie2)
+| Decision | Rationale |
+|----------|-----------|
+| Always use `format=BAM` (not BAMPE) | BAMPE requires properly-paired fragments; fails on mislabeled PE data |
+| `--nomodel --extsize 200` for all MACS3 | Eliminates model-building failures on low-signal samples |
+| No background/input control | ChIP-Atlas policy — uniform processing across 400K+ samples |
+| Single MACS3 + awk filter | 1 call at q=1e-05 + filter for 1e-10/1e-20, replaces 3 separate runs |
+| TogoID for SRX→SRR resolution | NCBI e-utils rate-limits under concurrent load; TogoID supports bulk |
+| Apptainer over udocker | Native kernel support, no ~/.udocker cache (~900 GB saving) |
+| NVMe /data1 for intermediates | 3x faster I/O than Lustre, reduces contention at scale |
