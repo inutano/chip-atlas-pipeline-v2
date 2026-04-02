@@ -18,9 +18,9 @@ doc: |
     - deeptools bamCoverage for BigWig (replaces bedtools genomecov + bedGraphToBigWig)
 
 requirements:
-  SubworkflowFeatureRequirement: {}
-  MultipleInputFeatureRequirement: {}
-  StepInputExpressionRequirement: {}
+  - class: SubworkflowFeatureRequirement
+  - class: MultipleInputFeatureRequirement
+  - class: StepInputExpressionRequirement
 
 inputs:
   sample_id:

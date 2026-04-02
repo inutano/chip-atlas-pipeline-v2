@@ -19,9 +19,9 @@ $namespaces:
   cwltool: "http://commonwl.org/cwltool#"
 
 requirements:
-  SubworkflowFeatureRequirement: {}
-  MultipleInputFeatureRequirement: {}
-  StepInputExpressionRequirement: {}
+  - class: SubworkflowFeatureRequirement
+  - class: MultipleInputFeatureRequirement
+  - class: StepInputExpressionRequirement
 
 inputs:
   sample_id:

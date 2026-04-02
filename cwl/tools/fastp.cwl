@@ -6,11 +6,11 @@ label: "fastp - Fast all-in-one FASTQ preprocessor"
 doc: "Quality trimming, adapter removal, and QC for FASTQ files"
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 4
     ramMin: 4096
-  ShellCommandRequirement: {}
-  InitialWorkDirRequirement:
+  - class: ShellCommandRequirement
+  - class: InitialWorkDirRequirement
     listing:
       - entryname: run-fastp.sh
         entry: |
@@ -31,7 +31,7 @@ requirements:
           fi
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/fastp:0.23.4--h5f740d0_0"
 
 baseCommand: [bash, run-fastp.sh]

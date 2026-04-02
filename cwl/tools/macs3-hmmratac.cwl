@@ -10,12 +10,12 @@ doc: |
   fragment size distributions.
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 1
     ramMin: 8192
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/macs3:3.0.4--py312h71493bf_0"
 
 baseCommand: [macs3, hmmratac]

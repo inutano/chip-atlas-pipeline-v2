@@ -6,11 +6,11 @@ label: "bedToBigBed - Convert BED to BigBed"
 doc: "Convert BED file to BigBed format using UCSC tools. Handles null input gracefully."
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 1
     ramMin: 2048
-  ShellCommandRequirement: {}
-  InitialWorkDirRequirement:
+  - class: ShellCommandRequirement
+  - class: InitialWorkDirRequirement
     listing:
       - entryname: run-bedtobigbed.sh
         entry: |
@@ -24,7 +24,7 @@ requirements:
           fi
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/ucsc-bedtobigbed:482--hdc0a859_0"
 
 baseCommand: [bash, run-bedtobigbed.sh]

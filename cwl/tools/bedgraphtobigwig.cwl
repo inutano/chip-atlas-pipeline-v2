@@ -6,12 +6,12 @@ label: "bedGraphToBigWig - Convert BedGraph to BigWig"
 doc: "Convert sorted BedGraph to BigWig format using UCSC tools"
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 1
     ramMin: 4096
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/ucsc-bedgraphtobigwig:482--hdc0a859_0"
 
 baseCommand: [bedGraphToBigWig]

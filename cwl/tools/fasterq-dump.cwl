@@ -6,14 +6,14 @@ label: "fasterq-dump - Download and convert SRA to FASTQ"
 doc: "Download and convert SRA accessions to FASTQ files using sra-tools"
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 4
     ramMin: 4096
-  NetworkAccess:
+  - class: NetworkAccess
     networkAccess: true
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/sra-tools:3.0.10--h9f5acd7_0"
 
 baseCommand: [fasterq-dump]

@@ -8,13 +8,13 @@ doc: |
   Reads mapped count from a text file and computes scale factor in shell.
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 1
     ramMin: 4096
-  ShellCommandRequirement: {}
+  - class: ShellCommandRequirement
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/bedtools:2.31.1--hf5e1c6e_2"
 
 baseCommand: []

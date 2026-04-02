@@ -6,13 +6,13 @@ label: "samtools view -c - Count mapped reads"
 doc: "Count mapped reads in a BAM file. Outputs count as a text file."
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 2
     ramMin: 2048
-  ShellCommandRequirement: {}
+  - class: ShellCommandRequirement
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1"
 
 baseCommand: []

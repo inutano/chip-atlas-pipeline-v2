@@ -6,12 +6,12 @@ label: "deepTools bamCoverage - Generate bigWig"
 doc: "Generate normalized bigWig coverage track from BAM file"
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 4
     ramMin: 8192
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/deeptools:3.5.6--pyhdfd78af_0"
 
 baseCommand: [bamCoverage]

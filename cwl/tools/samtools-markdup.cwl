@@ -8,13 +8,13 @@ doc: |
   Replaces the deprecated samtools rmdup used in v1.
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 4
     ramMin: 4096
-  ShellCommandRequirement: {}
+  - class: ShellCommandRequirement
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1"
 
 baseCommand: []

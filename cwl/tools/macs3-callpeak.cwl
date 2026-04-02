@@ -9,12 +9,12 @@ doc: |
   users filter by q-value threshold instead.
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 1
     ramMin: 4096
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/macs3:3.0.4--py312h71493bf_0"
 
 baseCommand: [macs3, callpeak]

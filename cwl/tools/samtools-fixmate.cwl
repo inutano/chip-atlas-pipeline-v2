@@ -8,12 +8,12 @@ doc: |
   Input must be name-sorted; output is name-sorted BAM with ms tags.
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 4
     ramMin: 4096
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1"
 
 baseCommand: [samtools, fixmate]

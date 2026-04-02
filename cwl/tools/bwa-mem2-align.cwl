@@ -6,12 +6,12 @@ label: "BWA-MEM2 - Fast genome aligner"
 doc: "Align reads to reference genome using BWA-MEM2"
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 8
     ramMin: 16384
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "quay.io/biocontainers/bwa-mem2:2.2.1--he70b90d_8"
 
 baseCommand: [bwa-mem2, mem]

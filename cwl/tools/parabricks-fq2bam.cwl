@@ -12,11 +12,11 @@ $namespaces:
   cwltool: "http://commonwl.org/cwltool#"
 
 requirements:
-  ResourceRequirement:
+  - class: ResourceRequirement
     coresMin: 8
     ramMin: 32768
-  ShellCommandRequirement: {}
-  InitialWorkDirRequirement:
+  - class: ShellCommandRequirement
+  - class: InitialWorkDirRequirement
     listing:
       - entryname: run-fq2bam.sh
         entry: |
@@ -35,9 +35,9 @@ requirements:
           fi
 
 hints:
-  DockerRequirement:
+  - class: DockerRequirement
     dockerPull: "nvcr.io/nvidia/clara/clara-parabricks:4.3.1-1"
-  cwltool:CUDARequirement:
+  - class: cwltool:CUDARequirement
     cudaVersionMin: "11.0"
     cudaComputeCapability: "7.0"
     cudaDeviceCountMin: 1

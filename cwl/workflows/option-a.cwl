@@ -14,9 +14,9 @@ doc: |
          → MACS3 callpeak (×3 thresholds) → bedToBigBed
 
 requirements:
-  SubworkflowFeatureRequirement: {}
-  MultipleInputFeatureRequirement: {}
-  StepInputExpressionRequirement: {}
+  - class: SubworkflowFeatureRequirement
+  - class: MultipleInputFeatureRequirement
+  - class: StepInputExpressionRequirement
 
 inputs:
   sample_id:
