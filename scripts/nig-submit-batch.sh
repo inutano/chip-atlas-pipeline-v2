@@ -88,6 +88,8 @@ tail -n +2 "$SAMPLES_TSV" | awk -F'\t' -v g="$GENOME" '$2==g {print $1 "\t" $3 "
 set -eo pipefail
 
 source $VENV_DIR/bin/activate
+export PATH=/opt/pkg/apptainer/1.4.5/bin:\$PATH
+export APPTAINER_CACHEDIR=$BASE_DIR/apptainer-cache
 export FASTQLIST="$DATA_DIR/ddbj-fastqlist.tsv"
 
 echo "=== ChIP-Atlas v2: $accession ==="
@@ -165,7 +167,7 @@ PIPE_START=\$(date +%s)
 # Use node-local NVMe for intermediates (3x faster I/O than Lustre)
 LOCAL_TMP="/data1/cwltool-\$SLURM_JOB_ID"
 mkdir -p "\$LOCAL_TMP"
-cwltool --udocker --tmpdir-prefix "\$LOCAL_TMP/tmp/" --tmp-outdir-prefix "\$LOCAL_TMP/out/" \
+cwltool --singularity --tmpdir-prefix "\$LOCAL_TMP/tmp/" --tmp-outdir-prefix "\$LOCAL_TMP/out/" \
   --outdir "$OUT_DIR" "$WORKFLOW" "$WORK_DIR/input.yml" 2>&1 | tee "$OUT_DIR/cwltool.log" | tail -10
 rm -rf "\$LOCAL_TMP"
 

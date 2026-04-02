@@ -10,7 +10,8 @@
 #   SRR (NCBI/US)    → ENA first → fasterq-dump
 #
 # Uses aria2c with 8 parallel connections for HTTP/FTP downloads.
-# Falls back to fasterq-dump (Docker) when mirrored FASTQs aren't available.
+# Falls back to fasterq-dump via container when mirrored FASTQs aren't available.
+# Container runtime: uses apptainer/singularity if available, then docker.
 #
 set -eo pipefail
 
@@ -97,7 +98,7 @@ download_from_ddbj() {
 
   # Use cached DDBJ fastqlist (file_path, md5, bytes, audit_time)
   # Cache at /data3/chip-atlas-v2/cache/ddbj-fastqlist.tsv
-  local FASTQLIST="/data3/chip-atlas-v2/cache/ddbj-fastqlist.tsv"
+  local FASTQLIST="${FASTQLIST:-/data3/chip-atlas-v2/cache/ddbj-fastqlist.tsv}"
 
   if [ ! -f "$FASTQLIST" ]; then
     echo "[DDBJ] fastqlist cache not found, downloading..."
@@ -153,9 +154,22 @@ download_from_ddbj() {
 download_from_sra() {
   local acc="$1"
   echo "[SRA] Falling back to fasterq-dump for $acc..."
-  docker run --rm -v "$OUTDIR":/data -w /data "$SRA_IMG" \
-    fasterq-dump "$acc" --split-files --skip-technical --threads 4 --outdir . 2>&1 \
-    | tail -3
+  if command -v apptainer &>/dev/null; then
+    apptainer exec "docker://$SRA_IMG" \
+      fasterq-dump "$acc" --split-files --skip-technical --threads 4 --outdir "$OUTDIR" 2>&1 \
+      | tail -3
+  elif command -v singularity &>/dev/null; then
+    singularity exec "docker://$SRA_IMG" \
+      fasterq-dump "$acc" --split-files --skip-technical --threads 4 --outdir "$OUTDIR" 2>&1 \
+      | tail -3
+  elif command -v docker &>/dev/null; then
+    docker run --rm -v "$OUTDIR":/data -w /data "$SRA_IMG" \
+      fasterq-dump "$acc" --split-files --skip-technical --threads 4 --outdir . 2>&1 \
+      | tail -3
+  else
+    echo "[SRA] ERROR: No container runtime (apptainer/singularity/docker) found"
+    return 1
+  fi
   echo "[SRA] Download complete"
   return 0
 }
