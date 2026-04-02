@@ -7,47 +7,63 @@
 | 1. Benchmarking & Tool Selection | [x] Done | bwa-mem2 + Parabricks evaluated, --nomodel validated |
 | 2. CWL Workflow Development | [x] Done | Option A (3 variants) + Option B (2 variants), CWL Zen refactored |
 | 3. Secondary Analysis | [x] Done | Target genes + colocalization (static JSON) + enrichment (compiled BED) |
-| 4. Validation | [x] Done | 2×2 matrix (ce11), Option A vs v1 (ce11 + hg38), peak overlap analysis |
-| 5. Production Deployment | [ ] In progress | NIG setup script ready, awaiting test run |
+| 4. Validation | [x] Done | 2x2 matrix (ce11), Option A vs v1 (ce11 + hg38), peak overlap analysis |
+| 5. Production Deployment | [ ] In progress | NIG benchmark in progress |
 | CWL Zen Runner | [ ] Design done | Spec + lint tool complete, Rust implementation not started |
+
+See [Benchmark Results](benchmark-results.md) for detailed data and [Progress Log](progress-log.md) for chronological record.
 
 ### Remaining TODO
 
 **Next steps:**
 - [ ] Run NIG supercomputer benchmark (script ready: `scripts/nig-setup-and-benchmark.sh`)
-- [x] ~~Enrichment analysis~~ — compiled BED + bedtools intersect, <1 sec per query
-- [x] ~~Add instrument filter to sample selection~~ — regex on title field, excluded instruments logged
+- [x] ~~Enrichment analysis~~ -- compiled BED + bedtools intersect, <1 sec per query
+- [x] ~~Add instrument filter to sample selection~~ -- regex on title field, excluded instruments logged
 
 **Future:**
 - [ ] CWL Zen runner implementation (Rust, separate repo: [cwl-zen](https://github.com/inutano/cwl-zen))
 - [ ] CUT&Tag support (SEACR peak caller)
-- [ ] Benchmark remaining genomes (dm6, mm10, rn6) — can run on NIG
+- [ ] Benchmark remaining genomes (dm6, mm10, rn6) -- can run on NIG
 - [ ] Process 10K+ remaining unprocessed samples on NIG
 - [ ] Full 400K+ sample reprocessing
 
 **Resolved:**
-- [x] ~~Option A vs B comparison~~ — Option B recommended (faster, more robust)
-- [x] ~~SRX25595131 outlier~~ — multi-run download issue, fixed with `download-experiment.sh`
-- [x] ~~CWL JavaScript elimination~~ — all 20 CWL files JS-free (CWL Zen compatible)
-- [x] ~~Target genes analysis~~ — JSON + HTML template, demo on GitHub Pages
-- [x] ~~Colocalization analysis~~ — H/M/L scoring + HTML template, demo on GitHub Pages
-- [x] ~~Fast download~~ — aria2c + ENA/DDBJ routing tested (2.5x faster)
-- [x] ~~CWL runner language choice~~ — Rust
+- [x] ~~Option A vs B comparison~~ -- Option B recommended (faster, more robust)
+- [x] ~~SRX25595131 outlier~~ -- multi-run download issue, fixed with `download-experiment.sh`
+- [x] ~~CWL JavaScript elimination~~ -- all 20 CWL files JS-free (CWL Zen compatible)
+- [x] ~~Target genes analysis~~ -- JSON + HTML template, demo on GitHub Pages
+- [x] ~~Colocalization analysis~~ -- H/M/L scoring + HTML template, demo on GitHub Pages
+- [x] ~~Fast download~~ -- aria2c + ENA/DDBJ routing tested (2.5x faster)
+- [x] ~~CWL runner language choice~~ -- Rust
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [README](../README.md) | Project overview and quick start |
+| [Benchmark Results](benchmark-results.md) | Performance data, comparisons, and analysis |
+| [Progress Log](progress-log.md) | Chronological development record |
+| [Cluster Setup Guide](cluster-setup-guide.md) | HPC deployment instructions |
+| [CWL Zen Design](cwl-zen-design.md) | JavaScript-free CWL specification |
+| [Secondary Analysis Plan](secondary-analysis-plan.md) | Target genes, colocalization, enrichment |
+| [Current Pipeline](current-pipeline.md) | v1 pipeline documentation |
 
 ---
 
 ## Design Philosophy
 
-The original ChIP-Atlas pipeline was intentionally minimal: because each sample has a different experimental setup (antibody, cell type, protocol, sequencing depth), per-sample optimization is impractical at scale. The v1 pipeline applies the same basic processing to all samples uniformly — this simplicity is a feature, not a limitation.
+The original ChIP-Atlas pipeline was intentionally minimal: because each sample has a different experimental setup (antibody, cell type, protocol, sequencing depth), per-sample optimization is impractical at scale. The v1 pipeline applies the same basic processing to all samples uniformly -- this simplicity is a feature, not a limitation.
 
 For v2, we propose **two pipeline options** to evaluate the tradeoff between speed and modernization:
 
-### Option A: "Fast Classic" — Same steps, faster tools
+### Option A: "Fast Classic" -- Same steps, faster tools
 
 Preserve the v1 processing logic exactly (same steps, same parameters where possible), but replace each tool with its modern equivalent for speed. No new steps added.
 
 **Pros:**
-- Results most comparable to v1 — easier to validate continuity
+- Results most comparable to v1 -- easier to validate continuity
 - Minimal risk of introducing new biases
 - Respects the original design rationale (uniform basic processing)
 - Simpler to implement and maintain
@@ -57,7 +73,7 @@ Preserve the v1 processing logic exactly (same steps, same parameters where poss
 - Does not leverage experiment-type-specific best practices
 - Some quality issues in v1 data will persist
 
-### Option B: "Modern" — Updated steps and best practices
+### Option B: "Modern" -- Updated steps and best practices
 
 Modernize the full pipeline: add QC/trimming, use experiment-type-specific peak callers, and apply current best practices.
 
@@ -68,7 +84,7 @@ Modernize the full pipeline: add QC/trimming, use experiment-type-specific peak 
 - Better for new experiment types like CUT&Tag
 
 **Cons:**
-- Results will differ more from v1 — harder to validate continuity
+- Results will differ more from v1 -- harder to validate continuity
 - Added complexity in workflow branching per experiment type
 - Risk of introducing biases that affect cross-sample comparisons
 - More parameters to tune and maintain
@@ -88,7 +104,7 @@ ChIP-Atlas intentionally performs peak calling **without background data** (inpu
 
 - **Why**: At the scale of 400K+ experiments from public repositories, it is impractical to reliably identify and pair each ChIP sample with its corresponding input control. Input data is often unavailable, mislabeled, or not explicitly described in the SRA metadata.
 - **How it works**: MACS2/MACS3 is run without a control BAM. Instead, peaks are called against a local background model, and users filter results using three q-value thresholds (1e-05, 1e-10, 1e-20) to control stringency.
-- **This is a defining characteristic of ChIP-Atlas** — it enables uniform processing of all public data regardless of whether controls exist.
+- **This is a defining characteristic of ChIP-Atlas** -- it enables uniform processing of all public data regardless of whether controls exist.
 - **v2 must preserve this policy**: Both Option A and Option B must call peaks without background/input control. Do not implement control pairing logic.
 
 ---
@@ -96,73 +112,19 @@ ChIP-Atlas intentionally performs peak calling **without background data** (inpu
 ## Goals
 
 1. **Dramatically reduce processing time** (currently ~1 day/sample)
-2. **Modernize tools** — replace decade-old versions
+2. **Modernize tools** -- replace decade-old versions
 3. **GPU acceleration** where beneficial
-4. **CWL-based orchestration** — portable, reproducible, runner-agnostic
-5. **Custom CWL runner** — minimal, fastest, flexible for any infrastructure
-6. **Full scope** — rewrite both primary processing and secondary analyses
-7. **Support new experiment types** — CUT&Tag in addition to ChIP-seq/DNase-seq/ATAC-seq/Bisulfite-seq
-8. **Validate against v1** — compare peak counts and overlap to understand differences
-
-## Infrastructure
-
-### Benchmark machine (this workstation)
-
-| Component | Spec |
-|-----------|------|
-| CPU | Intel Xeon Gold 6226R @ 2.90GHz |
-| CPU cores | 32 (16 physical × 2 HT) |
-| RAM | 93 GB |
-| GPU | NVIDIA RTX 6000 Ada Generation (48 GB VRAM) |
-| Storage | 3.6 TB NVMe (local) + 3.6 TB HDD ×2 (/data2, /data3) |
-
-All benchmark timings in this document are from this machine.
-
-### Target production environment: NIG Supercomputer 2025
-
-Source: https://sc.ddbj.nig.ac.jp/en/guides/hardware/hardware2025/
-
-| Node type | Count | CPU | Cores/node | RAM/node | GPU |
-|-----------|-------|-----|-----------|---------|-----|
-| Type 1 (CPU) | 50 | AMD EPYC 9654 (96c ×2) | 192 | 1.5 TB | — |
-| Type 2 (CPU) | 28 | AMD EPYC 7702 (64c ×2) | 128 | 512 GB | — |
-| Type 2 (GPU) | 3 | AMD EPYC 9334 (32c ×2) | 64 | 768 GB | 8× NVIDIA L40S |
-| Type 3 (Accel) | 2 | AMD EPYC 7713P (64c) | 64 | 2 TB | 4× PEZY-SC3 |
-
-- **Total CPU cores**: 13,184
-- **Storage**: 13.3 PB Lustre
-- **Network**: InfiniBand HDR100 (100 Gbps), 400 Gbps for GPU nodes
-- **Container**: Singularity/Apptainer available
-
-### Estimated speedup on NIG vs benchmark machine
-
-| Factor | Benchmark machine | NIG Type 1 node | Expected speedup |
-|--------|------------------|-----------------|-----------------|
-| CPU cores (for bwa-mem2) | 32 cores @ 2.9 GHz | 192 cores @ 2.4 GHz | ~3-4x per node (more cores, slightly lower clock) |
-| RAM | 93 GB | 1.5 TB | No bottleneck on NIG |
-| Parallel nodes | 1 | 50 (Type 1) + 28 (Type 2) | 78 samples in parallel |
-| GPU | 1× RTX 6000 Ada | 8× L40S per node (3 nodes) | ~8x per GPU node, 24 GPUs total |
-
-**Throughput estimate for 400K hg38 samples on NIG** (Option B CPU):
-
-| Scenario | Per sample | Parallel | Total time |
-|----------|-----------|----------|------------|
-| Benchmark machine (1 node) | 17 min (ce11) / 61 min (hg38) | 1 | ~46 years |
-| NIG Type 1 (1 node, 192 cores) | ~15-20 min (hg38 est.) | 1 | ~11-15 years |
-| NIG Type 1 (50 nodes) | ~15-20 min | 50 | ~80-110 days |
-| NIG Type 1+2 (78 nodes) | ~15-20 min | 78 | ~50-70 days |
-| NIG GPU (3 nodes × 8 L40S) | ~5-10 min (est.) | 24 | ~12-28 days |
-
-Note: Download time not included. NIG's high-bandwidth network (100 Gbps InfiniBand + fast external connectivity from NII/SINET) should significantly reduce download overhead compared to the benchmark machine.
-
-- **Cloud**: Available as fallback (AWS/GCP)
-- **Containers**: Singularity/Apptainer
+4. **CWL-based orchestration** -- portable, reproducible, runner-agnostic
+5. **Custom CWL runner** -- minimal, fastest, flexible for any infrastructure
+6. **Full scope** -- rewrite both primary processing and secondary analyses
+7. **Support new experiment types** -- CUT&Tag in addition to ChIP-seq/DNase-seq/ATAC-seq/Bisulfite-seq
+8. **Validate against v1** -- compare peak counts and overlap to understand differences
 
 ## Phase 1: Benchmarking & Tool Selection [x]
 
 ### 1.1 ~~Profiling the v1 Pipeline~~ (Skipped)
 
-Reproducing v1 behavior is impractical — many variables and file paths are hardcoded or implicitly declared in the original shell scripts. Instead, we will:
+Reproducing v1 behavior is impractical -- many variables and file paths are hardcoded or implicitly declared in the original shell scripts. Instead, we will:
 
 - Build the new pipelines (Option A and B) directly
 - Benchmark per-step timing on the new pipelines
@@ -185,6 +147,8 @@ Metrics to compare:
 - Mapping rate vs. Bowtie2 v1 baseline
 - Downstream peak call consistency
 
+See [Benchmark Results](benchmark-results.md) for timing data and comparisons.
+
 ### 1.3 Tool Mapping: Option A vs Option B
 
 | Step | v1 Tool | Option A (Fast Classic) | Option B (Modern) |
@@ -195,7 +159,7 @@ Metrics to compare:
 | Alignment | Bowtie2 2.2.2 | bwa-mem2 / minimap2 / Parabricks | Same as A |
 | BAM processing | SAMtools 0.1.19 | SAMtools latest (1.20+) | Same as A |
 | Duplicate removal | samtools rmdup | samtools markdup | Same as A |
-| Coverage tracks | bedtools 2.17.0 + bedGraphToBigWig | bedtools latest + bedGraphToBigWig | deeptools bamCoverage (BAM→BigWig direct) |
+| Coverage tracks | bedtools 2.17.0 + bedGraphToBigWig | bedtools latest + bedGraphToBigWig | deeptools bamCoverage (BAM->BigWig direct) |
 | Peak calling | MACS2 2.1.0 (all types) | MACS3 (all types) | MACS3 (ChIP-seq), HMMRATAC (ATAC-seq), SEACR (CUT&Tag) |
 | Format conversion | UCSC bedToBigBed | UCSC tools latest | Same as A |
 
@@ -217,7 +181,7 @@ Metrics to compare:
 
 ### 1.4 CUT&Tag Considerations (Option B only)
 
-- CUT&Tag has lower background than ChIP-seq — SEACR is the recommended peak caller
+- CUT&Tag has lower background than ChIP-seq -- SEACR is the recommended peak caller
 - Separate peak-calling branch in the CWL workflow
 - Alignment parameters may differ (e.g., fragment size expectations)
 
@@ -271,7 +235,7 @@ chip-atlas-pipeline-v2/
 ### 2.2 CWL Design Principles
 
 - **CWL v1.2** spec
-- One `CommandLineTool` per tool — granular, reusable, testable
+- One `CommandLineTool` per tool -- granular, reusable, testable
 - `Workflow` documents compose tools into pipelines
 - `scatter` for parallel execution across samples
 - All tools wrapped in Singularity containers
@@ -281,7 +245,7 @@ chip-atlas-pipeline-v2/
 
 ### 2.3 Custom CWL Runner (sub-project)
 
-- Minimal implementation — support CWL v1.2 subset needed by this pipeline
+- Minimal implementation -- support CWL v1.2 subset needed by this pipeline
 - Direct job submission to SLURM/SGE/local without intermediate layers
 - Singularity-native (no Docker translation layer)
 - Parallel step execution with dependency resolution
@@ -300,7 +264,7 @@ chip-atlas-pipeline-v2/
 ### 3.2 Colocalization Analysis
 
 - Replace custom Java tool (`coloCA.jar`) with Python implementation
-- Same algorithm: Gaussian fit → Z-score groups → pairwise scoring
+- Same algorithm: Gaussian fit -> Z-score groups -> pairwise scoring
 - Integrate STRING scores
 - Wrap as CWL CommandLineTool
 
@@ -327,20 +291,20 @@ Source: `https://chip-atlas.dbcls.jp/data/metadata/experimentList.tab`
 
 3. **Read count tier** (based on column 8, first comma-separated value):
    - Low: <10M reads
-   - Medium: 10–50M reads
+   - Medium: 10-50M reads
    - High: >50M reads
 
 #### Selection Method
 
-- For each **genome × experiment type × read tier** combination:
-  - Sort by accession number descending (newer experiments first — biases toward modern sequencing instruments)
+- For each **genome x experiment type x read tier** combination:
+  - Sort by accession number descending (newer experiments first -- biases toward modern sequencing instruments)
   - Pick **3 samples** from the top
 - This ensures multiple samples per organism to capture genome-structure-related variation in mapper/peak-caller behavior
-- **Expected size**: up to ~270 samples (6 genomes × 6 types × 3 tiers × 3 samples), fewer where combinations are sparse
+- **Expected size**: up to ~270 samples (6 genomes x 6 types x 3 tiers x 3 samples), fewer where combinations are sparse
 
 #### Selection Script
 
-`scripts/select-validation-samples.py` — reads experimentList.tab, applies filters and stratification, outputs the selected sample list to `data/validation-samples.tsv`
+`scripts/select-validation-samples.py` -- reads experimentList.tab, applies filters and stratification, outputs the selected sample list to `data/validation-samples.tsv`
 
 ### 4.2 Three-Way Comparison
 
@@ -356,293 +320,12 @@ Metrics:
 - **Exploratory**: visualize differences before setting pass/fail thresholds
 - Optionally: BigWig signal correlation (Pearson/Spearman) at later stage
 
+See [Benchmark Results](benchmark-results.md) for detailed comparison data.
+
 ### 4.3 Validation Tooling
 
 - `validate-vs-v1.py`: takes two BED files, reports peak count, overlap stats, generates comparison plots
 - Run as part of the test suite
-
-## Progress Log
-
-### 2026-03-20: Initial pipeline implementation and testing
-
-**Completed:**
-
-1. **CWL tool definitions** (11 tools):
-   - `fasterq-dump.cwl` — SRA download (sra-tools 3.0.10)
-   - `bwa-mem2-align.cwl` — alignment (bwa-mem2 2.2.1)
-   - `samtools-sort.cwl` — name/coordinate sort (samtools 1.19.2)
-   - `samtools-fixmate.cwl` — add mate score tags for markdup
-   - `samtools-markdup.cwl` — duplicate removal (replaces deprecated rmdup)
-   - `samtools-mapped-count.cwl` — read count for RPM normalization
-   - `bedtools-genomecov.cwl` — BedGraph coverage (bedtools 2.31.1)
-   - `bedgraphtobigwig.cwl` — BedGraph → BigWig (UCSC tools 482)
-   - `macs3-callpeak.cwl` — peak calling without control (MACS3 3.0.4)
-   - `bedtobigbed.cwl` — BED → BigBed (UCSC tools 482)
-   - `parabricks-fq2bam.cwl` — GPU-accelerated align+sort+dedup (Parabricks 4.3.1)
-
-2. **Two workflow variants**:
-   - `option-a.cwl` — CPU pipeline (bwa-mem2 → sort → fixmate → sort → markdup → ...)
-   - `option-a-parabricks.cwl` — GPU pipeline (fq2bam replaces align+sort+markdup)
-
-3. **Validation sample set**: 301 samples selected across 6 genomes × 6 experiment types × 3 read tiers
-
-4. **First test run** on sacCer3 (SRX22049197, H3K4me3, ~950K reads):
-
-| Threshold | v1 (MACS2 + Bowtie2) | v2 bwa-mem2 | v2 Parabricks |
-|-----------|---------------------|-------------|---------------|
-| q 1e-05   | 429                 | 539         | 539           |
-| q 1e-10   | —                   | 396         | 397           |
-| q 1e-20   | —                   | 286         | 286           |
-
-- bwa-mem2 and Parabricks produce nearly identical results (±1 peak)
-- v2 finds ~25% more peaks than v1 at q 1e-05 (expected: bwa-mem2 is more sensitive than Bowtie2)
-
-**Issues found and fixed during testing:**
-- `samtools markdup` requires `fixmate -m` first → added name-sort → fixmate → coord-sort flow
-- CWL `float` type truncates tiny q-values (1e-10, 1e-20) to 0 → changed to `string` type
-- Several Biocontainers Docker image tags didn't exist → verified and fixed all tags
-- Parabricks requires `PU` and `LB` fields in read group → added to fq2bam tool
-
-### 2026-03-25: ce11 full benchmark complete (Option A "Fast Classic")
-
-**All benchmarks below are Option A "Fast Classic"** — same processing steps as v1 (no QC, no trimming, single peak caller), with modern tool replacements for speed. Option B "Modern" (with fastp, experiment-type-specific callers) has not been tested yet.
-
-**Benchmark scope**: 46 ce11 samples (6 experiment types × 3 read tiers × ~3 samples), 1 PacBio sample excluded.
-
-#### Three pipelines tested
-
-| Pipeline | Workflow | Description |
-|----------|----------|-------------|
-| CPU (default) | `option-a.cwl` | bwa-mem2, MACS3 with model building |
-| CPU (nomodel) | `option-a-nomodel.cwl` | bwa-mem2, MACS3 with `--nomodel --extsize 200` |
-| GPU (Parabricks) | `option-a-parabricks.cwl` | Parabricks fq2bam, MACS3 with `--nomodel` |
-
-#### Success rates
-
-| Pipeline | OK | Failed | Notes |
-|----------|-----|--------|-------|
-| CPU (default) | 34 | 12 | 6 MACS3 model failures, 4 SE naming, 1 sort glob, 1 PacBio |
-| CPU (nomodel) | 45 | 1 | Only PacBio sample failed |
-| GPU (Parabricks) | 45 | 0 | All passed after SE fix (`--in-se-fq`) |
-
-**Conclusion**: `--nomodel --extsize 200` eliminates all MACS3 model-building failures with no loss of accuracy.
-
-#### Processing time (pipeline only, excluding download)
-
-| Read Tier | Samples | CPU (nomodel) | GPU (Parabricks) | Speedup |
-|-----------|---------|---------------|-------------------|---------|
-| Low (<10M) | 15 | 7 min | 5 min | 1.25x |
-| Medium (10-50M) | 15 | 16 min | 11 min | 1.47x |
-| High (>50M) | 15 | 43 min | 31 min | 1.37x |
-| **Overall** | **45** | **22 min** | **16 min** | **1.37x** |
-
-Compared to v1's ~1 day/sample, the v2 pipeline is **~65x faster** (CPU) to **~90x faster** (GPU) on ce11.
-
-#### Peak count comparison
-
-**nomodel vs default model (CPU, q 1e-05)**:
-- ATAC-Seq, DNase-seq, Histone, TFs: **identical peaks** (0 difference)
-- RNA polymerase: **<2% difference** (minor, due to estimated vs fixed fragment size)
-- `--nomodel` is safe to use as the default
-
-**CPU vs GPU (q 1e-05)**:
-- 45 samples compared
-- **0.9% total peak count difference** (171,677 vs 173,185)
-- Most samples differ by ±1-15 peaks
-- bwa-mem2 and Parabricks (BWA-MEM) produce essentially identical results
-
-#### Download speed
-
-| Method | Speed | Notes |
-|--------|-------|-------|
-| fasterq-dump (NCBI) | Baseline | Single-threaded SRA conversion |
-| aria2c + ENA | **2.5x faster** | 8 parallel HTTP connections, pre-generated FASTQ |
-| aria2c + DDBJ | Available for DRR | Uses cached fastqlist for path lookup |
-
-Download routing by accession prefix: DRR → DDBJ → ENA → fasterq-dump, SRR/ERR → ENA → fasterq-dump.
-
-#### Issues found and fixed
-
-| Issue | Fix |
-|-------|-----|
-| MACS3 model building fails on low-signal samples | Added `--nomodel --extsize 200` |
-| Single-end FASTQ naming (`SRR.fastq` vs `SRR_1.fastq`) | Flexible FASTQ detection in scripts |
-| Parabricks SE reads need `--in-se-fq` not `--in-fq` | Conditional argument in CWL tool |
-| ENA `_subreads.fastq` naming for PacBio data | Flexible FASTQ detection + exclude PacBio from validation |
-| CWL `float` truncates small q-values | Changed to `string` type |
-| MACS3 `xls` output missing when no peaks found | Made output optional (`File?`) |
-
-#### Data quality observation
-
-- SRX2170085 (ce11, Bisulfite-Seq) is a **PacBio RS II** sample mislabeled in SRA metadata. It has 4.5% mapping rate against a short-read index. The v1 pipeline should have filtered this by instrument model. **Recommendation**: add instrument filter to the v2 sample selection to exclude PacBio/ONT samples.
-
-### 2026-03-27: hg38 benchmark complete (Option A "Fast Classic")
-
-**Benchmark scope**: 18 hg38 samples (1 per experiment type × read tier), both CPU and GPU pipelines run in parallel. All using Option A "Fast Classic" with `--nomodel`.
-
-#### Processing time
-
-| Read Tier | Samples | CPU (nomodel) | GPU (Parabricks) | Speedup |
-|-----------|---------|---------------|-------------------|---------|
-| Low (<10M) | 6 | 7 min | 5 min | 1.4x |
-| Medium (10-50M) | 6 | 60 min | 31 min | 1.9x |
-| High (>50M) | 6 | 118 min | 72 min | 1.6x |
-| **Overall** | **18** | **61 min** | **36 min** | **1.7x** |
-
-GPU speedup is larger on hg38 (1.7x) than ce11 (1.37x) — GPU acceleration benefits more from larger genomes.
-
-Notable outliers:
-- Bisulfite-Seq 45M reads: CPU 91 min vs GPU **8 min** (10.2x speedup)
-- Bisulfite-Seq 314M reads: CPU 214 min vs GPU **67 min** (3.1x speedup)
-- Some samples showed CPU faster than GPU (ATAC-Seq 59M, Histone 123M) — likely due to GPU/CPU resource contention from running both benchmarks in parallel
-
-#### Peak count comparison (CPU vs GPU, q 1e-05)
-
-- 14 samples compared (1 GPU output missing)
-- **0.8% total peak count difference** (168,493 CPU vs 167,069 GPU)
-- Most samples differ by <1%, consistent with ce11 results
-- One outlier: SRX26159220 (TFs) differed by ~1,500 peaks (7%) — worth investigating
-
-#### Processing time estimates for full ChIP-Atlas reprocessing (hg38)
-
-Based on average pipeline times (excluding download):
-
-| Scenario | Per sample | 200K hg38 samples | With download |
-|----------|-----------|-------------------|---------------|
-| CPU (1 node, 8 cores) | 61 min | ~23 years | + download time |
-| GPU (1 node, 1 GPU) | 36 min | ~14 years | + download time |
-| CPU cluster (10 nodes) | 61 min | ~2.3 years | + download time |
-| GPU cluster (10 GPUs) | 36 min | ~1.4 years | + download time |
-| CPU cluster (100 nodes) | 61 min | ~84 days | + download time |
-
-**Conclusion**: Processing at scale requires significant parallelism. A cluster with 100+ CPU nodes or 10+ GPU nodes is needed for a reasonable reprocessing timeline.
-
-#### Comparison: ce11 vs hg38 scaling
-
-| Metric | ce11 (100MB genome) | hg38 (3GB genome) | Ratio |
-|--------|--------------------|--------------------|-------|
-| CPU avg pipeline | 22 min | 61 min | 2.8x |
-| GPU avg pipeline | 16 min | 36 min | 2.3x |
-| GPU speedup | 1.37x | 1.7x | GPU benefits more on larger genomes |
-
-### 2026-03-27: v1 vs v2 Peak Overlap Analysis (Option A "Fast Classic")
-
-Downloaded v1 BED files from chip-atlas.dbcls.jp and compared peak overlap with v2 Option A results using bedtools intersect.
-
-#### ce11 (35 samples with v1 peaks + 10 with v1=0)
-
-| Metric | Value |
-|--------|-------|
-| v1 peaks recovered in v2 | **~90%** average |
-| v2 finds more peaks | 77% of samples (1.6x total peaks) |
-| v1=0 but v2 found peaks | 10 samples (thousands of peaks each) |
-
-**Overlap by experiment type:**
-
-| Type | Avg overlap | Notes |
-|------|------------|-------|
-| RNA polymerase | 97% | Excellent concordance |
-| Histone | 93% | Good, v2 finds more |
-| ATAC-Seq | 88% | v2 finds 2-40x more peaks in high-read samples |
-| TFs and others | 87% | Good concordance, similar counts |
-| DNase-seq | 87% | v2 finds more peaks |
-
-#### hg38 (12 samples with v1 peaks)
-
-| Metric | Value |
-|--------|-------|
-| v1 peaks recovered in v2 | **~77%** average |
-| Samples with >90% overlap | 4/12 (DNase-seq, ATAC-Seq) |
-| Samples with <70% overlap | 2/12 (see outliers below) |
-
-**Overlap by sample:**
-
-| Type | v1 peaks | v2 peaks | Overlap | Notes |
-|------|---------|---------|---------|-------|
-| ATAC-Seq (8M) | 3,316 | 10,657 | 98% | v2 finds 3x more |
-| DNase-seq (50M) | 35,958 | 35,885 | 93% | Nearly identical |
-| DNase-seq (72M) | 51,473 | 55,556 | 95% | v2 slightly more |
-| TFs (21M) | 14,704 | 16,605 | 94% | Good concordance |
-| TFs (52M) | 23,306 | 22,890 | 88% | Good |
-| Histone (26M) | 1,046 | 1,268 | 84% | v2 finds more |
-| RNA pol (20M) | 820 | 1,513 | 80% | v2 finds ~2x more |
-
-**Outliers:**
-- ~~SRX25595131 (Histone, 10M reads, SE): v1=8,797 peaks → v2=201 peaks~~ **RESOLVED**: This experiment has **2 SRR runs** (SRR30125615: 3M reads + SRR30125616: 7M reads) but the benchmark only downloaded the first run (30% of data). After downloading and concatenating both runs: **v2=6,633 peaks** — consistent with v1's 8,797 (~25% difference from tool changes, not a bug). **Fix**: `download-experiment.sh` now resolves all runs per experiment and concatenates FASTQs, matching v1's behavior.
-- SRX25254554 (TFs, 10M reads): v1=28,075 → v2=20,239 (66% overlap). v2 finds fewer peaks.
-
-#### Multi-threshold comparison (q 1e-05, 1e-10, 1e-20)
-
-**v1 vs v2 CPU peak count ratio across all thresholds:**
-
-| Genome | q05 (v2/v1) | q10 (v2/v1) | q20 (v2/v1) |
-|--------|------------|------------|------------|
-| ce11 (35 samples) | 1.5x | 1.5x | 1.7x |
-| hg38 (11 samples, excl. outlier) | 1.0x | 0.9x | 0.8x |
-
-- ce11: v2 consistently finds **more peaks at all thresholds**, with the ratio increasing at stricter cutoffs — v2's additional peaks are high-confidence
-- hg38: v2 and v1 are **near-parity at q05**, with v2 finding slightly fewer at stricter thresholds
-- The difference between genomes may reflect aligner-specific behavior on different genome structures (ce11 ~100MB vs hg38 ~3GB)
-
-**v2 CPU vs GPU consistency across thresholds:**
-
-| Threshold | ce11 (45 samples) | hg38 (18 samples) |
-|-----------|------------------|-------------------|
-| q05 | 0.8% diff | 0.8% diff |
-| q10 | 1.1% diff | — |
-| q20 | 1.3% diff | — |
-
-CPU and GPU produce nearly identical results at all thresholds, confirming that the choice of aligner (bwa-mem2 vs Parabricks BWA-MEM) has minimal impact on peak calling.
-
-#### Interpretation
-
-1. **v2 recovers most v1 peaks** (~90% for ce11, ~77% for hg38) — the core signal is preserved
-2. **v2 finds more peaks on ce11** (1.5x) but is **near-parity on hg38** — the v1-v2 difference is genome-dependent
-3. **Samples with v1=0 now have peaks in v2** — this is an improvement, not a regression (10 ce11 samples)
-4. **Some samples show fewer peaks in v2** — expected given different tools; users can adjust with q-value thresholds
-5. **Overlap varies by experiment type** — RNA polymerase shows the best concordance, ATAC-Seq shows the most new peaks
-6. **CPU and GPU are interchangeable** — <1.5% peak difference at all thresholds
-
-### 2026-03-28: Full 2×2 benchmark complete (ce11)
-
-All four pipeline variants benchmarked on 46 ce11 samples.
-
-#### Pipeline time (average, pipeline step only)
-
-|  | No trimming (Option A) | fastp trimming (Option B) |
-|--|----------------------|-------------------------|
-| **CPU (bwa-mem2)** | 22 min | 17 min |
-| **GPU (Parabricks)** | 16 min | **13 min** |
-
-#### By read tier
-
-| Tier | A CPU | A GPU | B CPU | B GPU |
-|------|-------|-------|-------|-------|
-| Low (<10M) | 7m | 5m | 6m | 4m |
-| Medium (10-50M) | 16m | 11m | 12m | 9m |
-| High (>50M) | 43m | 31m | 33m | 27m |
-
-#### Success rates
-
-| Pipeline | OK | Failed | Notes |
-|----------|-----|--------|-------|
-| Option A CPU | 45 | 1 | PacBio sample failed |
-| Option A GPU | 45 | 0 | |
-| Option B CPU | **46** | **0** | fastp filtered PacBio reads → pipeline succeeded |
-| Option B GPU | **46** | **0** | |
-
-#### Key findings
-
-1. **Option B is faster than Option A** (17m vs 22m CPU, 13m vs 16m GPU) — fastp reduces read count slightly, and deeptools bamCoverage is faster than bedtools genomecov + bedGraphToBigWig
-2. **GPU adds ~1.3x speedup** on top of whichever option
-3. **Option B + GPU is the fastest** at 13 min average — 1.7x faster than Option A CPU
-4. **Option B has better robustness** — fastp acts as a quality gate, filtering 100% of PacBio reads that would otherwise cause failures
-5. **Peak counts are similar** across all four variants — trimming causes minor (<5%) differences
-6. Compared to v1's ~1 day/sample, even the slowest variant (Option A CPU, 22 min) is **~65x faster**
-
-#### Recommendation
-
-**Option B + GPU** for production where GPUs are available. **Option B CPU** for CPU-only clusters. Option A is not recommended — Option B is both faster and more robust with no downside.
 
 ---
 
@@ -682,10 +365,10 @@ After Phase 4 validation, decide:
 
 #### Transition plan
 
-1. **Announce v2 transition** — set 6-month window for users to download v1 data
+1. **Announce v2 transition** -- set 6-month window for users to download v1 data
 2. **During transition (~6 months)**: serve both v1 and v2 data (~204 TB)
 3. **After transition**: archive v1 to Glacier Deep Archive, serve only v2 (~102 TB)
-4. **Provide v1 CWL pipeline** — users who need v1 results can re-run the pipeline themselves (CWL is reproducible)
+4. **Provide v1 CWL pipeline** -- users who need v1 results can re-run the pipeline themselves (CWL is reproducible)
 
 #### AWS S3 storage costs
 
@@ -712,18 +395,18 @@ After Phase 4 validation, decide:
 - Metadata filtering: rewrite in Python (replace shell scripts)
 - Incremental update logic: detect new SRA accessions, queue for processing
 - Data distribution: same URL structure for backward compatibility
-- Multi-run download: use `download-experiment.sh` to handle SRX→SRR resolution
+- Multi-run download: use `download-experiment.sh` to handle SRX->SRR resolution
 
 ## Timeline
 
-1. [x] **Benchmarking** — bwa-mem2/Parabricks evaluated, --nomodel validated, 2×2 matrix complete
-2. [x] **CWL workflows** — Option A (3 variants) + Option B (2 variants), all CWL Zen (JS-free)
-3. [x] **Validation** — A vs v1 (ce11+hg38), A vs B (ce11), peak overlap analysis, multi-threshold
-4. [x] **Secondary analyses** — target genes + colocalization (scripts + templates + demo pages)
-5. [ ] **NIG supercomputer test** — setup script ready, awaiting run
-6. [ ] **Enrichment analysis** — third secondary analysis
-7. [ ] **CWL Zen runner** — Rust implementation (separate repo)
-8. [ ] **Production reprocessing** — 400K+ samples on NIG
+1. [x] **Benchmarking** -- bwa-mem2/Parabricks evaluated, --nomodel validated, 2x2 matrix complete
+2. [x] **CWL workflows** -- Option A (3 variants) + Option B (2 variants), all CWL Zen (JS-free)
+3. [x] **Validation** -- A vs v1 (ce11+hg38), A vs B (ce11), peak overlap analysis, multi-threshold
+4. [x] **Secondary analyses** -- target genes + colocalization (scripts + templates + demo pages)
+5. [ ] **NIG supercomputer test** -- in progress
+6. [x] **Enrichment analysis** -- compiled BED + bedtools intersect, <1 sec per query
+7. [ ] **CWL Zen runner** -- Rust implementation (separate repo)
+8. [ ] **Production reprocessing** -- 400K+ samples on NIG
 
 ## Instrument Filtering & Long Read Support
 
@@ -738,18 +421,18 @@ Long-read ChIP-seq/ATAC-seq (e.g., nanoCUT&Tag) is emerging but not yet in publi
 
 ### Decision
 
-- **Filter out non-Illumina samples** for v2 processing — add instrument check to sample selection
+- **Filter out non-Illumina samples** for v2 processing -- add instrument check to sample selection
 - **Log non-Illumina samples** to a separate file for monitoring growth
-- **Architecture supports future long reads** — adding `minimap2.cwl` is trivial, pipeline can branch by aligner parameter
+- **Architecture supports future long reads** -- adding `minimap2.cwl` is trivial, pipeline can branch by aligner parameter
 - **Revisit when >100 long-read ChIP/ATAC samples** appear in SRA
 
 ## Open Questions
 
-- [ ] Parabricks licensing on NIG — is L40S supported? Need to test
-- [ ] CUT&Tag peak caller — SEACR vs MACS3 for CUT&Tag data
-- [ ] Data storage strategy — host v2 on existing DBCLS infra or S3?
+- [ ] Parabricks licensing on NIG -- is L40S supported? Need to test
+- [ ] CUT&Tag peak caller -- SEACR vs MACS3 for CUT&Tag data
+- [ ] Data storage strategy -- host v2 on existing DBCLS infra or S3?
 - [ ] Why hg38 shows near-parity with v1 while ce11 shows 1.5x more peaks
-- [x] ~~Job scheduler~~ — SLURM (confirmed on NIG)
-- [x] ~~CWL runner language~~ — Rust
-- [x] ~~SRX25595131 outlier~~ — multi-run download issue
-- [x] ~~Instrument filtering~~ — filter non-Illumina, log for monitoring
+- [x] ~~Job scheduler~~ -- SLURM (confirmed on NIG)
+- [x] ~~CWL runner language~~ -- Rust
+- [x] ~~SRX25595131 outlier~~ -- multi-run download issue
+- [x] ~~Instrument filtering~~ -- filter non-Illumina, log for monitoring
