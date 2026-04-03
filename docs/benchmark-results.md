@@ -2,19 +2,26 @@
 
 ## Summary
 
-ChIP-Atlas Pipeline v2 replaces decade-old tools with modern equivalents. Two implementations were benchmarked on the NIG supercomputer (6 dedicated AMD EPYC nodes, 128 cores each):
+ChIP-Atlas Pipeline v2 replaces decade-old tools (Bowtie2 2.2.2, SAMtools 0.1.19, MACS2 2.1.0) with modern equivalents. Three pipeline configurations were benchmarked on the NIG supercomputer against v1 processing logs:
 
-- **Option B CWL** — modular CWL workflow, each tool runs as a separate step with intermediate files
-- **Option B Fast** — optimized single-pass pipeline, piped processing with no intermediate files
+| Pipeline | Cores/job | Memory/job | Container | Implementation |
+|----------|----------|-----------|-----------|----------------|
+| **v1** (baseline) | **4** | **16 GB** | None (bare metal) | Shell scripts |
+| **v2 Option B CWL** | **16** | **128 GB** | Apptainer (per step) | cwltool + 13 CWL steps |
+| **v2 Option B Fast** | **16 or 32** | **128 or 256 GB** | Apptainer (per tool in pipe) | Shell script, piped |
 
 Key results on 54 hg38 validation samples (289 to 314M reads):
 
-| Metric | v1 pipeline | Option B CWL (16 cores) | Option B Fast (32 cores) |
-|--------|------------|------------------------|--------------------------|
-| Avg total time (10-50M reads) | ~1 day | 57 min | **20 min** |
-| Avg total time (50-100M reads) | ~1 day | 93 min | **38 min** |
-| Peak disk per sample | unknown | ~60 GB | **~18 GB** |
-| 300M+ read samples | untested | crashes (disk quota) | **~146 min** |
+| Read tier | v1 (4 cores) | CWL (16 cores) | Fast (16 cores) | Fast (32 cores) |
+|-----------|-------------|---------------|----------------|----------------|
+| <1M | 12 min | 5 min | **1 min** | **1 min** |
+| 10-50M | 124 min | 57 min | 32 min | **28 min** |
+| 50-100M | 166 min | 92 min | 58 min | **38 min** |
+| 300M+ | 822 min | crashes | — | **146 min** |
+| **Overall avg** | **117 min** | **54 min** | **19 min** | **26 min** |
+| Peak disk/sample | unknown | ~60 GB | ~18 GB | **~18 GB** |
+
+Note: v1 uses 4 cores with lower parallelism per sample but can run more concurrent jobs per node. v2 uses more cores per job for faster individual processing. See "Core Efficiency" section for normalized comparison.
 
 ---
 
@@ -62,7 +69,12 @@ Key results on 54 hg38 validation samples (289 to 314M reads):
 
 ## 2. NIG Benchmark: Option B CWL (Step-by-Step)
 
-CWL workflow with 13 separate steps, each running in its own container via cwltool + Apptainer. 16 cores per job, NVMe scratch for cwltool intermediates.
+CWL workflow with 13 separate steps, each running in its own container via cwltool + Apptainer.
+
+- **Cores per job**: 16
+- **Memory per job**: 128 GB (16 cores × 8 GB)
+- **Jobs per node**: 8 (128 cores / 16)
+- **Scratch**: NVMe /data1 for cwltool intermediates
 
 ### Processing time by read tier
 
@@ -104,7 +116,11 @@ Optimized single-pass pipeline with three key optimizations:
 2. **Parallel post-markdup**: bamCoverage and MACS3 run concurrently
 3. **Single MACS3**: one call at q=1e-05, then awk filter for 1e-10 and 1e-20 (replaces 3 separate calls)
 
-32 cores per job, Apptainer containers, NVMe scratch. Data from 30/54 completed samples.
+Two core configurations tested:
+- **16 cores per job**: 128 GB memory, 8 jobs per node (21/54 completed)
+- **32 cores per job**: 256 GB memory, 4 jobs per node (49/54 completed)
+
+Apptainer containers, NVMe /data1 scratch.
 
 ### Processing time by read tier
 
@@ -143,7 +159,52 @@ Optimized single-pass pipeline with three key optimizations:
 
 ---
 
-## 4. Disk and I/O Efficiency
+## 4. Speedup and Core Efficiency
+
+### Speedup vs v1 (by read tier)
+
+| Read tier | v1 → CWL (16c) | v1 → Fast (16c) | v1 → Fast (32c) |
+|-----------|:--------------:|:---------------:|:---------------:|
+| <1M | 2.5x | 10.0x | **14.9x** |
+| 1-10M | 1.7x | 2.8x | **4.6x** |
+| 10-50M | 2.2x | 3.9x | **4.5x** |
+| 50-100M | 1.8x | 2.9x | **4.3x** |
+| 100-300M | 2.2x | — | **3.9x** |
+| 300M+ | crashes | — | **5.6x** |
+| **Overall** | **2.2x** | **6.1x** | **4.6x** |
+
+Fast 16t shows higher overall speedup (6.1x) than Fast 32t (4.6x) because the 16t dataset is skewed toward smaller samples. For medium-to-large samples (10M+), Fast 32t is consistently faster in wall time.
+
+### Core efficiency (minutes × cores per sample)
+
+Since v1 uses 4 cores and v2 uses 16 or 32, raw speedup doesn't reflect compute cost fairly. Core-minutes normalizes for resource usage:
+
+| Read tier | v1 (4c) | CWL (16c) | Fast (16c) | Fast (32c) |
+|-----------|--------:|----------:|-----------:|-----------:|
+| <1M | 47 | 76 | **19** | 25 |
+| 1-10M | 100 | 228 | **142** | 173 |
+| 10-50M | 494 | 914 | **510** | 882 |
+| 50-100M | 664 | 1,466 | **922** | 1,228 |
+| 100-300M | 1,060 | 1,937 | — | 2,166 |
+| **Overall** | **469** | **863** | **310** | **822** |
+
+Key findings:
+- **v1 is the most core-efficient** for medium samples (10-50M) — it uses only 4 cores, so despite being slower, it uses fewer total core-minutes
+- **Fast 16t is the most core-efficient v2 variant** — close to v1 efficiency at 10-50M, better at <10M
+- **CWL and Fast 32t use ~2x more core-minutes than v1** — the extra cores buy wall-time speed but cost compute
+- **For throughput optimization**: Fast 16t (8 jobs/node) gives the best samples-per-node-hour for the dominant 10-50M tier
+
+### Recommendation by use case
+
+| Goal | Best configuration | Rationale |
+|------|-------------------|-----------|
+| Fastest per sample | Fast 32t | 26 min avg, handles 300M+ |
+| Best throughput (samples/hour) | Fast 16t | More parallel jobs, near-v1 core efficiency |
+| Maximum compatibility | CWL 16t | Portable CWL, debuggable per-step |
+
+---
+
+## 5. Disk and I/O Efficiency
 
 ### Peak disk usage during processing (per sample, 60M reads hg38)
 
@@ -171,7 +232,7 @@ The piped approach is essential for samples >100M reads, where step-by-step inte
 
 ---
 
-## 5. Download Performance
+## 6. Download Performance
 
 Data downloaded via `fast-download.sh` with source-aware routing:
 - SRR/ERR → ENA mirror (aria2c, 8 parallel connections)
@@ -194,7 +255,7 @@ Download time averages ~10% of total processing time for medium samples, up to ~
 
 ---
 
-## 6. Earlier Workstation Benchmarks
+## 7. Earlier Workstation Benchmarks
 
 ### Option A vs B × CPU vs GPU (ce11, 46 samples)
 
@@ -222,7 +283,7 @@ CPU and GPU produce nearly identical peak calls (<1.5% difference at all thresho
 
 ---
 
-## 7. Production Throughput Estimates
+## 8. Production Throughput Estimates
 
 ### hg38 read count distribution (197K samples)
 
@@ -254,7 +315,7 @@ Note: The CWL step-by-step pipeline cannot process the 2,512 hg38 samples with >
 
 ---
 
-## 8. v1 vs v2 Per-Sample Comparison (hg38)
+## 9. v1 vs v2 Per-Sample Comparison (hg38)
 
 Full per-sample comparison using v1 processing logs provided by co-maintainers. Data: `data/benchmark-v1-v2-comparison-hg38.tsv`
 
@@ -336,7 +397,7 @@ Full per-sample comparison using v1 processing logs provided by co-maintainers. 
 
 ---
 
-## 9. Key Decisions and Fixes
+## 10. Key Decisions and Fixes
 
 | Decision | Rationale |
 |----------|-----------|
