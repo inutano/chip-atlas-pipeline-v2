@@ -47,9 +47,9 @@ requirements:
           samtools index "$DEDUP"
 
           # --- Step 2: Parallel bamCoverage + MACS3 ---
-          bamCoverage -b "$DEDUP" -o "$OUTDIR/$SID.bw" --binSize 10 --normalizeUsing RPKM -p $((THREADS/2)) 2>/dev/null &
+          bamCoverage -b "$DEDUP" -o "$OUTDIR/$SID.bw" --binSize 1 --normalizeUsing RPKM -p $((THREADS/2)) 2>/dev/null &
           PID_BC=$!
-          macs3 callpeak -t "$DEDUP" -n "$SID" -g "$GSIZE" -q 1e-05 -f BAM --nomodel --extsize 200 --outdir "$OUTDIR" 2>/dev/null || true
+          macs3 callpeak -t "$DEDUP" -n "$SID" -g "$GSIZE" -q 1e-05 -f BAM --outdir "$OUTDIR" 2>/dev/null || true
           wait $PID_BC || true
 
           # --- Step 3: Filter + BigBed ---
@@ -73,7 +73,7 @@ requirements:
 
 hints:
   - class: DockerRequirement
-    dockerPull: "quay.io/biocontainers/mulled-v2-bwa-mem2-samtools-fastp-macs3-deeptools-bedtools-ucsc:latest"
+    dockerPull: "ghcr.io/inutano/chip-atlas-pipeline-v2:latest"
 
 baseCommand: [bash, run-pipeline.sh]
 

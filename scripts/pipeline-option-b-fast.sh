@@ -171,14 +171,14 @@ STEP2_START=$(date +%s)
 # bamCoverage in background
 run_tool "$IMG_DEEPTOOLS" bamCoverage \
   -b "$DEDUP_BAM" -o "$OUTDIR/${SAMPLE_ID}.bw" \
-  --binSize 10 --normalizeUsing RPKM -p "$((THREADS / 2))" \
+  --binSize 1 --normalizeUsing RPKM -p "$((THREADS / 2))" \
   2>"$OUTDIR/bamcoverage.stderr" &
 PID_BAMCOV=$!
 
 # Single MACS3 call at the most permissive threshold (q=1e-05)
 run_tool "$IMG_MACS3" macs3 callpeak \
   -t "$DEDUP_BAM" -n "${SAMPLE_ID}" -g "$GENOME_SIZE" \
-  -q 1e-05 -f BAM --nomodel --extsize 200 --outdir "$OUTDIR" \
+  -q 1e-05 -f BAM --outdir "$OUTDIR" \
   2>"$OUTDIR/macs3.stderr" || true
 
 # Wait for bamCoverage

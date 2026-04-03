@@ -35,7 +35,7 @@ MEM_PER_CPU="8g"
 TIME_LIMIT="0-12:00:00"
 
 # Genome size for MACS3
-declare -A GSIZE=( [hg38]=hs [mm10]=mm [rn6]=2.87e9 [dm6]=dm [ce11]=ce [sacCer3]=1.2e7 )
+declare -A GSIZE=( [hg38]=hs [mm10]=mm [rn6]=2.87e9 [dm6]=dm [ce11]=ce [sacCer3]=1.2e7 [TAIR10]=1.35e8 )
 GENOME_SIZE="${GSIZE[$GENOME]:?Unknown genome: $GENOME}"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }

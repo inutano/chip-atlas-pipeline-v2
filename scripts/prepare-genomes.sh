@@ -12,9 +12,10 @@ GENOME_URLS=(
   ["rn6"]="https://hgdownload.soe.ucsc.edu/goldenPath/rn6/bigZips/rn6.fa.gz"
   ["dm6"]="https://hgdownload.soe.ucsc.edu/goldenPath/dm6/bigZips/dm6.fa.gz"
   ["ce11"]="https://hgdownload.soe.ucsc.edu/goldenPath/ce11/bigZips/ce11.fa.gz"
+  ["TAIR10"]="https://ftp.ensemblgenomes.org/pub/plants/release-60/fasta/arabidopsis_thaliana/dna/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz"
 )
 
-for genome in ce11 dm6 rn6 hg38; do
+for genome in ce11 dm6 rn6 hg38 TAIR10; do
   dir="$BASE_DIR/$genome"
   fa="$dir/${genome}.fa"
   url="${GENOME_URLS[$genome]}"

@@ -282,8 +282,8 @@ Source: `https://chip-atlas.dbcls.jp/data/metadata/experimentList.tab`
 
 #### Stratification Dimensions
 
-1. **Genome** (6 current assemblies, legacy assemblies skipped):
-   - hg38, mm10, rn6, dm6, ce11, sacCer3
+1. **Genome** (7 current assemblies, legacy assemblies skipped):
+   - hg38, mm10, rn6, dm6, ce11, sacCer3, TAIR10
 
 2. **Experiment type** (6 types):
    - Histone, TFs and others, ATAC-Seq, DNase-seq, RNA polymerase, Bisulfite-Seq
@@ -300,7 +300,7 @@ Source: `https://chip-atlas.dbcls.jp/data/metadata/experimentList.tab`
   - Sort by accession number descending (newer experiments first -- biases toward modern sequencing instruments)
   - Pick **3 samples** from the top
 - This ensures multiple samples per organism to capture genome-structure-related variation in mapper/peak-caller behavior
-- **Expected size**: up to ~270 samples (6 genomes x 6 types x 3 tiers x 3 samples), fewer where combinations are sparse
+- **Expected size**: up to ~315 samples (7 genomes x 6 types x 3 tiers x 3 samples), fewer where combinations are sparse
 
 #### Selection Script
 
@@ -350,6 +350,7 @@ After Phase 4 validation, decide:
 | dm6 | ~100 MB | ~3 MB | ~103 MB |
 | ce11 | 78 MB | ~2 MB | ~80 MB |
 | sacCer3 | ~10 MB | ~1 MB | ~11 MB |
+| TAIR10 | ~15 MB | ~1 MB | ~16 MB |
 
 #### Total storage by genome (432K samples)
 

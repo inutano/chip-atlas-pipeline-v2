@@ -3,7 +3,7 @@
 Select a representative subset of ChIP-Atlas experiments for v2 pipeline validation.
 
 Reads experimentList.tab and selects samples stratified by:
-  - Genome (6 current assemblies)
+  - Genome (7 current assemblies)
   - Experiment type (6 types)
   - Read count tier (low/medium/high)
 
@@ -34,7 +34,7 @@ EXCLUDED_INSTRUMENT_PATTERNS = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
-TARGET_GENOMES = {"hg38", "mm10", "rn6", "dm6", "ce11", "sacCer3"}
+TARGET_GENOMES = {"hg38", "mm10", "rn6", "dm6", "ce11", "sacCer3", "TAIR10"}
 
 TARGET_TYPES = {
     "Histone",

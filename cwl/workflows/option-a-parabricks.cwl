@@ -56,7 +56,7 @@ inputs:
   format:
     type: string?
     default: "BAM"
-    doc: "MACS3 input format. Always use BAM (single-read mode) — BAMPE requires properly-paired fragments which fails on mixed/mislabeled data. With --nomodel --extsize 200, BAM mode is consistent across SE and PE samples."
+    doc: "MACS3 input format. Always use BAM (single-read mode) — BAMPE requires properly-paired fragments which fails on mixed/mislabeled data. BAM mode is consistent across SE and PE samples."
 
   num_gpus:
     type: int?
@@ -122,8 +122,6 @@ steps:
       qvalue:
         default: "1e-05"
       format: format
-      nomodel:
-        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
@@ -140,8 +138,6 @@ steps:
       qvalue:
         default: "1e-10"
       format: format
-      nomodel:
-        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
@@ -158,8 +154,6 @@ steps:
       qvalue:
         default: "1e-20"
       format: format
-      nomodel:
-        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================

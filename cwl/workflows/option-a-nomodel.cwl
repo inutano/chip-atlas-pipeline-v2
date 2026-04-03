@@ -1,12 +1,15 @@
 #!/usr/bin/env cwl-runner
+# DEPRECATED: This workflow is now identical to option-a.cwl.
+# It previously used --nomodel --extsize 200 for MACS3, which has been removed.
+# Kept for backward compatibility; prefer option-a.cwl for new runs.
 cwlVersion: v1.2
 class: Workflow
 
-label: "ChIP-Atlas Option A - Fast Classic (--nomodel)"
+label: "ChIP-Atlas Option A - Fast Classic (DEPRECATED, use option-a.cwl)"
 doc: |
-  ChIP-Atlas v2 primary processing pipeline (Option A: Fast Classic).
-  Same as option-a.cwl but with --nomodel --extsize 200 for MACS3.
-  Skips fragment size model building to avoid failures on low-signal samples.
+  DEPRECATED: This workflow is now identical to option-a.cwl.
+  Previously used --nomodel --extsize 200 for MACS3; that has been removed
+  so MACS3 now builds the fragment size model naturally.
 
   Steps: SRA download → BWA-MEM2 align → name-sort → fixmate → coord-sort
          → markdup → bedtools genomecov → bedGraphToBigWig
@@ -51,7 +54,7 @@ inputs:
   format:
     type: string?
     default: "BAM"
-    doc: "MACS3 input format. Always use BAM (single-read mode) — BAMPE requires properly-paired fragments which fails on mixed/mislabeled data. With --nomodel --extsize 200, BAM mode is consistent across SE and PE samples."
+    doc: "MACS3 input format. Always use BAM (single-read mode) — BAMPE requires properly-paired fragments which fails on mixed/mislabeled data. BAM mode is consistent across SE and PE samples."
 
 steps:
   # =====================
@@ -155,8 +158,6 @@ steps:
       qvalue:
         default: "1e-05"
       format: format
-      nomodel:
-        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
@@ -173,8 +174,6 @@ steps:
       qvalue:
         default: "1e-10"
       format: format
-      nomodel:
-        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
@@ -191,8 +190,6 @@ steps:
       qvalue:
         default: "1e-20"
       format: format
-      nomodel:
-        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================

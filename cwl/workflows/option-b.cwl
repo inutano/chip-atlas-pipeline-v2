@@ -6,8 +6,8 @@ label: "ChIP-Atlas Option B - Modern"
 doc: |
   ChIP-Atlas v2 primary processing pipeline (Option B: Modern).
   Adds QC/trimming (fastp) and uses deeptools for coverage tracks.
-  Peak calling with MACS3 --nomodel for all types (same as Option A-nomodel
-  for now; experiment-type-specific callers like HMMRATAC can be added later).
+  Peak calling with MACS3 for all types (experiment-type-specific callers
+  like HMMRATAC can be added later).
 
   Steps: FASTQ → fastp trim → BWA-MEM2 align → name-sort → fixmate
          → coord-sort → markdup → deeptools bamCoverage (BigWig)
@@ -56,7 +56,7 @@ inputs:
   format:
     type: string?
     default: "BAM"
-    doc: "MACS3 input format. Always use BAM (single-read mode) — BAMPE requires properly-paired fragments which fails on mixed/mislabeled data. With --nomodel --extsize 200, BAM mode is consistent across SE and PE samples."
+    doc: "MACS3 input format. Always use BAM (single-read mode) — BAMPE requires properly-paired fragments which fails on mixed/mislabeled data. BAM mode is consistent across SE and PE samples."
 
 steps:
   # =====================
@@ -150,8 +150,6 @@ steps:
       qvalue:
         default: "1e-05"
       format: format
-      nomodel:
-        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
@@ -168,8 +166,6 @@ steps:
       qvalue:
         default: "1e-10"
       format: format
-      nomodel:
-        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================
@@ -186,8 +182,6 @@ steps:
       qvalue:
         default: "1e-20"
       format: format
-      nomodel:
-        default: true
     out: [narrow_peaks, summits, xls]
 
   # =====================

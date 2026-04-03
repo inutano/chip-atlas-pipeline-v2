@@ -51,20 +51,6 @@ inputs:
       prefix: -f
     doc: "Input format (BAM for single-end, BAMPE for paired-end)"
 
-  nomodel:
-    type: boolean?
-    default: false
-    inputBinding:
-      prefix: --nomodel
-    doc: "Skip model building, use --extsize instead"
-
-  extsize:
-    type: int?
-    default: 200
-    inputBinding:
-      prefix: --extsize
-    doc: "Extension size (used when --nomodel is set)"
-
   outdir:
     type: string?
     default: "."

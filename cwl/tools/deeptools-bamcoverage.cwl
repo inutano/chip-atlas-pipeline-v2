@@ -38,7 +38,7 @@ inputs:
 
   bin_size:
     type: int?
-    default: 50
+    default: 1
     inputBinding:
       prefix: --binSize
     doc: "Bin size in bases"
