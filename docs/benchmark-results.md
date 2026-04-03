@@ -254,7 +254,89 @@ Note: The CWL step-by-step pipeline cannot process the 2,512 hg38 samples with >
 
 ---
 
-## 8. Key Decisions and Fixes
+## 8. v1 vs v2 Per-Sample Comparison (hg38)
+
+Full per-sample comparison using v1 processing logs provided by co-maintainers. Data: `data/benchmark-v1-v2-comparison-hg38.tsv`
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Samples compared | 54 (hg38 validation set) |
+| v1 avg processing time | 123 min |
+| v2 CWL avg (excl. 300M+) | 53 min (2.3x faster than v1) |
+| **v2 Fast 32t avg** | **22 min (5.6x faster than v1)** |
+| Speedup range (v1/Fast) | 1.5x - 35x |
+
+### Per-sample table (sorted by read count)
+
+| Accession | Type | Reads | PE | v1 map% | v1 peaks | v1 min | CWL min | Fast min | v1/Fast |
+|-----------|------|------:|---:|--------:|---------:|-------:|--------:|---------:|--------:|
+| SRX22536539 | Histone | 289 | 0 | 93.4 | 0 | 2 | . | 1 | 3.4x |
+| SRX23943860 | DNase-seq | 21K | 1 | 11.6 | 0 | 2 | 4 | 1 | 2.7x |
+| SRX25139082 | Bisulfite-Seq | 123K | 1 | 87.2 | 925 | 26 | . | 1 | 35.0x |
+| SRX25139081 | Bisulfite-Seq | 136K | 1 | 86.5 | 1,413 | 25 | 4 | 1 | 27.4x |
+| SRX23943859 | DNase-seq | 165K | 1 | 98.5 | 0 | 3 | 4 | 1 | 3.3x |
+| SRX23943861 | DNase-seq | 171K | 1 | 96.5 | 0 | 2 | 7 | 1 | 2.8x |
+| SRX25139080 | Bisulfite-Seq | 221K | 1 | 91.5 | 1,548 | 23 | 4 | 1 | 23.6x |
+| SRX18646733 | RNA pol | 2.1M | 1 | 7.0 | 7 | 3 | 6 | 2 | 1.5x |
+| SRX18298170 | RNA pol | 5.0M | 0 | 91.8 | 681 | 8 | 8 | 2 | 3.6x |
+| SRX25793268 | ATAC-Seq | 8.0M | 1 | 99.2 | 8,389 | 21 | 13 | 5 | 4.2x |
+| SRX26106775 | ATAC-Seq | 8.3M | 1 | 38.0 | 3,316 | 21 | 17 | 4 | 4.8x |
+| SRX25595128 | Histone | 8.3M | 0 | 96.1 | 8,023 | 16 | 7 | 1 | 12.9x |
+| SRX25793269 | ATAC-Seq | 8.5M | 1 | 99.2 | 12,948 | 19 | 12 | 5 | 3.8x |
+| SRX25050178 | TFs | 8.6M | 1 | 90.1 | 2,229 | 58 | 27 | 12 | 4.7x |
+| SRX25050179 | TFs | 9.3M | 1 | 88.6 | 1,671 | 61 | 31 | 14 | 4.3x |
+| SRX25254554 | TFs | 9.8M | 1 | 98.7 | 28,075 | 40 | 20 | 8 | 4.9x |
+| SRX24105763 | RNA pol | 9.9M | 0 | 80.9 | 247 | 11 | 10 | 3 | 3.1x |
+| SRX25595131 | Histone | 10.0M | 0 | 96.0 | 8,797 | 17 | 7 | 2 | 9.8x |
+| SRX26208417 | TFs | 15.1M | 1 | 98.0 | 533 | 115 | 36 | . | |
+| SRX26084085 | RNA pol | 20.2M | 1 | 97.2 | 820 | 71 | 35 | 17 | 4.2x |
+| SRX26323825 | TFs | 21.7M | 1 | 97.4 | 14,704 | 111 | 43 | . | |
+| SRX26208418 | TFs | 21.9M | 1 | 98.6 | 1,067 | 150 | 57 | . | |
+| SRX26084084 | RNA pol | 22.4M | 1 | 97.3 | 514 | 76 | 38 | 18 | 4.2x |
+| SRX26208419 | Histone | 23.2M | 1 | 97.4 | 2,006 | 163 | 65 | 24 | 6.8x |
+| SRX26268297 | Histone | 25.4M | 1 | 95.2 | 166 | 120 | 66 | 26 | 4.6x |
+| SRX26268299 | Histone | 26.4M | 1 | 96.7 | 1,046 | 148 | 47 | 27 | 5.5x |
+| SRX24152104 | DNase-seq | 26.9M | 1 | 96.2 | 884 | 100 | 74 | 27 | 3.7x |
+| SRX26084083 | RNA pol | 28.9M | 1 | 97.5 | 13,174 | 97 | 46 | 22 | 4.4x |
+| SRX26303596 | Bisulfite-Seq | 35.4M | 1 | 97.4 | 135,005 | 101 | 51 | 30 | 3.3x |
+| SRX26303597 | Bisulfite-Seq | 40.5M | 1 | 86.2 | 204,551 | 108 | 65 | 32 | 3.3x |
+| SRX26398646 | ATAC-Seq | 40.8M | 1 | 50.3 | 570 | 204 | 79 | 43 | 4.8x |
+| SRX26398645 | ATAC-Seq | 42.0M | 1 | 53.0 | 605 | 206 | 77 | 41 | 5.1x |
+| SRX26303598 | Bisulfite-Seq | 45.7M | 1 | 84.4 | 207,751 | 119 | 63 | 34 | 3.4x |
+| SRX26398642 | ATAC-Seq | 46.7M | 1 | 30.1 | 386 | 219 | 80 | 41 | 5.3x |
+| SRX24388472 | DNase-seq | 46.7M | 0 | 98.8 | 25,342 | 56 | 51 | 15 | 3.7x |
+| SRX24388475 | DNase-seq | 49.7M | 0 | 98.9 | 35,958 | 60 | 54 | 16 | 3.7x |
+| SRX26084170 | RNA pol | 51.6M | 1 | 79.3 | 6,896 | 142 | 79 | 38 | 3.7x |
+| SRX26159220 | TFs | 52.9M | 1 | 80.3 | 23,306 | 146 | 70 | 29 | 5.0x |
+| SRX26159217 | TFs | 53.2M | 1 | 74.3 | 26,443 | 191 | 66 | 28 | 6.9x |
+| SRX26398644 | ATAC-Seq | 58.2M | 1 | 34.4 | 608 | 177 | 110 | 46 | 3.8x |
+| SRX26398647 | ATAC-Seq | 59.7M | 1 | 38.1 | 627 | 202 | 106 | 46 | 4.3x |
+| SRX26084172 | RNA pol | 65.4M | 1 | 79.7 | 595 | 185 | 127 | 49 | 3.8x |
+| SRX26084217 | Histone | 67.1M | 1 | 85.1 | 6,921 | 196 | 111 | 43 | 4.5x |
+| SRX26159219 | TFs | 67.4M | 1 | 86.6 | 24,982 | 230 | 91 | 39 | 5.9x |
+| SRX24388480 | DNase-seq | 68.2M | 0 | 98.1 | 48,096 | 72 | 52 | 22 | 3.3x |
+| SRX26084171 | RNA pol | 69.0M | 1 | 82.0 | 11,387 | 194 | 107 | 52 | 3.7x |
+| SRX24388482 | DNase-seq | 72.6M | 0 | 98.0 | 51,473 | 86 | 77 | 23 | 3.7x |
+| SRX26398643 | ATAC-Seq | 73.2M | 1 | 47.3 | 845 | 253 | 130 | 59 | 4.3x |
+| SRX24388481 | DNase-seq | 73.8M | 0 | 98.3 | 60,167 | 84 | 64 | 24 | 3.5x |
+| SRX26084218 | Histone | 114.6M | 1 | 85.1 | 35,711 | 258 | 158 | 66 | 3.9x |
+| SRX26084219 | Histone | 123.5M | 1 | 85.1 | 36,988 | 272 | 128 | 69 | 3.9x |
+| SRX26240693 | Bisulfite-Seq | 306.8M | 1 | 92.0 | 0 | 790 | . | . | |
+| SRX26240694 | Bisulfite-Seq | 309.6M | 1 | 91.8 | 0 | 894 | . | . | |
+| SRX26240695 | Bisulfite-Seq | 314.1M | 1 | 90.2 | 0 | 822 | . | 146 | 5.6x |
+
+### Notable v1 data quality observations
+
+- **Low mapping rates in ATAC-Seq**: SRX26398642 (30%), SRX26398644 (34%), SRX26106775 (38%) — likely paired-end data aligned as single-end in v1 (Bowtie2)
+- **SRX18646733** (RNA pol, 2.1M reads): only 7% mapped — problematic sample in both v1 and v2
+- **SRX23943860** (DNase-seq, 21K reads): 11.6% mapped — likely mislabeled or low-quality
+- **300M+ Bisulfite-Seq**: v1 found 0 peaks (HyperMR_num=0) despite 90%+ mapping, took 13-15 hours each
+
+---
+
+## 9. Key Decisions and Fixes
 
 | Decision | Rationale |
 |----------|-----------|
