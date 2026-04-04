@@ -56,14 +56,13 @@ log() { echo "[$(date '+%H:%M:%S')] $*"; }
 # ============================================================
 # Thread allocation
 # ============================================================
-# fastp is fast, needs minimal threads. bwa-mem2 is the bottleneck.
-# samtools sort threads run concurrently in the pipe — keep low to
-# avoid oversubscription.
+# bwa-mem2 is the CPU bottleneck — give it almost all threads.
+# collate/fixmate/markdup are I/O-bound, single-threaded is fine.
+# samtools sort needs a few threads for merge.
 FASTP_T=2
-ALIGN_T=$((THREADS > 4 ? THREADS - 2 : 2))
-SORT_T=$((THREADS > 8 ? 4 : 2))
-SORT_MEM="2G"
-BIGWIG_T=$((THREADS > 4 ? THREADS / 2 : 2))
+ALIGN_T=$((THREADS > 3 ? THREADS - 1 : 2))
+SORT_T=$((THREADS > 8 ? 3 : 2))
+SORT_MEM="4G"
 
 # ============================================================
 # Step 1: Piped alignment + BigWig in one pass
@@ -75,11 +74,12 @@ BIGWIG="$OUTDIR/${SAMPLE_ID}.bw"
 RG="@RG\\tID:${SAMPLE_ID}\\tSM:${SAMPLE_ID}\\tPL:ILLUMINA"
 
 # Build fastp command
-FASTP_ARGS="--in1 $FASTQ_FWD --stdout --json $OUTDIR/${SAMPLE_ID}_fastp.json --thread $FASTP_T"
+FASTP_ARGS="--stdout --json $OUTDIR/${SAMPLE_ID}_fastp.json --thread $FASTP_T"
 if [ -n "$FASTQ_REV" ] && [ -e "$FASTQ_REV" ]; then
   FASTP_ARGS="--in1 $FASTQ_FWD --in2 $FASTQ_REV $FASTP_ARGS"
   BWA_INTERLEAVED="-p"
 else
+  FASTP_ARGS="--in1 $FASTQ_FWD $FASTP_ARGS"
   BWA_INTERLEAVED=""
 fi
 
@@ -88,10 +88,10 @@ STEP1_START=$(date +%s)
 # Main pipe: fastp → bwa-mem2 → collate → fixmate → sort → markdup → BAM
 fastp $FASTP_ARGS 2>/dev/null \
   | bwa-mem2 mem -t "$ALIGN_T" -R "$RG" $BWA_INTERLEAVED "$GENOME_FA" - 2>/dev/null \
-  | samtools collate -O -@ 2 - \
-  | samtools fixmate -m -@ 2 - - \
+  | samtools collate -O - \
+  | samtools fixmate -m - - \
   | samtools sort -@ "$SORT_T" -m "$SORT_MEM" - \
-  | samtools markdup -r -@ 2 - "$DEDUP_BAM"
+  | samtools markdup -r - "$DEDUP_BAM"
 
 STEP1_END=$(date +%s)
 log "Step 1 done: $((STEP1_END - STEP1_START))s"
@@ -103,10 +103,11 @@ log "Step 2: BigWig + MACS3 (parallel)"
 STEP2_START=$(date +%s)
 
 # BigWig via bedtools genomecov (single-bp resolution)
-# bedGraphToBigWig requires a seekable file, so we write a temp BedGraph
-BEDGRAPH="$OUTDIR/.${SAMPLE_ID}.bedGraph"
+# Output from coordinate-sorted BAM is already sorted — no re-sort needed.
+# bedGraphToBigWig requires a seekable file, so write temp BedGraph.
+# Use TMPDIR if available (node-local NVMe) to avoid Lustre I/O.
+BEDGRAPH="${TMPDIR:-$OUTDIR}/.${SAMPLE_ID}.bedGraph"
 (bedtools genomecov -bg -ibam "$DEDUP_BAM" \
-  | LC_ALL=C sort -k1,1 -k2,2n -S "${SORT_MEM}" --parallel="$SORT_T" \
   > "$BEDGRAPH" \
   && bedGraphToBigWig "$BEDGRAPH" "$CHROM_SIZES" "$BIGWIG" \
   && rm -f "$BEDGRAPH") &
