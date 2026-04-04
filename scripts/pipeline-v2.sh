@@ -4,14 +4,14 @@
 #
 # Runs entirely inside one container with all tools. Optimized for throughput:
 #   1. Pipe-through: fastp → bwa-mem2 → collate → fixmate → sort → markdup
-#   2. Tee: dedup BAM split to bedtools genomecov (BigWig) + file (for MACS3)
+#   2. All intermediates on local TMPDIR (NVMe) — only final outputs to Lustre
 #   3. Single MACS3 + awk filter for 3 q-value thresholds
-#   4. No intermediate files, no container restart overhead
+#   4. No intermediate files on shared filesystem, no container restart overhead
 #
 # Container: ghcr.io/inutano/chip-atlas-pipeline-v2:latest
 #
 # Usage:
-#   apptainer exec pipeline-v2.sif bash pipeline-v2.sh \
+#   apptainer exec --bind /data1/tmp:/tmp pipeline-v2.sif bash pipeline-v2.sh \
 #     --sample-id SRX12345678 \
 #     --fastq-fwd reads_1.fastq \
 #     [--fastq-rev reads_2.fastq] \
@@ -54,6 +54,14 @@ mkdir -p "$OUTDIR"
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
 # ============================================================
+# Working directory — use local NVMe when available
+# ============================================================
+# All intermediates (dedup BAM, BedGraph, samtools temps, logs) go here.
+# Only final outputs (BigWig, peaks, BigBed, fastp JSON) are copied to $OUTDIR.
+WORK="${TMPDIR:-/tmp}/${SAMPLE_ID}_$$"
+mkdir -p "$WORK"
+
+# ============================================================
 # Thread allocation
 # ============================================================
 # bwa-mem2 is the CPU bottleneck — give it almost all threads.
@@ -65,16 +73,15 @@ SORT_T=$((THREADS > 8 ? 3 : 2))
 SORT_MEM="4G"
 
 # ============================================================
-# Step 1: Piped alignment + BigWig in one pass
+# Step 1: Piped alignment
 # ============================================================
-log "Step 1: fastp → bwa-mem2 → collate → fixmate → sort → markdup → tee(BAM + BigWig)"
+log "Step 1: fastp → bwa-mem2 → collate → fixmate → sort → markdup"
 
-DEDUP_BAM="$OUTDIR/${SAMPLE_ID}.dedup.bam"
-BIGWIG="$OUTDIR/${SAMPLE_ID}.bw"
+DEDUP_BAM="$WORK/${SAMPLE_ID}.dedup.bam"
 RG="@RG\\tID:${SAMPLE_ID}\\tSM:${SAMPLE_ID}\\tPL:ILLUMINA"
 
-# Build fastp command
-FASTP_ARGS="--stdout --json $OUTDIR/${SAMPLE_ID}_fastp.json --thread $FASTP_T"
+# Build fastp args
+FASTP_ARGS="--stdout --json $WORK/${SAMPLE_ID}_fastp.json --thread $FASTP_T"
 if [ -n "$FASTQ_REV" ] && [ -e "$FASTQ_REV" ]; then
   FASTP_ARGS="--in1 $FASTQ_FWD --in2 $FASTQ_REV $FASTP_ARGS"
   BWA_INTERLEAVED="-p"
@@ -85,39 +92,36 @@ fi
 
 STEP1_START=$(date +%s)
 
-# Main pipe: fastp → bwa-mem2 → collate → fixmate → sort → markdup → BAM
-fastp $FASTP_ARGS 2>/dev/null \
-  | bwa-mem2 mem -t "$ALIGN_T" -R "$RG" $BWA_INTERLEAVED "$GENOME_FA" - 2>/dev/null \
-  | samtools collate -O - \
+fastp $FASTP_ARGS 2>"$WORK/fastp.stderr" \
+  | bwa-mem2 mem -t "$ALIGN_T" -R "$RG" $BWA_INTERLEAVED "$GENOME_FA" - 2>"$WORK/bwamem2.stderr" \
+  | samtools collate -O -T "$WORK/collate" - \
   | samtools fixmate -m - - \
-  | samtools sort -@ "$SORT_T" -m "$SORT_MEM" - \
+  | samtools sort -@ "$SORT_T" -m "$SORT_MEM" -T "$WORK/sort" - \
   | samtools markdup -r - "$DEDUP_BAM"
 
 STEP1_END=$(date +%s)
 log "Step 1 done: $((STEP1_END - STEP1_START))s"
 
 # ============================================================
-# Step 2: BigWig + MACS3 in parallel (both read dedup BAM)
+# Step 2: BigWig + MACS3 in parallel (both read dedup BAM from NVMe)
 # ============================================================
 log "Step 2: BigWig + MACS3 (parallel)"
 STEP2_START=$(date +%s)
 
 # BigWig via bedtools genomecov (single-bp resolution)
-# Output from coordinate-sorted BAM is already sorted — no re-sort needed.
-# bedGraphToBigWig requires a seekable file, so write temp BedGraph.
-# Use TMPDIR if available (node-local NVMe) to avoid Lustre I/O.
-BEDGRAPH="${TMPDIR:-$OUTDIR}/.${SAMPLE_ID}.bedGraph"
+# BAM is coordinate-sorted → output is already sorted → no re-sort needed
+BEDGRAPH="$WORK/${SAMPLE_ID}.bedGraph"
 (bedtools genomecov -bg -ibam "$DEDUP_BAM" \
   > "$BEDGRAPH" \
-  && bedGraphToBigWig "$BEDGRAPH" "$CHROM_SIZES" "$BIGWIG" \
+  && bedGraphToBigWig "$BEDGRAPH" "$CHROM_SIZES" "$OUTDIR/${SAMPLE_ID}.bw" \
   && rm -f "$BEDGRAPH") &
 PID_BIGWIG=$!
 
 # MACS3 peak calling
 macs3 callpeak \
   -t "$DEDUP_BAM" -n "${SAMPLE_ID}" -g "$GENOME_SIZE" \
-  -q 1e-05 -f BAM --outdir "$OUTDIR" \
-  2>"$OUTDIR/macs3.stderr" || true
+  -q 1e-05 -f BAM --outdir "$WORK" \
+  2>"$WORK/macs3.stderr" || true
 
 wait $PID_BIGWIG || log "WARNING: BigWig generation failed"
 
@@ -128,23 +132,22 @@ log "Step 2 done: $((STEP2_END - STEP2_START))s"
 # Step 3: Filter peaks + BigBed conversion
 # ============================================================
 log "Step 3: Filter peaks + BigBed"
-PEAKS_05="$OUTDIR/${SAMPLE_ID}_peaks.narrowPeak"
+PEAKS_05="$WORK/${SAMPLE_ID}_peaks.narrowPeak"
 
 if [ -f "$PEAKS_05" ]; then
   mv "$PEAKS_05" "$OUTDIR/${SAMPLE_ID}.05_peaks.narrowPeak"
-  mv "$OUTDIR/${SAMPLE_ID}_peaks.xls" "$OUTDIR/${SAMPLE_ID}.05_peaks.xls" 2>/dev/null || true
+  mv "$WORK/${SAMPLE_ID}_peaks.xls" "$OUTDIR/${SAMPLE_ID}.05_peaks.xls" 2>/dev/null || true
   PEAKS_05="$OUTDIR/${SAMPLE_ID}.05_peaks.narrowPeak"
 
   awk '$9 >= 10' "$PEAKS_05" > "$OUTDIR/${SAMPLE_ID}.10_peaks.narrowPeak"
   awk '$9 >= 20' "$PEAKS_05" > "$OUTDIR/${SAMPLE_ID}.20_peaks.narrowPeak"
 
-  # BigBed conversion (parallel)
   for q in 05 10 20; do
     BED="$OUTDIR/${SAMPLE_ID}.${q}_peaks.narrowPeak"
     if [ -s "$BED" ]; then
-      (cut -f1-4 "$BED" | sort -k1,1 -k2,2n > "$OUTDIR/.tmp_${q}.bed" \
-        && bedToBigBed "$OUTDIR/.tmp_${q}.bed" "$CHROM_SIZES" "$OUTDIR/${SAMPLE_ID}.${q}.bb" \
-        && rm -f "$OUTDIR/.tmp_${q}.bed") &
+      (cut -f1-4 "$BED" | sort -k1,1 -k2,2n > "$WORK/.tmp_${q}.bed" \
+        && bedToBigBed "$WORK/.tmp_${q}.bed" "$CHROM_SIZES" "$OUTDIR/${SAMPLE_ID}.${q}.bb" \
+        && rm -f "$WORK/.tmp_${q}.bed") &
     fi
   done
   wait
@@ -155,9 +158,10 @@ else
 fi
 
 # ============================================================
-# Cleanup
+# Move fastp report to final output, cleanup work dir
 # ============================================================
-rm -f "$DEDUP_BAM" "$OUTDIR/macs3.stderr" "$OUTDIR/${SAMPLE_ID}_summits.bed"
+mv "$WORK/${SAMPLE_ID}_fastp.json" "$OUTDIR/" 2>/dev/null || true
+rm -rf "$WORK"
 
 TOTAL=$(($(date +%s) - STEP1_START))
 log "Pipeline complete: ${TOTAL}s ($(( TOTAL / 60 ))m)"
