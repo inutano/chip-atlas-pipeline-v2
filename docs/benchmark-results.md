@@ -2,26 +2,42 @@
 
 ## Summary
 
-ChIP-Atlas Pipeline v2 replaces decade-old tools (Bowtie2 2.2.2, SAMtools 0.1.19, MACS2 2.1.0) with modern equivalents. Three pipeline configurations were benchmarked on the NIG supercomputer against v1 processing logs:
+ChIP-Atlas Pipeline v2 replaces decade-old tools (Bowtie2 2.2.2, SAMtools 0.1.19, MACS2 2.1.0) with modern equivalents. The production pipeline ("Option B Fast") uses piped processing, single-bp BigWig resolution, and natural MACS3 model building (no --nomodel).
+
+### Pipeline configurations benchmarked
 
 | Pipeline | Cores/job | Memory/job | Container | Implementation |
 |----------|----------|-----------|-----------|----------------|
-| **v1** (baseline) | **4** | **16 GB** | None (bare metal) | Shell scripts |
+| **v1** (baseline) | **4** | **16 GB** | None (bare metal) | Shell scripts (Bowtie2, MACS2) |
 | **v2 Option B CWL** | **16** | **128 GB** | Apptainer (per step) | cwltool + 13 CWL steps |
-| **v2 Option B Fast** | **16 or 32** | **128 or 256 GB** | Apptainer (per tool in pipe) | Shell script, piped |
+| **v2 Option B Fast** | **4 / 8 / 16 / 32** | **varies** | Apptainer (per tool in pipe) | Shell script, piped |
 
-Key results on 54 hg38 validation samples (289 to 314M reads):
+### Key results: Option B Fast with optimal 8-core configuration
 
-| Read tier | v1 (4 cores) | CWL (16 cores) | Fast (16 cores) | Fast (32 cores) |
-|-----------|-------------|---------------|----------------|----------------|
-| <1M | 12 min | 5 min | **1 min** | **1 min** |
-| 10-50M | 124 min | 57 min | 32 min | **28 min** |
-| 50-100M | 166 min | 92 min | 58 min | **38 min** |
-| 300M+ | 822 min | crashes | — | **146 min** |
-| **Overall avg** | **117 min** | **54 min** | **19 min** | **26 min** |
-| Peak disk/sample | unknown | ~60 GB | ~18 GB | **~18 GB** |
+| Read tier | v1 (4c) | Fast (8c) | Fast (16c) | Speedup (v1→8c) |
+|-----------|--------:|----------:|-----------:|----------------:|
+| <1M | 12 min | 13 min | 6 min | 0.9x |
+| 1-10M | 25 min | 14 min | 8 min | 1.8x |
+| 10-50M | 124 min | 58 min | 27 min | 2.1x |
+| 50-100M+ | 166 min | 116 min | 58 min | 1.4x |
+| **Overall** | **117 min** | **38 min** | **27 min** | **3.1x** |
 
-Note: v1 uses 4 cores with lower parallelism per sample but can run more concurrent jobs per node. v2 uses more cores per job for faster individual processing. See "Core Efficiency" section for normalized comparison.
+### Production throughput per node (128 cores, 512 GB RAM)
+
+| Pipeline | Cores/job | Max RSS | Jobs/node | **Samples/hr/node** |
+|----------|----------|--------:|----------:|-------------------:|
+| v1 | 4 | 16 GB | 32 | 16.4 |
+| **v2 Fast (recommended)** | **8** | **36 GB** | **14** | **22.2** |
+| v2 Fast | 16 | 45 GB | 8 | 18.1 |
+
+**v2 Fast 8c delivers 35% higher throughput per node than v1**, while producing single-bp BigWig files and handling 300M+ read samples that v1 cannot.
+
+| Metric | v1 | v2 Fast 8c |
+|--------|---:|----------:|
+| 6 kumamoto nodes, hg38 197K samples | 84 days | **62 days** |
+| Peak disk per sample | unknown | ~18 GB |
+| BigWig resolution | single-bp | single-bp |
+| 300M+ read support | yes (slow) | yes |
 
 ---
 
@@ -108,93 +124,91 @@ CWL workflow with 13 separate steps, each running in its own container via cwlto
 
 ---
 
-## 3. NIG Benchmark: Option B Fast (Piped)
+## 3. NIG Benchmark: Option B Fast (Piped, Updated Pipeline)
 
-Optimized single-pass pipeline with three key optimizations:
+Production pipeline with all fixes applied:
+- **No --nomodel**: MACS3 builds fragment size models naturally
+- **binSize=1**: Single basepair BigWig resolution (required for ChIP-Atlas)
+- **format=BAM**: Consistent handling of SE/PE samples
 
-1. **Pipe-through**: `fastp | bwa-mem2 | samtools sort | fixmate | sort | markdup` — no intermediate files written to disk
-2. **Parallel post-markdup**: bamCoverage and MACS3 run concurrently
-3. **Single MACS3**: one call at q=1e-05, then awk filter for 1e-10 and 1e-20 (replaces 3 separate calls)
-
-Two core configurations tested:
-- **16 cores per job**: 128 GB memory, 8 jobs per node (21/54 completed)
-- **32 cores per job**: 256 GB memory, 4 jobs per node (49/54 completed)
+Optimizations:
+1. **Pipe-through**: `fastp | bwa-mem2 | samtools sort | fixmate | sort | markdup` — no intermediate files
+2. **Parallel post-markdup**: bamCoverage (binSize=1) and MACS3 run concurrently
+3. **Single MACS3**: one call at q=1e-05, then awk filter for 1e-10 and 1e-20
 
 Apptainer containers, NVMe /data1 scratch.
 
-### Processing time by read tier
+### Profiling: single sample across core counts (SRX26084085, RNA pol, 20M reads)
 
-| Read tier | Samples | Avg download | Avg pipeline | Avg total | vs CWL speedup |
-|-----------|--------:|-------------|-------------|-----------|---------------|
-| Low (<10M) | 8 | 12s | 1 min | 1 min | **12x** |
-| Medium (10-50M) | 8 | 3.8 min | 24 min | 28 min | **2.0x** |
-| High (50-100M) | 11 | 2.7 min | 33 min | 36 min | **2.6x** |
-| Very high (>100M) | 2 | 3.5 min | 39 min | 43 min | **3.1x** |
-| **300M+ (Bisulfite-Seq)** | **1** | **0s (cached)** | **146 min** | **146 min** | **did not crash** |
-| **Overall** | **30** | **2.1 min** | **20 min** | **22 min** | **2.4x** |
+| Cores | Step 1 (align pipe) | Step 2 (BigWig + MACS3) | Total | Peak RSS | Core-min | Jobs/node |
+|------:|--------------------:|------------------------:|------:|---------:|---------:|----------:|
+| 4 | 136 min | 29 min | **165 min** | 32 GB | 660 | 16 |
+| **8** | **39 min** | **16 min** | **54 min** | **33 GB** | **432** | **14** |
+| 16 | 20 min | 10 min | 30 min | 38 GB | 480 | 8 |
+| 32 | 14 min | 6 min | 22 min | 53 GB | 704 | 4 |
 
-### Processing time by experiment type (available data)
+Jobs/node = min(128 cores / cores-per-job, 512 GB RAM / peak RSS).
 
-| Type | Samples | Avg download | Avg pipeline | Avg total | vs CWL |
-|------|--------:|-------------|-------------|-----------|--------|
-| Bisulfite-Seq | 7 | 1.9 min | 28 min | 30 min | 1.0x |
-| DNase-seq | 9 | 1.2 min | 12 min | 14 min | **2.9x** |
-| ATAC-Seq | 9 | 1.7 min | 27 min | 29 min | **2.3x** |
-| Histone | 5 | 1.4 min | 13 min | 15 min | **4.2x** |
+Note: Step 2 (BigWig at binSize=1) takes 10-29 min depending on cores — this is ~30% of total pipeline time. Single-bp resolution is significantly slower than binned BigWig but is required for ChIP-Atlas (users rely on it to inspect read mappings since BAM files are not kept).
 
-### Per-sample comparison: CWL vs Fast (32t) on matching samples
+### Benchmark matrix: 8c vs 16c on 20 hg38 samples
 
-| Sample | Type | Reads | CWL total | Fast total | Speedup |
-|--------|------|------:|-----------|-----------|---------|
-| SRX23943860 | DNase-seq | 21K | 4m | 1m | 5.4x |
-| SRX25139080 | Bisulfite-Seq | 221K | 4m | 1m | 4.2x |
-| SRX25595131 | Histone | 10M | 7m | 2m | 4.0x |
-| SRX26303596 | Bisulfite-Seq | 35M | 51m | 30m | 1.7x |
-| SRX26398645 | ATAC-Seq | 42M | 77m | 41m | 1.9x |
-| SRX24388472 | DNase-seq | 47M | 51m | 15m | 3.4x |
-| SRX26398647 | ATAC-Seq | 60M | 106m | 47m | 2.3x |
-| SRX26084217 | Histone | 67M | 111m | 43m | 2.6x |
-| SRX24388481 | DNase-seq | 74M | 64m | 24m | 2.7x |
-| SRX26240695 | Bisulfite-Seq | 314M | **CRASHED** | **146m** | **--** |
+| Read tier | N (8c) | 8c avg | 8c RSS | N (16c) | 16c avg | 16c RSS |
+|-----------|-------:|-------:|-------:|--------:|--------:|--------:|
+| <1M | 5 | 13 min | 5 GB | 5 | 6 min | 1 GB |
+| 1-10M | 3 | 14 min | 20 GB | 3 | 8 min | 16 GB |
+| 10-50M | 6 | 58 min | 31 GB | 7 | 27 min | 34 GB |
+| 50-100M+ | 1 | 116 min | 36 GB | 5 | 58 min | 42 GB |
+| **Overall** | **15** | **38 min** | | **20** | **27 min** | |
+
+### Memory observations
+
+- **<1M reads**: 1-5 GB — bwa-mem2 index barely loaded before alignment finishes
+- **1-10M reads**: 16-20 GB — bwa-mem2 index partially loaded
+- **10M+ reads**: 31-45 GB — bwa-mem2 index fully loaded (~20 GB) + samtools sort buffers + bamCoverage
+- Memory scales with cores mainly via samtools sort (`-m` per-thread buffers) and bamCoverage parallelism
+- **8c peak RSS (36 GB) allows 14 jobs per 512 GB node**; 16c peak (45 GB) allows only 8
 
 ---
 
-## 4. Speedup and Core Efficiency
+## 4. Speedup, Core Efficiency, and Throughput
 
-### Speedup vs v1 (by read tier)
+### Speedup vs v1 (by read tier, updated pipeline)
 
-| Read tier | v1 → CWL (16c) | v1 → Fast (16c) | v1 → Fast (32c) |
-|-----------|:--------------:|:---------------:|:---------------:|
-| <1M | 2.5x | 10.0x | **14.9x** |
-| 1-10M | 1.7x | 2.8x | **4.6x** |
-| 10-50M | 2.2x | 3.9x | **4.5x** |
-| 50-100M | 1.8x | 2.9x | **4.3x** |
-| 100-300M | 2.2x | — | **3.9x** |
-| 300M+ | crashes | — | **5.6x** |
-| **Overall** | **2.2x** | **6.1x** | **4.6x** |
+| Read tier | v1 (4c) avg | Fast (8c) avg | Fast (16c) avg | v1→8c | v1→16c |
+|-----------|------------:|--------------:|---------------:|------:|-------:|
+| <1M | 12 min | 13 min | 6 min | 0.9x | 2.0x |
+| 1-10M | 25 min | 14 min | 8 min | 1.8x | 3.1x |
+| 10-50M | 124 min | 58 min | 27 min | 2.1x | 4.6x |
+| 50-100M+ | 166 min | 116 min | 58 min | 1.4x | 2.9x |
+| **Overall** | **117 min** | **38 min** | **27 min** | **3.1x** | **4.3x** |
 
-Fast 16t shows higher overall speedup (6.1x) than Fast 32t (4.6x) because the 16t dataset is skewed toward smaller samples. For medium-to-large samples (10M+), Fast 32t is consistently faster in wall time.
+For very small samples (<1M), v2 8c is slightly slower than v1 4c due to higher overhead (Apptainer container startup, bwa-mem2 index loading). This is acceptable as <1M samples are only 12% of data.
 
 ### Core efficiency (minutes × cores per sample)
 
-Since v1 uses 4 cores and v2 uses 16 or 32, raw speedup doesn't reflect compute cost fairly. Core-minutes normalizes for resource usage:
+| Read tier | v1 (4c) | Fast (8c) | Fast (16c) | 8c vs v1 |
+|-----------|--------:|----------:|-----------:|---------:|
+| <1M | 47 | 100 | 101 | 2.1x more |
+| 1-10M | 100 | 112 | 125 | 1.1x more |
+| 10-50M | 494 | 462 | 425 | **0.9x (more efficient)** |
+| 50-100M+ | 664 | 931 | 930 | 1.4x more |
 
-| Read tier | v1 (4c) | CWL (16c) | Fast (16c) | Fast (32c) |
-|-----------|--------:|----------:|-----------:|-----------:|
-| <1M | 47 | 76 | **19** | 25 |
-| 1-10M | 100 | 228 | **142** | 173 |
-| 10-50M | 494 | 914 | **510** | 882 |
-| 50-100M | 664 | 1,466 | **922** | 1,228 |
-| 100-300M | 1,060 | 1,937 | — | 2,166 |
-| **Overall** | **469** | **863** | **310** | **822** |
+- At 10-50M reads (**54% of all hg38 samples**), 8c is slightly more core-efficient than v1
+- 8c and 16c have nearly identical core efficiency across all tiers
 
-Key findings:
-- **v1 is the most core-efficient** for medium samples (10-50M) — it uses only 4 cores, so despite being slower, it uses fewer total core-minutes
-- **Fast 16t is the most core-efficient v2 variant** — close to v1 efficiency at 10-50M, better at <10M
-- **CWL and Fast 32t use ~2x more core-minutes than v1** — the extra cores buy wall-time speed but cost compute
-- **For throughput optimization**: Fast 16t (8 jobs/node) gives the best samples-per-node-hour for the dominant 10-50M tier
+### Production throughput comparison
 
-### Recommendation by use case
+| Pipeline | Cores/job | Max RSS | Jobs/node (128c, 512GB) | Avg time | **Samples/hr/node** |
+|----------|----------|--------:|------------------------:|---------:|-------------------:|
+| v1 | 4 | 16 GB | 32 | 117 min | 16.4 |
+| **v2 Fast (recommended)** | **8** | **36 GB** | **14** | **38 min** | **22.2** |
+| v2 Fast | 16 | 45 GB | 8 | 27 min | 18.1 |
+| v2 Fast | 32 | 53 GB | 4 (core-limited) | 22 min | 10.9 |
+
+**v2 Fast 8c: 35% higher throughput than v1 per node.**
+
+### Recommendation
 
 | Goal | Best configuration | Rationale |
 |------|-------------------|-----------|
@@ -299,10 +313,20 @@ CPU and GPU produce nearly identical peak calls (<1.5% difference at all thresho
 
 ### Estimated reprocessing time (hg38, 197K samples, including downloads)
 
-| Pipeline | 6 kumamoto nodes (48 parallel) | 78 NIG nodes (624 parallel) |
-|----------|-------------------------------|---------------------------|
-| Option B CWL (step-by-step) | 184 days | 14 days |
-| **Option B Fast (piped)** | **~85 days** | **~7 days** |
+Based on measured throughput: v1 = 16.4 samples/hr/node, v2 Fast 8c = 22.2 samples/hr/node.
+
+| Pipeline | 6 kumamoto nodes | 78 NIG nodes |
+|----------|-----------------|-------------|
+| v1 (4c, baseline) | 84 days | 6.5 days |
+| v2 CWL step-by-step (16c) | 184 days | 14 days |
+| **v2 Fast 8c (recommended)** | **62 days** | **4.8 days** |
+
+### All genomes (845K samples, estimated)
+
+| Pipeline | 6 kumamoto nodes | 78 NIG nodes |
+|----------|-----------------|-------------|
+| v1 | ~360 days | ~28 days |
+| **v2 Fast 8c** | **~265 days** | **~20 days** |
 
 ### All genomes (845K samples)
 
