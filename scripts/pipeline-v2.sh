@@ -85,43 +85,40 @@ fi
 
 STEP1_START=$(date +%s)
 
-# Named pipe for the BigWig branch
-BIGWIG_FIFO="$OUTDIR/.bigwig_fifo_$$"
-mkfifo "$BIGWIG_FIFO"
-
-# Start bedtools genomecov → bedGraphToBigWig reading from the FIFO
-(bedtools genomecov -bg -ibam "$BIGWIG_FIFO" \
-  | LC_ALL=C sort -k1,1 -k2,2n -S "${SORT_MEM}" --parallel="$SORT_T" \
-  | bedGraphToBigWig stdin "$CHROM_SIZES" "$BIGWIG" \
-  && log "BigWig done") &
-PID_BIGWIG=$!
-
-# Main pipe: fastp → bwa-mem2 → collate → fixmate → sort → markdup → tee
+# Main pipe: fastp → bwa-mem2 → collate → fixmate → sort → markdup → BAM
 fastp $FASTP_ARGS 2>/dev/null \
   | bwa-mem2 mem -t "$ALIGN_T" -R "$RG" $BWA_INTERLEAVED "$GENOME_FA" - 2>/dev/null \
   | samtools collate -O -@ 2 - \
   | samtools fixmate -m -@ 2 - - \
   | samtools sort -@ "$SORT_T" -m "$SORT_MEM" - \
-  | samtools markdup -r -@ 2 - - \
-  | tee "$DEDUP_BAM" > "$BIGWIG_FIFO"
-
-# Wait for BigWig to finish
-wait $PID_BIGWIG || log "WARNING: BigWig generation failed"
-rm -f "$BIGWIG_FIFO"
+  | samtools markdup -r -@ 2 - "$DEDUP_BAM"
 
 STEP1_END=$(date +%s)
 log "Step 1 done: $((STEP1_END - STEP1_START))s"
 
 # ============================================================
-# Step 2: MACS3 peak calling (reads dedup BAM)
+# Step 2: BigWig + MACS3 in parallel (both read dedup BAM)
 # ============================================================
-log "Step 2: MACS3 peak calling"
+log "Step 2: BigWig + MACS3 (parallel)"
 STEP2_START=$(date +%s)
 
+# BigWig via bedtools genomecov (single-bp resolution)
+# bedGraphToBigWig requires a seekable file, so we write a temp BedGraph
+BEDGRAPH="$OUTDIR/.${SAMPLE_ID}.bedGraph"
+(bedtools genomecov -bg -ibam "$DEDUP_BAM" \
+  | LC_ALL=C sort -k1,1 -k2,2n -S "${SORT_MEM}" --parallel="$SORT_T" \
+  > "$BEDGRAPH" \
+  && bedGraphToBigWig "$BEDGRAPH" "$CHROM_SIZES" "$BIGWIG" \
+  && rm -f "$BEDGRAPH") &
+PID_BIGWIG=$!
+
+# MACS3 peak calling
 macs3 callpeak \
   -t "$DEDUP_BAM" -n "${SAMPLE_ID}" -g "$GENOME_SIZE" \
   -q 1e-05 -f BAM --outdir "$OUTDIR" \
   2>"$OUTDIR/macs3.stderr" || true
+
+wait $PID_BIGWIG || log "WARNING: BigWig generation failed"
 
 STEP2_END=$(date +%s)
 log "Step 2 done: $((STEP2_END - STEP2_START))s"
