@@ -681,8 +681,10 @@ cmd_status() {
   avg_pipe=$(echo "$latest"  | awk -F'\t' '$5=="done" && $11+0>0 {s+=$11;n++} END{if(n) printf "%.0f",s/n; else print "N/A"}')
 
   local slurm_running slurm_pending
-  slurm_running=$(squeue -u "$USER" -h -t R  -o "%j" 2>/dev/null | grep -c "^ca2-" || echo 0)
-  slurm_pending=$(squeue -u "$USER" -h -t PD -o "%j" 2>/dev/null | grep -c "^ca2-" || echo 0)
+  slurm_running=$(squeue -u "$USER" -h -t R  -o "%j" 2>/dev/null | grep -c "^ca2-" || true)
+  slurm_running="${slurm_running:-0}"
+  slurm_pending=$(squeue -u "$USER" -h -t PD -o "%j" 2>/dev/null | grep -c "^ca2-" || true)
+  slurm_pending="${slurm_pending:-0}"
 
   local disk_gb
   disk_gb=$(get_disk_usage_gb)
