@@ -430,7 +430,7 @@ apptainer exec --bind "$LOCAL_TMP:/tmp" "$SIF" \
     --fastq-fwd "$FWD" \
     $REV_ARG \
     --genome-fasta "$FA" \
-    --chrom-sizes "$REF_DIR/${genome}.chrom.sizes" \
+    --chrom-sizes "__CHROM_SIZES__" \
     --genome-size "$GENOME_SIZE" \
     --outdir "$OUT_DIR" \
     --threads "$THREADS" \
@@ -487,6 +487,7 @@ JOBTPL
     -e "s|__DOWNLOAD_SCRIPT__|${DOWNLOAD_SCRIPT}|g" \
     -e "s|__PIPELINE_SCRIPT__|${PIPELINE_SCRIPT}|g" \
     -e "s|__SRX_SRR_MAP__|${SRX_SRR_MAP}|g" \
+    -e "s|__CHROM_SIZES__|${REF_DIR}/${genome}.chrom.sizes|g" \
     -e "s|__DOWNLOAD_SLOTS__|${DOWNLOAD_SLOTS}|g" \
     -e "s|__RETRY_COUNT__|${retry}|g" \
     "$job_script"
