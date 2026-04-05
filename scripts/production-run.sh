@@ -147,8 +147,9 @@ check_disk_quota() {
 # SLURM helpers
 # ============================================================
 count_my_jobs() {
-  squeue -u "$USER" -h -t PD,R -o "%j" 2>/dev/null \
-    | grep -c "^ca2-" || echo 0
+  local n
+  n=$(squeue -u "$USER" -h -t PD,R -o "%j" 2>/dev/null | grep -c "^ca2-" || true)
+  echo "${n:-0}"
 }
 
 wait_for_job_slots() {
