@@ -430,7 +430,7 @@ apptainer exec --bind "$LOCAL_TMP:/tmp" "$SIF" \
     --fastq-fwd "$FWD" \
     $REV_ARG \
     --genome-fasta "$FA" \
-    --chrom-sizes "$REF_DIR/chrom.sizes" \
+    --chrom-sizes "$REF_DIR/${genome}.chrom.sizes" \
     --genome-size "$GENOME_SIZE" \
     --outdir "$OUT_DIR" \
     --threads "$THREADS" \
@@ -537,7 +537,7 @@ cmd_submit() {
   [ -f "$samples_tsv" ]          || die "Samples file not found: $samples_tsv"
   [ -f "$SIF" ]                  || die "Container SIF not found: $SIF"
   [ -f "$FA" ]                   || die "Reference not found: $FA"
-  [ -f "$REF_DIR/chrom.sizes" ]  || die "chrom.sizes not found: $REF_DIR/chrom.sizes"
+  [ -f "$REF_DIR/${genome}.chrom.sizes" ]  || die "chrom.sizes not found: $REF_DIR/${genome}.chrom.sizes"
   [ -f "$DOWNLOAD_SCRIPT" ]      || die "Download script not found: $DOWNLOAD_SCRIPT"
   [ -f "$PIPELINE_SCRIPT" ]      || die "Pipeline script not found: $PIPELINE_SCRIPT"
   [ -f "${FA}.bwt.2bit.64" ]     || warn "bwa-mem2 index not found — jobs may fail"
