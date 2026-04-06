@@ -297,7 +297,48 @@ CPU and GPU produce nearly identical peak calls (<1.5% difference at all thresho
 
 ---
 
-## 8. Production Throughput Estimates
+## 8. Production Test: ce11 (2,693 Samples)
+
+First production-scale test run on the NIG kumamoto dedicated nodes (6 × 128 cores).
+Pipeline v2 (single container, piped, NVMe I/O) with 8 cores/job.
+Run halted at 40% due to disk quota (954 GB Lustre limit).
+
+### Results
+
+| Metric | Value |
+|--------|-------|
+| Completed | 1,079 / 2,693 (40%) |
+| Failed | 23 (21 download, 2 pipeline) |
+| Halted | Disk quota at 848 GB |
+
+### Processing time by read tier
+
+| Read tier | Samples | Avg download | Avg pipeline | Avg total |
+|-----------|--------:|-----------:|-----------:|----------:|
+| <1M | 5 | 21s | 31s | 0.9 min |
+| 1-10M | 504 | 19s | 103s | 2.0 min |
+| 10-50M | 531 | 64s | 402s | 7.8 min |
+| 50M+ | 39 | 363s | 1,133s | 24.9 min |
+| **Overall** | **1,079** | **53s** | **287s** | **5.7 min** |
+
+### Throughput
+
+- **216 samples/hr** across 6 nodes (36/hr/node)
+- Full ce11 (2,693) projected: ~12.5 hours
+- Failure rate: 2.1% (mostly ENA download failures, retriable)
+
+### Lessons learned
+
+- **Disk quota is the bottleneck**, not compute — results accumulate faster than quota allows
+- **`--output-base` is essential** for production: write final outputs to shared directory with larger quota
+- Submit all jobs at once — SLURM handles queuing better than script-level backpressure via SSH
+- Per-genome chrom.sizes must be templated correctly in job scripts
+
+See `docs/production-lessons-ce11.md` for full details.
+
+---
+
+## 9. Production Throughput Estimates
 
 ### hg38 read count distribution (197K samples)
 
@@ -339,7 +380,7 @@ Note: The CWL step-by-step pipeline cannot process the 2,512 hg38 samples with >
 
 ---
 
-## 9. v1 vs v2 Per-Sample Comparison (hg38)
+## 10. v1 vs v2 Per-Sample Comparison (hg38)
 
 Full per-sample comparison using v1 processing logs provided by co-maintainers. Data: `data/benchmark-v1-v2-comparison-hg38.tsv`
 
@@ -421,12 +462,12 @@ Full per-sample comparison using v1 processing logs provided by co-maintainers. 
 
 ---
 
-## 10. Key Decisions and Fixes
+## 11. Key Decisions and Fixes
 
 | Decision | Rationale |
 |----------|-----------|
 | Always use `format=BAM` (not BAMPE) | BAMPE requires properly-paired fragments; fails on mislabeled PE data |
-| `--nomodel --extsize 200` for all MACS3 | Eliminates model-building failures on low-signal samples |
+| No `--nomodel` — let MACS3 build models | Model failures on low-signal samples are expected; BigWig still produced |
 | No background/input control | ChIP-Atlas policy — uniform processing across 400K+ samples |
 | Single MACS3 + awk filter | 1 call at q=1e-05 + filter for 1e-10/1e-20, replaces 3 separate runs |
 | TogoID for SRX→SRR resolution | NCBI e-utils rate-limits under concurrent load; TogoID supports bulk |
