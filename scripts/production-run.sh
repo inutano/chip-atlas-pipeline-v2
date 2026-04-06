@@ -22,6 +22,7 @@
 #   --disk-limit-gb N    Pause submission when Lustre usage exceeds this (default: 800)
 #   --time-limit T       SLURM time limit per job (default: 0-03:00:00)
 #   --mem M              Memory per job (default: 64g)
+#   --output-base DIR    Final output directory (default: production-<genome>/results)
 #   --dry-run            Print what would be submitted, don't submit
 #
 # Environment:
@@ -55,6 +56,7 @@ DRY_RUN=false
 MAX_RETRIES=3
 TIME_LIMIT="0-03:00:00"
 MEM="64g"
+OUTPUT_BASE=""  # If set, final outputs go here instead of PROD_DIR/results
 
 declare -A GSIZE=( [hg38]=hs [mm10]=mm [rn6]=2.87e9 [dm6]=dm [ce11]=ce [sacCer3]=1.2e7 [TAIR10]=1.35e8 )
 
@@ -72,7 +74,7 @@ setup_paths() {
   local genome="$1"
   PROD_DIR="$BASE_DIR/production-${genome}"
   LOG_DIR="$PROD_DIR/logs"
-  RESULT_DIR="$PROD_DIR/results"
+  RESULT_DIR="${OUTPUT_BASE:-$PROD_DIR/results}"
   FASTQ_DIR="$PROD_DIR/fastq"
   STATUS_FILE="$PROD_DIR/status.tsv"
   SRX_SRR_MAP="$PROD_DIR/srx-srr-map.tsv"
@@ -512,6 +514,7 @@ cmd_submit() {
       --disk-limit-gb)  DISK_LIMIT_GB="$2"; shift 2 ;;
       --time-limit)     TIME_LIMIT="$2"; shift 2 ;;
       --mem)            MEM="$2"; shift 2 ;;
+      --output-base)    OUTPUT_BASE="$2"; shift 2 ;;
       --dry-run)        DRY_RUN=true; shift ;;
       *) die "Unknown option: $1" ;;
     esac
@@ -531,6 +534,7 @@ cmd_submit() {
   log "Time limit:     $TIME_LIMIT"
   log "Memory:         $MEM"
   log "Disk limit:     ${DISK_LIMIT_GB}GB"
+  log "Output base:    ${OUTPUT_BASE:-$PROD_DIR/results (default)}"
   log "Dry run:        $DRY_RUN"
   log ""
 
@@ -867,6 +871,11 @@ cmd_summary() {
 # ============================================================
 # Dispatch
 # ============================================================
+# Global option: --output-base can be set before the subcommand
+if [[ "${1:-}" == "--output-base" ]]; then
+  OUTPUT_BASE="$2"; shift 2
+fi
+
 case "${1:-}" in
   submit)   shift; cmd_submit "$@" ;;
   status)   shift; cmd_status "$@" ;;
