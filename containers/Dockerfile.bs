@@ -1,0 +1,29 @@
+# ChIP-Atlas Pipeline v2: Bisulfite-seq container
+#
+# Contains DNMTools + samtools + UCSC tools for the piped WGBS pipeline.
+#
+# Build:
+#   docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2-bs:latest \
+#     -f containers/Dockerfile.bs containers/
+#
+FROM condaforge/mambaforge:latest
+
+LABEL org.opencontainers.image.source="https://github.com/inutano/chip-atlas-pipeline-v2"
+LABEL org.opencontainers.image.description="ChIP-Atlas Pipeline v2 BS-seq container (DNMTools + samtools + UCSC tools)"
+
+RUN mamba install -y -c bioconda -c conda-forge \
+    dnmtools \
+    samtools \
+    ucsc-bedgraphtobigwig \
+    && mamba clean -afy
+
+RUN printf '#!/bin/bash\n\
+echo "dnmtools $(dnmtools 2>&1 | grep -i version | head -1)"\n\
+echo "samtools $(samtools --version | head -1)"\n\
+echo "bedGraphToBigWig $(bedGraphToBigWig 2>&1 | head -1)"\n' > /usr/local/bin/versions.sh \
+    && chmod +x /usr/local/bin/versions.sh
+
+RUN versions.sh
+
+ENTRYPOINT []
+CMD ["/bin/bash"]
