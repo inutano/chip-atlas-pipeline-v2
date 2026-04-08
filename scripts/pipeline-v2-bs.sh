@@ -3,9 +3,13 @@
 # ChIP-Atlas Pipeline v2: Bisulfite-seq production pipeline
 #
 # Runs entirely inside one container. Optimized for throughput:
-#   1. Pipe-through: abismal → format → sort → uniq → counts (no BAM on disk)
-#   2. Parallel region calling: hmr + hypermr + pmd + BigWig simultaneously
-#   3. All intermediates on local TMPDIR (NVMe)
+#   1. Single-container execution (no per-step docker startup overhead)
+#   2. All intermediates on local TMPDIR (NVMe), deleted as consumed
+#   3. Parallel region calling: hmr + hypermr + pmd + BigWig simultaneously
+#
+# Note: dnmtools format/uniq use htslib, which requires seekable BAM files,
+# so step 1 uses file-based intermediates rather than a Unix pipe. The big
+# wins are NVMe locality, container reuse, and the parallel step 3 fan-out.
 #
 # Container: ghcr.io/inutano/chip-atlas-pipeline-v2-bs:latest
 #
@@ -72,40 +76,70 @@ fi
 # ============================================================
 # Thread allocation
 # ============================================================
-# abismal is the CPU bottleneck (alignment), give it most threads.
-# samtools sort uses a few threads for merge.
-# Other tools (uniq, format, counts) use 1-2 threads.
-ALIGN_T="$THREADS"
-SORT_T=$((THREADS > 8 ? 4 : 2))
-SORT_MEM="4G"
+# Every step that scales with threads gets all of them. samtools sort and
+# the dnmtools tools all use thread pools internally.
+SORT_MEM="2G"
 
 # ============================================================
-# Step 1: Piped alignment
+# Step 1: Sequential alignment + format + sort + dedup
 # ============================================================
+# Each intermediate lives on local NVMe ($WORK) and is deleted as soon as
+# the next step has consumed it. This keeps peak disk usage low and avoids
+# Lustre I/O entirely.
 log "Step 1: abismal → format → sort → uniq → dedup BAM"
 DEDUP_BAM="$WORK/${SAMPLE_ID}.dedup.bam"
 
 STEP1_START=$(date +%s)
 
-# Build fastq input args
+# Build fastq input args as an array (handles SE/PE without word splitting)
 if [ "$IS_PAIRED" = true ]; then
-  FASTQ_ARGS="$FASTQ_FWD $FASTQ_REV"
+  FASTQ_ARGS=("$FASTQ_FWD" "$FASTQ_REV")
 else
-  FASTQ_ARGS="$FASTQ_FWD"
+  FASTQ_ARGS=("$FASTQ_FWD")
 fi
 
-# Piped alignment: abismal → format → samtools sort → uniq
-# abismal writes BAM to stdout, format reads stdin via -, sort reads -, uniq reads -
+# 1a. abismal alignment
+T0=$(date +%s)
 dnmtools abismal \
     -i "$ABISMAL_IDX" \
-    -t "$ALIGN_T" \
+    -t "$THREADS" \
     -B \
-    -o /dev/stdout \
+    -o "$WORK/mapped.bam" \
     -s "$WORK/abismal.stats" \
-    $FASTQ_ARGS 2>"$WORK/abismal.stderr" \
-  | dnmtools format -f abismal -B $FORMAT_SE_FLAG -stdout - 2>"$WORK/format.stderr" \
-  | samtools sort -@ "$SORT_T" -m "$SORT_MEM" -T "$WORK/sort" - 2>"$WORK/sort.stderr" \
-  | dnmtools uniq -B -stdout - "$DEDUP_BAM" 2>"$WORK/uniq.stderr"
+    "${FASTQ_ARGS[@]}" 2>"$WORK/abismal.stderr"
+log "  abismal: $(($(date +%s) - T0))s"
+
+# 1b. dnmtools format → drop mapped.bam
+T0=$(date +%s)
+dnmtools format \
+    -t "$THREADS" \
+    -f abismal \
+    -B \
+    $FORMAT_SE_FLAG \
+    "$WORK/mapped.bam" \
+    "$WORK/formatted.bam" 2>"$WORK/format.stderr"
+rm -f "$WORK/mapped.bam"
+log "  format:  $(($(date +%s) - T0))s"
+
+# 1c. samtools sort → drop formatted.bam
+T0=$(date +%s)
+samtools sort \
+    -@ "$THREADS" \
+    -m "$SORT_MEM" \
+    -T "$WORK/sort" \
+    -o "$WORK/sorted.bam" \
+    "$WORK/formatted.bam" 2>"$WORK/sort.stderr"
+rm -f "$WORK/formatted.bam"
+log "  sort:    $(($(date +%s) - T0))s"
+
+# 1d. dnmtools uniq (dedup) → drop sorted.bam
+T0=$(date +%s)
+dnmtools uniq \
+    -t "$THREADS" \
+    "$WORK/sorted.bam" \
+    "$DEDUP_BAM" 2>"$WORK/uniq.stderr"
+rm -f "$WORK/sorted.bam"
+log "  uniq:    $(($(date +%s) - T0))s"
 
 STEP1_END=$(date +%s)
 log "Step 1 done: $((STEP1_END - STEP1_START))s"
@@ -148,13 +182,14 @@ PID_HYPERMR=$!
 (dnmtools pmd -o "$OUTDIR/${SAMPLE_ID}.pmd.bed" "$WORK/counts.tsv" 2>"$WORK/pmd.stderr") &
 PID_PMD=$!
 
-# BigWig: single awk pass to produce both BedGraphs, then parallel bedGraphToBigWig
-# counts.tsv is already in chromosome order (from coord-sorted BAM) — no re-sort needed
+# BigWig: sort counts.tsv (lexical chrom order — bedGraphToBigWig is strict),
+# single awk pass to produce both BedGraphs, then parallel bedGraphToBigWig.
 (
-  awk -F'\t' -v OFS='\t' -v M="$WORK/methyl.bg" -v C="$WORK/cover.bg" '{
-    print $1, $2, $2+1, $5 > M
-    print $1, $2, $2+1, $6 > C
-  }' "$WORK/counts.tsv"
+  sort -k1,1 -k2,2n "$WORK/counts.tsv" \
+    | awk -F'\t' -v OFS='\t' -v M="$WORK/methyl.bg" -v C="$WORK/cover.bg" '{
+        print $1, $2, $2+1, $5 > M
+        print $1, $2, $2+1, $6 > C
+      }'
   bedGraphToBigWig "$WORK/methyl.bg" "$CHROM_SIZES" "$OUTDIR/${SAMPLE_ID}.methyl.bw" &
   bedGraphToBigWig "$WORK/cover.bg"  "$CHROM_SIZES" "$OUTDIR/${SAMPLE_ID}.cover.bw" &
   wait
@@ -179,11 +214,7 @@ cp "$WORK/abismal.stats" "$OUTDIR/${SAMPLE_ID}.abismal.stats" 2>/dev/null || tru
 echo ""
 echo "=== Pipeline v2 BS-seq: $SAMPLE_ID ==="
 if [ -f "$WORK/abismal.stats" ]; then
-  if [ "$IS_PAIRED" = true ]; then
-    grep "percent_mapped" "$WORK/abismal.stats" | head -1
-  else
-    grep "percent_mapped" "$WORK/abismal.stats" | head -1
-  fi
+  grep "percent_mapped" "$WORK/abismal.stats" | head -1
 fi
 echo "CpGs with coverage: $(wc -l < "$WORK/counts.tsv")"
 for bed in hmr hypermr pmd; do

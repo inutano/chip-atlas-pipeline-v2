@@ -247,15 +247,74 @@ New tools to add to the v2 container for Bisulfite-seq support:
    the main v2 container? Separate is cleaner (only used for BS-seq) but
    adds complexity to the production-run.sh dispatch logic.
 
+## Production pipeline: `pipeline-v2-bs.sh`
+
+Created at `scripts/pipeline-v2-bs.sh`, paired with a dedicated container
+`ghcr.io/inutano/chip-atlas-pipeline-v2-bs:latest` (Dockerfile.bs:
+mambaforge + dnmtools 1.5.1 + samtools 1.22.1 + bedGraphToBigWig 2.10).
+
+Optimizations relative to the test runner (`run-bs-test.sh`):
+
+- **Single-container execution** — one `docker/apptainer` invocation covers
+  every step. The test runner launched docker ~10 times (~1-2s per step of
+  startup overhead).
+- **NVMe scratch via `$TMPDIR`** — every intermediate (`mapped.bam`,
+  `formatted.bam`, `sorted.bam`, `dedup.bam`, `counts.tsv`, `counts.sym.tsv`,
+  `*.bg`) lives on local fast storage and is deleted as soon as the next
+  step consumes it. No Lustre I/O during the run.
+- **Parallel step 3** — after `dnmtools sym` (prereq for HMR), the four
+  region/track jobs fan out concurrently: `hmr` + `hypermr` + `pmd` +
+  BedGraph/BigWig. On the 1M-read sample this collapsed ~21s of sequential
+  work into ~10s.
+- **Auto SE/PE detection** — `--fastq-rev` presence toggles the
+  `-single-end` flag for `dnmtools format`.
+
+**Pipe attempt abandoned.** The initial design tried to pipe
+`abismal | format | sort | uniq` through a single Unix pipeline to skip
+intermediate BAMs entirely. This fails: `dnmtools format` and `dnmtools uniq`
+open their input through htslib, which requires a seekable BAM file.
+Passing `-` or `/dev/stdin` produces `[E::hts_hopen] Failed to open file -
+: Exec format error`. The file-based alternative costs very little
+(~5s of writes on the 1M sample) because all I/O is local NVMe.
+
+### Optimized run on the 1M-read human cfDNA sample (SRX22130352)
+
+Re-ran the existing test sample through `pipeline-v2-bs.sh`, 16 threads,
+local NVMe scratch.
+
+| Metric | Test runner (baseline) | `pipeline-v2-bs.sh` |
+|---|---:|---:|
+| Wall clock | ~3:30 | **3:00** |
+| abismal | 60s | 60s |
+| format + sort + uniq | ~5s | ~3s |
+| counts | 120s | 107s |
+| step 3 (sym + 3 region calls + 2 BigWigs) | ~21s serial | **10s parallel** |
+
+**Speedup:** ~14% (~30s) at this sample size. Savings are constant-ish from
+container reuse + parallel step 3; `counts` is the biggest bottleneck and
+scales with reads × genome regardless.
+
+**Output verification:** bit-identical to the baseline for all five files
+— `hmr.bed`, `hypermr.bed`, `pmd.bed`, `methyl.bw`, `cover.bw` (md5
+checked). 987,360 CpGs with coverage, 2,985 HMR, 36,765 HyperMR, 3 PMD.
+98.76% mapping rate.
+
+Note on the BigWig reproducibility: a first optimized run produced
+byte-different BigWigs that contained identical data in a different chrom
+block order. Added `sort -k1,1 -k2,2n` before the BedGraph `awk` to
+guarantee lexical chrom ordering, which makes the output bit-identical to
+the baseline test runner and also keeps us safe on genomes with unusual
+BAM-header chrom orders. Sort cost is negligible (<1s on ~1M lines).
+
 ## Next steps
 
 1. **Meeting discussion** — review test results, agree on parameters
-2. **Add `-single-end` detection** to the pipeline script (like pipeline-v2.sh)
+2. **Validate on a larger sample** — `ERX2690393` (51M PE, 94.8% mapping,
+   digestive tract) is queued to confirm the ~35-40 min production projection
 3. **Build abismal index on NIG** for all 6 genomes + TAIR10
-4. **Create `pipeline-v2-bs.sh`** — production script analogous to pipeline-v2.sh
-5. **Update `production-run.sh`** to dispatch Bisulfite-Seq samples to the BS pipeline
-6. **Test on larger mammalian sample** (50M reads) to validate runtime projection
-7. **Build BS-seq container** with dnmtools + samtools + bedGraphToBigWig
+4. **Update `production-run.sh`** to dispatch Bisulfite-Seq samples to
+   `pipeline-v2-bs.sh`
+5. **GitHub Actions** workflow to publish `chip-atlas-pipeline-v2-bs` to GHCR
 
 ## References
 
