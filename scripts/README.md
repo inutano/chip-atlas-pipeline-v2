@@ -30,6 +30,79 @@ Step 2 (parallel):
 Step 3:  narrowPeak → bedToBigBed → .bb (×3 thresholds)
 ```
 
+**Tool options used in Step 1:**
+
+```bash
+fastp --in1 R1.fq --in2 R2.fq --stdout --json fastp.json --thread 2
+  # --stdout          Stream passing-filters reads to STDOUT as interleaved FASTQ (PE)
+  # --json            Write QC report in JSON format
+  # --thread          Number of worker threads (2 is enough; fastp is I/O-bound)
+
+| bwa-mem2 mem -t $THREADS -R '@RG\tID:SRX\tSM:SRX\tPL:ILLUMINA' -p genome.fa -
+  # -t INT            Number of threads
+  # -R STR            Read group header line (required for downstream tools)
+  # -p                Smart pairing: treat interleaved FASTQ from stdin as paired-end
+  # -                 Read input from stdin
+
+| samtools collate -O -T $WORK/collate -
+  # -O                Output to stdout (for piping)
+  # -T PREFIX         Write temporary files to PREFIX.nnnn.bam (on NVMe scratch)
+  # Collates reads by name so fixmate can find mate pairs
+
+| samtools fixmate -m - -
+  # -m                Add mate score tag (ms:i:) used by markdup to pick best read
+  # - -               Read from stdin, write to stdout
+
+| samtools sort -@ $SORT_T -m $SORT_MEM -T $WORK/sort -
+  # -@ INT            Number of additional threads for compression (2–3)
+  # -m INT            Max memory per thread for sorting (default: 768M, we use 4G)
+  # -T PREFIX         Write temporary files to PREFIX.nnnn.bam (on NVMe scratch)
+  # Coordinate-sorts the name-collated BAM
+
+| samtools markdup -r - dedup.bam
+  # -r                Remove duplicate reads (not just flag them)
+  # Reads the ms:i: mate score tag from fixmate to resolve duplicates
+```
+
+**Tool options used in Step 2:**
+
+```bash
+bedtools genomecov -bg -ibam dedup.bam > coverage.bedGraph
+  # -bg               Report depth in BedGraph format (chrom, start, end, depth)
+  # -ibam             Input is a coordinate-sorted BAM file
+
+bedGraphToBigWig coverage.bedGraph chrom.sizes output.bw
+  # Positional args: input BedGraph, chrom sizes, output BigWig
+  # BedGraph must be sorted by chrom then start position
+
+macs3 callpeak -t dedup.bam -n $SAMPLE -g $GENOME_SIZE -q 1e-05 -f BAM --outdir $WORK
+  # -t FILE           Treatment file (input BAM)
+  # -n NAME           Experiment name (used as output filename prefix)
+  # -g SIZE           Effective genome size: 'hs' (2.7e9), 'mm' (1.87e9),
+  #                   'ce' (9e7), 'dm' (1.2e8), or an integer
+  # -q FLOAT          Minimum FDR (q-value) cutoff for peak detection (default: 0.05)
+  #                   We use 1e-05 as the most permissive threshold, then filter
+  #                   narrowPeak column 9 (-log10 q-value) for 1e-10 and 1e-20
+  # -f FORMAT         Input format: BAM (single-end mode, not BAMPE) — reads are
+  #                   extended by the estimated fragment size for peak calling.
+  #                   Using BAM (not BAMPE) gives consistent treatment of SE and PE
+  #                   data (ChIP-Atlas policy: uniform processing without controls)
+  # --outdir DIR      Output directory
+  # Note: MACS3 uses default --nomodel=false, so it builds a shifting model.
+  #       If model building fails (low-signal samples), no peaks are produced.
+```
+
+**Tool options used in Step 3:**
+
+```bash
+# Filter peaks by -log10(q-value) in narrowPeak column 9
+awk '$9 >= 10' q05_peaks.narrowPeak > q10_peaks.narrowPeak   # q-value ≤ 1e-10
+awk '$9 >= 20' q05_peaks.narrowPeak > q20_peaks.narrowPeak   # q-value ≤ 1e-20
+
+bedToBigBed peaks.bed chrom.sizes output.bb
+  # Positional args: input BED (columns 1–4, sorted), chrom sizes, output BigBed
+```
+
 **Arguments:**
 
 | Flag | Required | Description |
@@ -37,11 +110,21 @@ Step 3:  narrowPeak → bedToBigBed → .bb (×3 thresholds)
 | `--sample-id` | yes | Experiment accession (e.g. SRX12345678) |
 | `--fastq-fwd` | yes | Forward reads (FASTQ or FASTQ.gz) |
 | `--fastq-rev` | no | Reverse reads (omit for single-end) |
-| `--genome-fasta` | yes | Reference genome FASTA (with bwa-mem2 index) |
+| `--genome-fasta` | yes | Reference genome FASTA (with bwa-mem2 index files in same dir) |
 | `--chrom-sizes` | yes | Chromosome sizes file (tab: chrom, size) |
 | `--genome-size` | yes | MACS3 genome size (`hs`, `mm`, `ce`, `dm`, or integer) |
 | `--outdir` | yes | Output directory |
 | `--threads` | no | CPU threads (default: 8) |
+
+**Thread allocation** (for `--threads 8`):
+
+| Stage | Threads | Rationale |
+|-------|--------:|-----------|
+| fastp | 2 | I/O-bound; more threads don't help |
+| bwa-mem2 | 7 | CPU bottleneck; gets `threads - 1` |
+| samtools sort | 2–3 | Compression threads for merge |
+| samtools collate/fixmate/markdup | 1 | I/O-bound, single-threaded is fine |
+| bedtools / MACS3 / BigWig | 1 | Single-threaded tools |
 
 **Outputs:**
 
@@ -107,7 +190,95 @@ Step 3 (parallel fan-out after dnmtools sym):
   └── sort → awk → bedGraphToBigWig → methyl.bw + cover.bw
 ```
 
-Step 1 uses file-based intermediates rather than a Unix pipe because `dnmtools format` and `dnmtools uniq` require seekable BAM input (htslib constraint). All intermediates live on local NVMe and are deleted as soon as the next step consumes them.
+Step 1 uses file-based intermediates rather than a Unix pipe because
+`dnmtools format` and `dnmtools uniq` require seekable BAM input (htslib
+constraint). All intermediates live on local NVMe and are deleted as soon
+as the next step consumes them.
+
+**Tool options used in Step 1:**
+
+```bash
+dnmtools abismal -i genome.abismal.idx -t $THREADS -B -o mapped.bam -s abismal.stats R1.fq R2.fq
+  # -i FILE    abismal index file (built with `dnmtools abismalidx genome.fa genome.abismal.idx`)
+  # -t INT     Number of threads
+  # -B         Output BAM format (default: SAM)
+  # -o FILE    Output file (aligned reads)
+  # -s FILE    Mapping statistics file (YAML format)
+  # Positional: one FASTQ for SE, two FASTQs for PE
+
+dnmtools format -t $THREADS -f abismal -B [-single-end] mapped.bam formatted.bam
+  # -t INT          Number of threads
+  # -f FORMAT       Input format: {abismal, bsmap, bismark}
+  # -B              Output in BAM format
+  # -single-end     Assume single-end reads (required for SE; without it, format
+  #                 fails with "failed to identify read name suffix length")
+  # Converts abismal's non-standard BAM tags to dnmtools standard format
+
+samtools sort -@ $THREADS -m 2G -T $WORK/sort -o sorted.bam formatted.bam
+  # -@ INT     Additional sorting threads
+  # -m INT     Max memory per thread (2G per thread)
+  # -T PREFIX  Temporary files on NVMe scratch
+  # -o FILE    Output file (coordinate-sorted BAM)
+
+dnmtools uniq -t $THREADS sorted.bam dedup.bam
+  # -t INT     Number of threads
+  # Removes PCR duplicates from sorted, formatted BAM
+  # Output format is inferred from the .bam extension
+```
+
+**Tool options used in Step 2:**
+
+```bash
+dnmtools counts -t $THREADS -cpg-only -c genome.fa dedup.bam | awk '$6 > 0' > counts.tsv
+  # -t INT       Number of threads
+  # -cpg-only    Print only CpG context cytosines (skip CHG/CHH — not relevant for mammals)
+  # -c FILE      Reference genome FASTA (required)
+  # Output format (tab-separated): chrom, pos, strand, context, meth_fraction, read_count
+  # The awk filter keeps only CpG sites with at least 1 read (column 6 = coverage > 0)
+```
+
+**Tool options used in Step 3:**
+
+```bash
+dnmtools sym -t 2 -o counts.sym.tsv counts.tsv
+  # -t INT     Number of threads (2 is sufficient)
+  # -o FILE    Output file
+  # Merges +/- strand CpG data into single symmetric CpG entries.
+  # Required input for HMR (hmr expects strand-collapsed CpG data)
+
+dnmtools hmr -o output.hmr.bed counts.sym.tsv
+  # -o FILE    Output BED file
+  # Identifies hypomethylated regions (HMRs) using a hidden Markov model.
+  # HMRs correspond to CpG islands, active promoters, and enhancers.
+  # Requires symmetric (strand-collapsed) input from `dnmtools sym`
+  # Default parameters: -d 1000 (max desert between CpGs), -i 10 (max iterations)
+
+dnmtools hypermr -o output.hypermr.bed counts.tsv
+  # -o FILE    Output BED file
+  # Identifies hypermethylated regions using an HMM.
+  # Designed for organisms with low background methylation (e.g., plants).
+  # For mammalian genomes: identifies regions of elevated methylation above
+  # the already-high background (~80% CpG methylation).
+  # Accepts either symmetric or per-strand counts; results are similar
+  # Default: -d 1000 (desert size), -i 10 (iterations), -M 4.0 (min cumulative meth)
+
+dnmtools pmd -o output.pmd.bed counts.tsv
+  # -o FILE    Output BED file
+  # Identifies partially methylated domains (PMDs) — large genomic regions
+  # with reduced methylation, often seen in cancer cells, placenta, and
+  # some differentiated cell types.
+  # Uses a bin-based HMM approach
+
+# BigWig generation from counts.tsv:
+sort -k1,1 -k2,2n counts.tsv \
+  | awk '{print $1, $2, $2+1, $5 > "methyl.bg"; print $1, $2, $2+1, $6 > "cover.bg"}'
+  # Column 5 = methylation fraction (0–1), column 6 = read coverage
+  # sort ensures lexical chrom order for bedGraphToBigWig
+  # Each CpG is a 1-bp interval (start, start+1)
+
+bedGraphToBigWig methyl.bg chrom.sizes output.methyl.bw
+bedGraphToBigWig cover.bg  chrom.sizes output.cover.bw
+```
 
 **Arguments:**
 
@@ -115,12 +286,16 @@ Step 1 uses file-based intermediates rather than a Unix pipe because `dnmtools f
 |------|----------|-------------|
 | `--sample-id` | yes | Experiment accession (e.g. SRX12345678) |
 | `--fastq-fwd` | yes | Forward reads (FASTQ or FASTQ.gz) |
-| `--fastq-rev` | no | Reverse reads (omit for single-end) |
+| `--fastq-rev` | no | Reverse reads (omit for single-end; auto-detects and passes `-single-end` to format) |
 | `--genome-fasta` | yes | Reference genome FASTA |
 | `--abismal-index` | yes | abismal index file (built with `dnmtools abismalidx`) |
 | `--chrom-sizes` | yes | Chromosome sizes file |
 | `--outdir` | yes | Output directory |
 | `--threads` | no | CPU threads (default: 16) |
+
+**Thread allocation:** All thread-aware tools (abismal, format, sort, uniq,
+counts) receive the full `--threads` value. Step 3 parallel jobs (hmr,
+hypermr, pmd, BigWig) are single-threaded but run simultaneously.
 
 **Outputs:**
 
@@ -192,37 +367,76 @@ SRX12345678	hg38	TFs and others	25000000
 | `SLURM_PARTITION` | `kumamoto-c768` | SLURM partition |
 | `SLURM_ACCOUNT` | `kumamoto-group` | SLURM account |
 
+Note: `production-run.sh` is being refactored into a separated
+download/processing architecture. See
+[`docs/production-download-design.md`](../docs/production-download-design.md)
+for the new design.
+
 ---
 
 ## Helpers
 
 ### `fast-download.sh` — FASTQ download with source-aware routing
 
-Downloads FASTQs for a given run accession, routing to the fastest mirror based on accession prefix:
+Downloads FASTQs for a given run accession, routing to the fastest mirror
+based on accession prefix.
 
-- `DRR*` (DDBJ/Japan) → DDBJ first, then ENA fallback
-- `ERR*` (ENA/Europe) → ENA first, then fasterq-dump fallback
-- `SRR*` (NCBI/US) → ENA first, then fasterq-dump fallback
-
-Uses `aria2c` with parallel connections for HTTP/FTP downloads.
+**Usage:**
 
 ```bash
-bash fast-download.sh SRR26425632 ./fastq/
+bash fast-download.sh <run_accession> <output_dir>
 ```
+
+**Routing logic:**
+
+| Prefix | Primary source | Fallback |
+|--------|---------------|----------|
+| `DRR*` | DDBJ local Lustre bz2 (NIG only) → DDBJ HTTPS | ENA HTTPS → fasterq-dump |
+| `ERR*` | ENA HTTPS | fasterq-dump |
+| `SRR*` | ENA HTTPS | fasterq-dump |
+
+**DDBJ local path** (available on NIG compute nodes):
+```
+/lustre9/open/database/ddbj-dbt/dra-public/dra/fastq/DRA*/DRA*/{DRX}/{DRR}*.fastq.bz2
+```
+Only DRA-submitted (DRR) experiments have local FASTQs. SRX/ERX directories
+exist as empty stubs. The mirror is current for DRA (updated through April
+2026) but stopped updating for ERA/SRA around Dec 2024 / Jan 2025.
+
+**ENA download details:**
+
+1. Queries ENA filereport API for FASTQ URLs + md5 checksums
+2. Downloads via `aria2c -x 8 -s 8` over HTTPS (`ftp.sra.ebi.ac.uk`)
+3. Verifies md5 checksum (`--checksum=md5=...`)
+4. Decompresses `.fastq.gz` → `.fastq`
+
+**fasterq-dump fallback:** Uses sra-tools container
+(`quay.io/biocontainers/sra-tools:3.0.10`) via apptainer/singularity/docker
+when pre-built FASTQs are not available from mirrors.
 
 ### `prepare-genomes.sh` — Reference genome setup
 
-Downloads reference genomes from UCSC/Ensembl, builds FASTA index, chromosome sizes, and bwa-mem2 indexes. Supported genomes: hg38, rn6, dm6, ce11, TAIR10.
+Downloads reference genomes from UCSC/Ensembl, builds all indexes using the
+pipeline containers (same tool versions as production).
+
+**Usage:**
 
 ```bash
-bash prepare-genomes.sh
+bash prepare-genomes.sh [BASE_DIR]
+# Default: ~/chip-atlas-v2/references (or $CHIP_ATLAS_BASE/references)
 ```
 
-For Bisulfite-seq, abismal indexes must be built separately:
+**Supported genomes:** hg38, mm10, rn6, dm6, ce11, sacCer3, TAIR10
 
-```bash
-dnmtools abismalidx <genome.fa> <genome.abismal.idx>
-```
+**Per-genome outputs:**
+
+| File | Built by | Used by |
+|------|----------|---------|
+| `{genome}.fa` | Downloaded from UCSC/Ensembl | All pipelines |
+| `{genome}.fa.fai` | `samtools faidx` (ChIP-seq container) | samtools |
+| `chrom.sizes` | `cut -f1,2` from `.fai` | bedGraphToBigWig, bedToBigBed |
+| `{genome}.fa.bwt.2bit.64` + index files | `bwa-mem2 index` (ChIP-seq container) | bwa-mem2 alignment |
+| `{genome}.abismal.idx` | `dnmtools abismalidx` (BS-seq container) | abismal alignment |
 
 ---
 
@@ -247,7 +461,11 @@ Built via GitHub Actions (`.github/workflows/container.yml`) and published to GH
 | `ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0` | `containers/Dockerfile` | fastp 1.3.1, bwa-mem2 2.3, samtools 1.23.1, MACS3 3.0.4, bedtools 2.31.1, UCSC 482 |
 | `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0` | `containers/Dockerfile.bs` | DNMTools 1.5.1, samtools 1.22.1, UCSC 482 |
 
-Both containers use `condaforge/mambaforge` as the base image with tools installed from bioconda and conda-forge.
+Both containers use `condaforge/mambaforge` as the base image with tools installed from bioconda and conda-forge. All tool versions are pinned in the Dockerfiles for reproducibility.
+
+Note: samtools is 1.22.1 in the BS-seq container (not 1.23.1) because
+dnmtools 1.5.1 requires htslib <1.23. The CVE-2026-31973 fix in 1.23.1 is
+CRAM-specific; this pipeline uses BAM only.
 
 ---
 
