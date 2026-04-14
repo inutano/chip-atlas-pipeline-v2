@@ -16,14 +16,34 @@ in a single SLURM job. At scale (400K+ samples across 6 nodes), this causes:
 4. **Cascading failures**: download failures waste the full SLURM time
    allocation and require retry of the entire job.
 
-### Why not use local SRA files on NIG?
+### Local data sources on NIG
 
-NIG/DDBJ mirrors NCBI `.sra` files at `/lustre9/open/database/ddbj-dbt/dra-public/dra/sralite/`,
-but only in SRA Lite format (quality scores stripped — unusable for our pipeline).
-The mirror also stopped updating ~1 year ago. Additionally, `fasterq-dump` is
-unreliable in practice — frequent failures cause CPU and memory allocation loss.
-The v1 pipeline used local `.sra` files successfully, but this path is no longer
-viable for v2.
+**SRA Lite mirror** (`/lustre9/open/database/ddbj-dbt/dra-public/dra/sralite/`):
+Quality scores stripped — unusable. Mirror stopped ~1 year ago. `fasterq-dump`
+is unreliable (frequent failures causing resource waste). Not viable.
+
+**DDBJ FASTQ mirror** (`/lustre9/open/database/ddbj-dbt/dra-public/dra/fastq/`):
+Contains `.fastq.bz2` files, but **only for DRA-submitted (DRR) experiments**.
+SRA/ERA directories exist as empty stubs — no actual FASTQ files for SRX/ERX.
+DRA data is current (updated through April 2026).
+
+**Coverage for ChIP-Atlas (432,318 experiments):**
+
+| Prefix | Experiments | Local FASTQ | Source needed |
+|--------|------------:|-------------|---------------|
+| DRX    |  7,344 (1.7%) | bz2 on Lustre (100% hit rate) | Local copy + decompress |
+| SRX    | 390,424 (90.3%) | None (empty stubs) | ENA HTTPS download |
+| ERX    | 34,550 (8.0%) | None (empty stubs) | ENA HTTPS download |
+
+Investigation confirmed: 15/15 random DRX samples found with valid
+`.fastq.bz2` files. 30/30 random SRX/ERX samples had empty directories.
+The DDBJ fastqlist metadata file is stale (last entry from 2013) but the
+DRA filesystem data is current.
+
+**Decompression performance** (tested on kumamoto node):
+- `bzcat` (single-threaded): 36 MB/s → 219 MB bz2 in 35s
+- `pbzip2 -dc -p4` (4 threads): 145 MB/s → same file in 8.7s
+- bwa-mem2 consumes input at ~13 MB/s, so even `bzcat` is never a bottleneck
 
 ## Design: Separated Download and Processing
 
@@ -33,18 +53,18 @@ through the filesystem.
 ```
 ┌─────────────────────────┐     ┌─────────────────────────┐
 │  Phase 1: Downloader    │     │  Phase 2: Processor     │
-│  (single long-running   │     │  (SLURM batch jobs)     │
-│   process, NOT a SLURM  │     │                         │
-│   job)                  │     │                         │
+│  (SLURM job on login    │     │  (SLURM batch jobs on   │
+│   partition, 1-2 cores) │     │   kumamoto partition)   │
 │                         │     │                         │
 │  - Reads sample list    │     │  - Scans staging dir    │
-│  - Downloads FASTQs     │     │    for "ready" samples  │
-│  - Rate-limited (N      │────>│  - Submits SLURM jobs   │
-│    concurrent downloads)│     │  - Each job processes   │
-│  - Watches disk quota   │     │    one sample           │
-│  - Marks "ready" when   │     │  - Marks "done" on      │
-│    verified             │<────│    completion           │
-│  - Deletes FASTQs after │     │                         │
+│  - DRX: local bz2 copy │     │    for "ready" samples  │
+│    + decompress to gz   │────>│  - Submits SLURM jobs   │
+│  - SRX/ERX: ENA HTTPS   │     │  - Each job processes   │
+│    download (rate-limit) │     │    one sample           │
+│  - Watches disk quota   │     │  - Marks "done" on      │
+│  - Marks "ready" when   │<────│    completion           │
+│    verified             │     │  - Reports to status    │
+│  - Deletes FASTQs after │     │    TSV                  │
 │    "done"               │     │                         │
 └─────────────────────────┘     └─────────────────────────┘
          │                                │
@@ -59,23 +79,25 @@ through the filesystem.
 
 ### Phase 1: Downloader
 
-A single long-running process (run in `tmux`/`screen` on the gateway or a
-login node, NOT as a SLURM job) that continuously downloads FASTQs.
+A long-running SLURM job on the **login partition** (a001-a003, 192 cores,
+3-day time limit). Uses 1–2 cores, minimal memory.
 
-**Behavior:**
+**Download routing:**
 
-1. Read the sample list TSV (accession, genome, experiment_type, num_reads).
-2. Skip samples that already have `.ready`, `.running`, or `.done` markers.
-3. Download the next sample's FASTQs from ENA via `aria2c -x 8 -s 8` (HTTPS).
-4. Verify md5 checksum against ENA's reported hash.
-5. Write a `.ready` marker file on success.
-6. Loop, respecting concurrency and quota limits.
+1. **DRX** → copy `.fastq.bz2` from local Lustre mirror at
+   `/lustre9/open/database/ddbj-dbt/dra-public/dra/fastq/DRA*/DRA*/{DRX}/`,
+   decompress with `pbzip2 -dc` and recompress with `pigz` to `.fastq.gz`
+   (or leave uncompressed if disk allows).
+2. **ERR/SRR** → download `.fastq.gz` from ENA HTTPS via `aria2c -x 8 -s 8`
+   with md5 checksum verification.
+3. **ERR/SRR fallback** → `fasterq-dump` via container (last resort).
 
 **Rate limiting:**
 
-- Max concurrent downloads: configurable (default: 4–6).
+- Max concurrent ENA downloads: configurable (default: 4–6).
+- DRX local copies are not rate-limited (Lustre-to-Lustre, fast).
 - Lustre disk quota check before each download. Pause when usage exceeds
-  threshold (e.g., 80% of quota).
+  `--disk-limit-gb` (default: 400 GB).
 - Backoff on ENA errors (HTTP 429, connection reset): exponential backoff
   starting at 60s.
 
@@ -83,7 +105,7 @@ login node, NOT as a SLURM job) that continuously downloads FASTQs.
 
 ```
 download started → staging/{SRX}/{SRR}_1.fastq.gz (partial)
-download + md5 verified → staging/{SRX}/.ready
+download + verified → staging/{SRX}/.ready
 SLURM job starts → staging/{SRX}/.running (downloader won't delete)
 SLURM job finishes → staging/{SRX}/.done
 downloader sees .done → rm -rf staging/{SRX}/
@@ -94,7 +116,8 @@ coordination. No database or message queue needed.
 
 ### Phase 2: Processor
 
-Periodic SLURM batch submission (can run as a cron job or a loop with sleep).
+Periodic SLURM batch submission on **kumamoto partition** (can run as a
+loop with sleep, or triggered by the downloader via a signal file).
 
 **Behavior:**
 
@@ -102,9 +125,10 @@ Periodic SLURM batch submission (can run as a cron job or a loop with sleep).
    or `.done`.
 2. For each ready sample, submit a SLURM job that:
    a. Writes `.running` marker.
-   b. Runs `pipeline-v2.sh` (or `pipeline-v2-bs.sh` for Bisulfite-seq).
-   c. On success: writes `.done` marker, appends to status TSV.
-   d. On failure: removes `.running`, appends error to status TSV.
+   b. Copies FASTQ from Lustre staging to local NVMe (`/data1/tmp`).
+   c. Runs `pipeline-v2.sh` (or `pipeline-v2-bs.sh` for Bisulfite-seq).
+   d. On success: writes `.done` marker, appends to status TSV.
+   e. On failure: removes `.running`, appends error to status TSV.
 3. Respect `--max-concurrent` limit (don't over-submit).
 4. Loop with configurable interval (e.g., every 60s).
 
@@ -113,19 +137,15 @@ Periodic SLURM batch submission (can run as a cron job or a loop with sleep).
 - CPU cores are never idle waiting for network I/O.
 - Failed downloads don't waste SLURM allocation.
 
-### Disk Budget
+### Dispatch: ChIP-seq vs Bisulfite-seq
 
-For hg38 at steady state (download ahead of processing):
+The processor checks `experiment_type` from the sample list:
+- `Bisulfite-Seq` → `pipeline-v2-bs.sh` with the BS-seq container
+- Everything else → `pipeline-v2.sh` with the ChIP-seq container
 
-| Item | Size per sample | Count | Total |
-|------|----------------:|------:|------:|
-| FASTQ pair (compressed) | ~2 GB | 20 buffered | ~40 GB |
-| Pipeline intermediates (NVMe) | ~15 GB peak | 16 concurrent | ~240 GB (NVMe, not Lustre) |
-| Final outputs | ~15 MB | accumulates | grows |
-
-With 20 samples buffered on Lustre + concurrent processing intermediates
-on local NVMe, Lustre usage stays well within the 954 GB quota. The
-downloader pauses automatically when the buffer is full or quota is near.
+Both pipelines share the same CLI interface (`--sample-id`, `--fastq-fwd`,
+`--fastq-rev`, `--outdir`, `--threads`) plus pipeline-specific reference
+arguments.
 
 ### Configuration
 
@@ -135,39 +155,12 @@ Both phases share a config file or common CLI options:
 |-----------|---------|-------------|
 | `--staging-dir` | `production-{genome}/staging` | FASTQ staging area (Lustre) |
 | `--output-dir` | `production-{genome}/results` | Final output directory |
-| `--max-downloads` | 4 | Concurrent download limit |
-| `--max-concurrent` | 96 | Max SLURM jobs |
-| `--threads` | 8 | CPUs per SLURM job |
-| `--disk-limit-gb` | 800 | Pause downloads at this Lustre usage |
-| `--buffer-size` | 50 | Max samples downloaded but not yet processed |
+| `--max-downloads` | 4 | Concurrent ENA download limit |
+| `--max-concurrent` | 96 | Max SLURM processing jobs |
+| `--threads` | 8 | CPUs per SLURM job (TBD from benchmark) |
+| `--disk-limit-gb` | 400 | Pause downloads at this Lustre usage |
+| `--buffer-size` | 100 | Max samples downloaded but not yet processed |
 | `--status-file` | `production-{genome}/status.tsv` | Append-only progress tracking |
-
-### Dispatch: ChIP-seq vs Bisulfite-seq
-
-The processor checks `experiment_type` from the sample list:
-- `Bisulfite-Seq` → `pipeline-v2-bs.sh` with the BS-seq container
-- Everything else → `pipeline-v2.sh` with the ChIP-seq container
-
-Both pipelines have the same interface (`--sample-id`, `--fastq-fwd`,
-`--fastq-rev`, `--outdir`, `--threads`) plus pipeline-specific reference
-arguments.
-
-### Core Count Benchmark
-
-The optimal `--threads` setting is TBD. Theoretical analysis (Amdahl's law
-with ~80% parallelizable pipeline) suggests fewer cores per job yields higher
-cluster throughput, but real-world factors (memory bandwidth, I/O contention,
-Lustre metadata pressure) favor larger allocations.
-
-**Planned benchmark:** Run 100 hg38 samples at 4, 8, and 16 cores/job on
-NIG kumamoto. Measure:
-- Total wall-clock time for the batch
-- Average per-sample pipeline time
-- Lustre I/O metrics (if available)
-- Memory high-water mark per job
-
-This benchmark should use the separated architecture (pre-downloaded FASTQs)
-to isolate compute performance from download variability.
 
 ### Error Handling
 
@@ -181,41 +174,7 @@ to isolate compute performance from download variability.
 - Retry: processor re-submits samples without `.done` (up to `--max-retries`).
 - Persistent failures (3+ retries) → marked as `permanent_fail` in status.
 
-### Migration from Current production-run.sh
-
-The current `production-run.sh` can be refactored into two scripts:
-
-1. `production-download.sh` — Phase 1 (downloader)
-2. `production-run.sh` — Phase 2 (processor), refactored to read from
-   staging dir instead of downloading
-
-The status TSV format remains the same (append-only, 14 columns). The
-`status` and `summary` subcommands work unchanged. The `submit` subcommand
-becomes the processor loop. The `retry` subcommand works on processing
-failures only (download retries are handled by the downloader).
-
-## Design Decisions
-
-1. **Downloader runs as a SLURM job**, not on the gateway. Long-running
-   processes on the NIG gateway (`gw`) are killed by admins. Use a low-CPU
-   SLURM allocation (1–2 cores, minimal memory) with a long time limit,
-   or a recurring cron-like SLURM job.
-
-2. **DDBJ first for all accessions**. DDBJ mirrors FASTQs for DRA/ERA/SRA
-   submissions and is local to NIG (Lustre or domestic network). Use DDBJ
-   as the primary source, fall back to ENA HTTPS only when DDBJ doesn't
-   have the file. `fast-download.sh` already implements this routing for
-   DRR; extend it to try DDBJ for ERR/SRR as well.
-
-3. **Keep FASTQs compressed** (`.fastq.gz`) on Lustre. Both fastp and
-   bwa-mem2 read gzipped input natively. abismal (BS-seq) also reads
-   `.fastq.gz`. Compressed FASTQs use ~3× less Lustre quota, which is
-   critical given the 954 GB limit. The decompression step in
-   `fast-download.sh` should be removed.
-
-4. **Buffer size** is calculated from the disk budget below.
-
-## Buffer Size Calculation
+## Disk Budget
 
 Available Lustre quota for staging depends on the output destination.
 If `--output-base` points to the collaborator's larger shared storage,
@@ -255,16 +214,61 @@ This leaves ~500 GB headroom on Lustre for any intermediate spill, logs,
 and the status tracking files. Tune up if `--output-base` is on separate
 storage and more quota is available for staging.
 
-## Open Questions
+## Migration from Current production-run.sh
 
-1. **SLURM allocation for the downloader**: What partition and time limit?
-   A 1-core job on kumamoto-c768 wastes a 128-core node. Is there a
-   smaller partition (e.g., login, short, or IO-class) available on NIG?
+The current `production-run.sh` will be refactored into two scripts:
 
-2. **DDBJ FASTQ coverage**: What fraction of ChIP-Atlas samples have
-   FASTQs on DDBJ? If coverage is high, ENA downloads become the
-   exception rather than the rule, and the concurrency problem mostly
-   disappears.
+1. `production-download.sh` — Phase 1 (downloader)
+2. `production-run.sh` — Phase 2 (processor), refactored to read from
+   staging dir instead of downloading
 
-3. **Core count benchmark**: Still TBD — run 100 hg38 samples at 4, 8,
-   16 cores on NIG to determine optimal `--threads` for cluster throughput.
+The status TSV format remains the same (append-only, 14 columns). The
+`status` and `summary` subcommands work unchanged. The `submit` subcommand
+becomes the processor loop. The `retry` subcommand works on processing
+failures only (download retries are handled by the downloader).
+
+## Core Count Benchmark
+
+The optimal `--threads` setting is TBD. Theoretical analysis (Amdahl's law
+with ~80% parallelizable pipeline) suggests fewer cores per job yields higher
+cluster throughput, but real-world factors (memory bandwidth, I/O contention,
+Lustre metadata pressure) favor larger allocations.
+
+**Planned benchmark:** Use 3 kumamoto nodes (1 per configuration), each
+running as many samples as possible in 12 hours:
+
+| Node | Cores/job | Concurrent jobs | Goal |
+|------|----------:|----------------:|------|
+| at137 | 4 | 32 | Measure total samples completed |
+| at138 | 8 | 16 | Same |
+| at140 | 16 | 8 | Same |
+
+Pre-download FASTQs to staging to isolate compute performance from download
+variability. Measure: total samples processed, average per-sample time,
+memory high-water mark per job.
+
+## Design Decisions
+
+1. **Downloader runs on the login partition** (a001-a003, 3-day limit,
+   1–2 cores). Gateway processes are killed by admins. The login partition
+   has idle 192-core nodes with a 3-day time limit — use 1 core for the
+   downloader, leaving 191 idle (acceptable since login nodes are designed
+   for this).
+
+2. **DDBJ local bz2 for DRX, ENA HTTPS for SRX/ERX.** Only 1.7% of
+   ChIP-Atlas samples (7,344 DRX) have local FASTQs on the NIG Lustre
+   mirror. The remaining 98.3% (425K SRX/ERX) require ENA download.
+   DDBJ HTTPS (`ddbj.nig.ac.jp`) can be tried as a domestic mirror for
+   ERR/SRR as well, though filesystem investigation showed no local FASTQs
+   for these prefixes.
+
+3. **Keep FASTQs compressed** (`.fastq.gz`) on Lustre. Both fastp and
+   bwa-mem2 read gzipped input natively. abismal (BS-seq) also reads
+   `.fastq.gz`. Compressed FASTQs use ~3× less Lustre quota, which is
+   critical given the 954 GB limit. The decompression step in
+   `fast-download.sh` should be removed.
+
+4. **DRX local copy decompresses bz2 and recompresses to gz** (or stores
+   uncompressed) so the pipeline sees a uniform input format regardless of
+   origin. `pbzip2 -dc file.bz2 | pigz > file.fastq.gz` if pigz is
+   available, otherwise `bzcat file.bz2 | gzip > file.fastq.gz`.
