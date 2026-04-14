@@ -194,23 +194,77 @@ The status TSV format remains the same (append-only, 14 columns). The
 becomes the processor loop. The `retry` subcommand works on processing
 failures only (download retries are handled by the downloader).
 
+## Design Decisions
+
+1. **Downloader runs as a SLURM job**, not on the gateway. Long-running
+   processes on the NIG gateway (`gw`) are killed by admins. Use a low-CPU
+   SLURM allocation (1–2 cores, minimal memory) with a long time limit,
+   or a recurring cron-like SLURM job.
+
+2. **DDBJ first for all accessions**. DDBJ mirrors FASTQs for DRA/ERA/SRA
+   submissions and is local to NIG (Lustre or domestic network). Use DDBJ
+   as the primary source, fall back to ENA HTTPS only when DDBJ doesn't
+   have the file. `fast-download.sh` already implements this routing for
+   DRR; extend it to try DDBJ for ERR/SRR as well.
+
+3. **Keep FASTQs compressed** (`.fastq.gz`) on Lustre. Both fastp and
+   bwa-mem2 read gzipped input natively. abismal (BS-seq) also reads
+   `.fastq.gz`. Compressed FASTQs use ~3× less Lustre quota, which is
+   critical given the 954 GB limit. The decompression step in
+   `fast-download.sh` should be removed.
+
+4. **Buffer size** is calculated from the disk budget below.
+
+## Buffer Size Calculation
+
+Available Lustre quota for staging depends on the output destination.
+If `--output-base` points to the collaborator's larger shared storage,
+the full 954 GB home quota is available for staging + overhead.
+
+Assumptions:
+- Lustre quota: 954 GB total, reserve 100 GB for overhead → 850 GB usable
+- Final outputs stay on `--output-base` (separate filesystem), not counted
+
+**Compressed FASTQ sizes by read count (hg38, PE, gzipped):**
+
+| Read tier | Avg compressed size | % of hg38 samples |
+|-----------|--------------------:|-------------------:|
+| < 1M      | ~50 MB              | ~10%               |
+| 1–10M     | ~500 MB             | ~25%               |
+| 10–50M    | ~3 GB               | ~35%               |
+| 50–200M   | ~12 GB              | ~25%               |
+| 200M+     | ~40 GB              | ~5%                |
+
+Weighted average across the full distribution: ~4 GB per sample (compressed).
+
+**Buffer size at different limits:**
+
+| Lustre budget | Avg sample size | Buffer capacity |
+|--------------:|----------------:|----------------:|
+| 200 GB        | 4 GB            | ~50 samples     |
+| 400 GB        | 4 GB            | ~100 samples    |
+| 800 GB        | 4 GB            | ~200 samples    |
+
+At 96 concurrent SLURM jobs (8 cores × 96 = 768 cores) with ~8 min avg
+pipeline time, processing consumes ~720 samples/hour. A 100-sample buffer
+lasts ~8 minutes of processing — tight but workable if the downloader keeps
+pace. A 200-sample buffer provides ~16 minutes of runway.
+
+**Recommendation:** default `--buffer-size 100`, `--disk-limit-gb 400`.
+This leaves ~500 GB headroom on Lustre for any intermediate spill, logs,
+and the status tracking files. Tune up if `--output-base` is on separate
+storage and more quota is available for staging.
+
 ## Open Questions
 
-1. **Gateway vs login node for downloader**: The downloader is a long-running
-   process. On NIG, should it run on the gateway (`gw`) or on a compute node
-   via an interactive SLURM session? Gateway is simpler but may have network
-   restrictions.
+1. **SLURM allocation for the downloader**: What partition and time limit?
+   A 1-core job on kumamoto-c768 wastes a 128-core node. Is there a
+   smaller partition (e.g., login, short, or IO-class) available on NIG?
 
-2. **DDBJ fallback for DRR samples**: `fast-download.sh` already routes DRR
-   accessions to DDBJ first. Should the downloader use this routing, or
-   always go to ENA for consistency?
+2. **DDBJ FASTQ coverage**: What fraction of ChIP-Atlas samples have
+   FASTQs on DDBJ? If coverage is high, ENA downloads become the
+   exception rather than the rule, and the concurrency problem mostly
+   disappears.
 
-3. **Compressed vs decompressed FASTQs**: The current pipeline accepts both
-   `.fastq` and `.fastq.gz`. Keeping FASTQs compressed on Lustre saves ~3×
-   disk space. fastp and bwa-mem2 both read gzipped input natively. Should
-   we skip the decompression step in `fast-download.sh`?
-
-4. **Optimal buffer size**: How many samples should be pre-downloaded? Too
-   few → processing stalls waiting for downloads. Too many → wastes Lustre
-   quota. Depends on relative download vs processing speed. Start with 50
-   and tune based on observation.
+3. **Core count benchmark**: Still TBD — run 100 hg38 samples at 4, 8,
+   16 cores on NIG to determine optimal `--threads` for cluster throughput.
