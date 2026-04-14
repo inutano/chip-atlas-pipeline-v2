@@ -12,13 +12,13 @@ Single-pass piped pipeline for chromatin profiling assays.
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| fastp | latest | Adapter trimming, QC |
-| bwa-mem2 | 2.x | Short-read alignment |
-| samtools | 1.x | collate, fixmate, sort, markdup (deduplication) |
-| MACS3 | 3.x | Peak calling |
-| bedtools | 2.x | Genome coverage (BedGraph) |
-| bedGraphToBigWig | UCSC | BedGraph to BigWig conversion |
-| bedToBigBed | UCSC | BED to BigBed conversion |
+| fastp | 1.3.1 | Adapter trimming, QC |
+| bwa-mem2 | 2.3 | Short-read alignment |
+| samtools | 1.23.1 | collate, fixmate, sort, markdup (deduplication) |
+| MACS3 | 3.0.4 | Peak calling |
+| bedtools | 2.31.1 | Genome coverage (BedGraph) |
+| bedGraphToBigWig | 482 (UCSC) | BedGraph to BigWig conversion |
+| bedToBigBed | 482 (UCSC) | BED to BigBed conversion |
 
 **Processing steps:**
 
@@ -80,16 +80,16 @@ Whole-genome bisulfite sequencing pipeline using DNMTools.
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| abismal (DNMTools) | 1.5.x | Bisulfite-aware alignment |
-| dnmtools format | 1.5.x | Convert abismal BAM to standard format |
-| samtools sort | 1.x | Coordinate sort |
-| dnmtools uniq | 1.5.x | PCR duplicate removal |
-| dnmtools counts | 1.5.x | Per-CpG methylation levels |
-| dnmtools sym | 1.5.x | Symmetric CpG merging (for HMR) |
-| dnmtools hmr | 1.5.x | Hypomethylated region calling |
-| dnmtools hypermr | 1.5.x | Hypermethylated region calling |
-| dnmtools pmd | 1.5.x | Partially methylated domain calling |
-| bedGraphToBigWig | UCSC | BedGraph to BigWig conversion |
+| abismal (DNMTools) | 1.5.1 | Bisulfite-aware alignment |
+| dnmtools format | 1.5.1 | Convert abismal BAM to standard format |
+| samtools sort | 1.22.1 | Coordinate sort |
+| dnmtools uniq | 1.5.1 | PCR duplicate removal |
+| dnmtools counts | 1.5.1 | Per-CpG methylation levels |
+| dnmtools sym | 1.5.1 | Symmetric CpG merging (for HMR) |
+| dnmtools hmr | 1.5.1 | Hypomethylated region calling |
+| dnmtools hypermr | 1.5.1 | Hypermethylated region calling |
+| dnmtools pmd | 1.5.1 | Partially methylated domain calling |
+| bedGraphToBigWig | 482 (UCSC) | BedGraph to BigWig conversion |
 
 **Processing steps:**
 
@@ -244,8 +244,8 @@ Built via GitHub Actions (`.github/workflows/container.yml`) and published to GH
 
 | Container | Dockerfile | Tools |
 |-----------|------------|-------|
-| `ghcr.io/inutano/chip-atlas-pipeline-v2:latest` | `containers/Dockerfile` | fastp, bwa-mem2, samtools, MACS3, bedtools, bedGraphToBigWig, bedToBigBed |
-| `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:latest` | `containers/Dockerfile.bs` | DNMTools (abismal + downstream), samtools, bedGraphToBigWig |
+| `ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0` | `containers/Dockerfile` | fastp 1.3.1, bwa-mem2 2.3, samtools 1.23.1, MACS3 3.0.4, bedtools 2.31.1, UCSC 482 |
+| `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0` | `containers/Dockerfile.bs` | DNMTools 1.5.1, samtools 1.22.1, UCSC 482 |
 
 Both containers use `condaforge/mambaforge` as the base image with tools installed from bioconda and conda-forge.
 
