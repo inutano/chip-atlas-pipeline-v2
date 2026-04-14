@@ -67,7 +67,7 @@ download_from_ena() {
   IFS=';' read -ra MD5S <<< "$fastq_md5"
 
   for i in "${!URLS[@]}"; do
-    local url="http://${URLS[$i]}"
+    local url="https://${URLS[$i]}"
     local md5="${MD5S[$i]:-}"
     local filename
     filename=$(basename "$url")
