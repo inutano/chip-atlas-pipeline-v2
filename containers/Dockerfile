@@ -1,27 +1,30 @@
 # ChIP-Atlas Pipeline v2: All-in-one container
 #
-# Contains all tools for the v2 production pipeline.
-# Versions resolved by conda solver — record actual versions in build log.
+# Contains all tools for the v2 ChIP-seq / ATAC-seq / DNase-seq pipeline.
+# Tool versions are pinned for reproducibility.
 #
 # Build:
-#   docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2:latest containers/
+#   docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 \
+#     -t ghcr.io/inutano/chip-atlas-pipeline-v2:latest \
+#     -f containers/Dockerfile containers/
 #
 # Test:
-#   docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:latest versions.sh
+#   docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
 #
 FROM condaforge/mambaforge:latest
 
 LABEL org.opencontainers.image.source="https://github.com/inutano/chip-atlas-pipeline-v2"
 LABEL org.opencontainers.image.description="ChIP-Atlas Pipeline v2 all-in-one container"
+LABEL org.opencontainers.image.version="1.0.0"
 
 RUN mamba install -y -c bioconda -c conda-forge \
-    fastp \
-    bwa-mem2 \
-    samtools \
-    macs3 \
-    bedtools \
-    ucsc-bedgraphtobigwig \
-    ucsc-bedtobigbed \
+    fastp=1.3.1 \
+    bwa-mem2=2.3 \
+    samtools=1.23.1 \
+    macs3=3.0.4 \
+    bedtools=2.31.1 \
+    ucsc-bedgraphtobigwig=482 \
+    ucsc-bedtobigbed=482 \
     && mamba clean -afy
 
 # Version check script

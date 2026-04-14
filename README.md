@@ -1,123 +1,145 @@
 # ChIP-Atlas Pipeline v2
 
-Uniform processing of public epigenomic data (ChIP-seq, ATAC-seq, DNase-seq,
-Bisulfite-seq) at scale. This is the next-generation pipeline behind
-[ChIP-Atlas](https://chip-atlas.dbcls.jp), rewritten as portable CWL v1.2
-workflows with modern tools.
+Production pipelines for processing 400K+ public epigenomic samples
+(ChIP-seq, ATAC-seq, DNase-seq, Bisulfite-seq) behind
+[ChIP-Atlas](https://chip-atlas.dbcls.jp).
 
-v2 processes samples 65-90x faster than v1 (from roughly 1 day per sample down
-to 15-60 minutes depending on genome size and hardware) while recovering
-approximately 90% of v1 peaks with improved sensitivity.
+Each pipeline runs entirely inside a single container with all intermediates
+on local NVMe scratch. v2 processes samples 65--90x faster than v1 (from
+roughly 1 day per sample down to 15--60 minutes depending on genome size).
+
+
+## Pipelines
+
+### ChIP-seq / ATAC-seq / DNase-seq
+
+Single-pass piped pipeline: fastp, bwa-mem2, samtools, MACS3, bedtools, UCSC tools.
+
+```
+fastp → bwa-mem2 → samtools (collate → fixmate → sort → markdup) → dedup.bam
+  ├── bedtools genomecov → bedGraphToBigWig → coverage.bw
+  └── MACS3 callpeak (q=1e-5) → filter q=1e-10, q=1e-20 → bedToBigBed
+```
+
+**Outputs:** `.bw` (coverage), `.narrowPeak` + `.bb` (peaks at 3 q-value thresholds), fastp QC JSON.
+
+See [`scripts/README.md`](scripts/README.md) for full argument and output documentation.
+
+### Bisulfite-seq (WGBS)
+
+DNMTools-based pipeline: abismal, dnmtools (format/uniq/counts/sym/hmr/hypermr/pmd), samtools, UCSC tools.
+
+```
+abismal → dnmtools format → samtools sort → dnmtools uniq → dedup.bam
+  → dnmtools counts → counts.tsv
+  → dnmtools sym → parallel: hmr + hypermr + pmd + BigWig
+```
+
+**Outputs:** `.methyl.bw` + `.cover.bw` (methylation/coverage), `.hmr.bed`, `.hypermr.bed`, `.pmd.bed`, alignment stats.
+
+See [`scripts/README.md`](scripts/README.md) for full argument and output documentation.
+
+
+## Containers
+
+| Image | Tag | Tools |
+|-------|-----|-------|
+| `ghcr.io/inutano/chip-atlas-pipeline-v2` | `v1.0.0` | fastp 1.3.1, bwa-mem2 2.3, samtools 1.23.1, MACS3 3.0.4, bedtools 2.31.1, UCSC 482 |
+| `ghcr.io/inutano/chip-atlas-pipeline-v2-bs` | `v1.0.0` | DNMTools 1.5.1, samtools 1.22.1, UCSC 482 |
+
+All tool versions are pinned in the Dockerfiles for reproducibility. Built via GitHub Actions and published to GHCR.
+
+```bash
+# Build locally
+docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 -f containers/Dockerfile containers/
+docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0 -f containers/Dockerfile.bs containers/
+
+# Verify
+docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
+docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0 versions.sh
+```
 
 
 ## Quick Start
 
 ```bash
-# Clone the repository
-git clone https://github.com/inutano/chip-atlas-pipeline-v2.git
-cd chip-atlas-pipeline-v2
+# Run a ChIP-seq sample
+apptainer exec --bind /data1/tmp:/tmp pipeline-v2.sif \
+  bash scripts/pipeline-v2.sh \
+    --sample-id SRX12345678 \
+    --fastq-fwd reads_1.fastq.gz \
+    --fastq-rev reads_2.fastq.gz \
+    --genome-fasta /ref/hg38.fa \
+    --chrom-sizes /ref/hg38.chrom.sizes \
+    --genome-size hs \
+    --outdir ./output
 
-# Install cwltool (reference CWL runner)
-pip install cwltool
-
-# Run a single sample (Option B recommended)
-cwltool cwl/workflows/option-b.cwl \
-  --sample_id SRX12345678 \
-  --fastq_fwd reads_1.fastq.gz \
-  --fastq_rev reads_2.fastq.gz \
-  --genome_index bwa-mem2-index/ \
-  --chrom_sizes hg38.chrom.sizes
-```
-
-All tools run in containers (Docker, Singularity, or udocker), so you do not
-need to install individual bioinformatics tools. See `docs/cluster-setup-guide.md`
-for NIG supercomputer setup and `docs/v2-plan.md` for the full design document.
-
-
-## Pipeline Options
-
-### Option A -- Fast Classic
-
-Same processing steps as the original ChIP-Atlas v1 pipeline, rebuilt with
-faster tools:
-
-    FASTQ -> BWA-MEM2 align -> sort -> fixmate -> sort -> markdup
-          -> bedtools genomecov -> bedGraphToBigWig
-          -> MACS3 callpeak (x3 thresholds) -> bedToBigBed
-
-### Option B -- Modern (recommended)
-
-Adds QC/trimming and uses deeptools for coverage tracks:
-
-    FASTQ -> fastp trim -> BWA-MEM2 align -> sort -> fixmate -> sort -> markdup
-          -> deeptools bamCoverage (BigWig)
-          -> MACS3 callpeak (x3 thresholds) -> bedToBigBed
-
-Option B is faster and more robust in practice. It is the recommended choice
-for production runs.
-
-### GPU Variants
-
-Both options have Parabricks variants (`option-a-parabricks.cwl`,
-`option-b-parabricks.cwl`) that use NVIDIA Parabricks for GPU-accelerated
-alignment and sorting.
-
-### Key Parameters
-
-- Peak calling uses `--nomodel --extsize 200` and `--format BAM` (not BAMPE)
-  for consistent handling of single-end and paired-end data.
-- Three q-value thresholds per sample: 1e-05, 1e-10, 1e-20.
-- No background/input control is used for peak calling (ChIP-Atlas policy --
-  all samples are processed uniformly without matched controls).
-
-
-## Directory Structure
-
-```
-cwl/
-  tools/              CWL CommandLineTool definitions (one file per tool)
-  workflows/          Workflow definitions
-                        option-a.cwl, option-a-nomodel.cwl, option-a-parabricks.cwl
-                        option-b.cwl, option-b-parabricks.cwl
-scripts/              Benchmark, download, and batch submission scripts
-data/                 Validation sample lists, benchmark timing, metadata
-docs/                 Design documents, benchmark results, progress log
-templates/            HTML templates for secondary analysis output
-test-run/             Test run outputs (e.g., sacCer3 validation)
+# Run a Bisulfite-seq sample
+apptainer exec --bind /data1/tmp:/tmp pipeline-v2-bs.sif \
+  bash scripts/pipeline-v2-bs.sh \
+    --sample-id SRX12345678 \
+    --fastq-fwd reads_1.fastq.gz \
+    --fastq-rev reads_2.fastq.gz \
+    --genome-fasta /ref/hg38.fa \
+    --abismal-index /ref/hg38.abismal.idx \
+    --chrom-sizes /ref/hg38.chrom.sizes \
+    --outdir ./output
 ```
 
 
-## Tools
+## Production at Scale
 
-| Tool           | Version | Purpose                              |
-|----------------|---------|--------------------------------------|
-| bwa-mem2       | latest  | Sequence alignment                   |
-| samtools       | 1.19    | BAM sorting, fixmate, markdup        |
-| MACS3          | 3.0.4   | Peak calling                         |
-| fastp          | latest  | QC and adapter trimming (Option B)   |
-| deeptools      | latest  | Coverage tracks / BigWig (Option B)  |
-| bedtools       | latest  | Genome coverage (Option A)           |
-| UCSC tools     | latest  | bedGraphToBigWig, bedToBigBed        |
+`scripts/production-run.sh` manages batched SLURM submission of 100K+ samples
+with progress tracking, disk quota awareness, and automatic retry.
+
+```bash
+# Submit a genome batch
+bash scripts/production-run.sh submit hg38 samples.tsv --threads 8
+
+# Monitor progress
+bash scripts/production-run.sh status hg38
+
+# Retry failed jobs
+bash scripts/production-run.sh retry hg38
+
+# Performance summary
+bash scripts/production-run.sh summary hg38
+```
+
+See [`scripts/README.md`](scripts/README.md) for full options and environment variables.
+
+
+## Repository Structure
+
+```
+containers/           Dockerfiles for both pipelines
+scripts/
+  pipeline-v2.sh      ChIP-seq / ATAC-seq / DNase-seq pipeline
+  pipeline-v2-bs.sh   Bisulfite-seq (WGBS) pipeline
+  production-run.sh   SLURM batch job management
+  fast-download.sh    FASTQ download with source-aware routing
+  prepare-genomes.sh  Reference genome setup (download + index)
+  secondary-analysis/ Downstream analysis (colocalization, enrichment, target genes)
+docs/                 Design documents, benchmark results, setup guides
+data/                 Experiment metadata (gitignored)
+```
 
 
 ## Documentation
 
-- `docs/v2-plan.md` -- Full design and rationale
-- `docs/current-pipeline.md` -- Description of the v1 pipeline
-- `docs/cwl-zen-design.md` -- CWL design principles (no InlineJavascriptRequirement)
-- `docs/cluster-setup-guide.md` -- NIG supercomputer setup instructions
-- `docs/secondary-analysis-plan.md` -- Downstream analysis (target genes, colocalization)
-- `data/benchmark-timing-*.tsv` -- Benchmark results across genomes and hardware
+- [`scripts/README.md`](scripts/README.md) -- Pipeline arguments, outputs, runtime characteristics
+- [`docs/v2-plan.md`](docs/v2-plan.md) -- Architecture and design rationale
+- [`docs/benchmark-results.md`](docs/benchmark-results.md) -- v1 vs v2 benchmark comparison
+- [`docs/bisulfite-seq-investigation.md`](docs/bisulfite-seq-investigation.md) -- BS-seq pipeline design
+- [`docs/cluster-setup-guide.md`](docs/cluster-setup-guide.md) -- NIG supercomputer setup
+- [`docs/production-lessons-ce11.md`](docs/production-lessons-ce11.md) -- Production lessons learned
 
 
 ## Requirements
 
-- A CWL v1.2 runner (cwltool is the reference implementation)
-- A container runtime: Docker, Singularity, or udocker
-- For GPU variants: NVIDIA GPU with Parabricks installed
-
-The pipeline is designed for the NIG supercomputer but runs on any
-CWL-compatible environment with container support.
+- A container runtime: Apptainer/Singularity or Docker
+- For production: SLURM cluster with NVMe local scratch
+- For BS-seq: abismal index (built with `dnmtools abismalidx`)
 
 
 ## License
