@@ -11,7 +11,7 @@
 # so step 1 uses file-based intermediates rather than a Unix pipe. The big
 # wins are NVMe locality, container reuse, and the parallel step 3 fan-out.
 #
-# Container: ghcr.io/inutano/chip-atlas-pipeline-v2-bs:latest
+# Container: ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0
 #
 # Usage:
 #   apptainer exec --bind /data1/tmp:/tmp pipeline-v2-bs.sif bash pipeline-v2-bs.sh \

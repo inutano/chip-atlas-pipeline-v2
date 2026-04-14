@@ -8,7 +8,7 @@ Production pipelines for processing ChIP-seq, ATAC-seq, DNase-seq, and Bisulfite
 
 Single-pass piped pipeline for chromatin profiling assays.
 
-**Container:** `ghcr.io/inutano/chip-atlas-pipeline-v2:latest`
+**Container:** `ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0`
 
 | Tool | Version | Purpose |
 |------|---------|---------|
@@ -76,7 +76,7 @@ apptainer exec --bind /data1/tmp:/tmp pipeline-v2.sif \
 
 Whole-genome bisulfite sequencing pipeline using DNMTools.
 
-**Container:** `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:latest`
+**Container:** `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0`
 
 | Tool | Version | Purpose |
 |------|---------|---------|

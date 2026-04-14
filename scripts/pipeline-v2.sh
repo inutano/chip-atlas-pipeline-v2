@@ -8,7 +8,7 @@
 #   3. Single MACS3 + awk filter for 3 q-value thresholds
 #   4. No intermediate files on shared filesystem, no container restart overhead
 #
-# Container: ghcr.io/inutano/chip-atlas-pipeline-v2:latest
+# Container: ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0
 #
 # Usage:
 #   apptainer exec --bind /data1/tmp:/tmp pipeline-v2.sif bash pipeline-v2.sh \
