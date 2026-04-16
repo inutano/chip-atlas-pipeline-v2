@@ -25,7 +25,7 @@ Single-pass piped pipeline for chromatin profiling assays.
 ```
 Step 1 (piped):  fastp → bwa-mem2 → samtools collate → fixmate → sort → markdup → dedup.bam
 Step 2 (parallel):
-  ├── bedtools genomecov → bedGraphToBigWig → coverage.bw
+  ├── samtools view -c (mapped count) → bedtools genomecov → RPM normalize → bedGraphToBigWig → coverage.bw
   └── MACS3 callpeak (q=1e-5) → filter q=1e-10, q=1e-20
 Step 3:  narrowPeak → bedToBigBed → .bb (×3 thresholds)
 ```
@@ -67,9 +67,16 @@ fastp --in1 R1.fq --in2 R2.fq --stdout --json fastp.json --thread 2
 **Tool options used in Step 2:**
 
 ```bash
-bedtools genomecov -bg -ibam dedup.bam > coverage.bedGraph
+# Count mapped reads for RPM normalization
+MAPPED=$(samtools view -c -F 4 dedup.bam)
+  # -c                 Count reads (output number only)
+  # -F 4               Exclude unmapped reads (flag 0x4)
+
+bedtools genomecov -bg -ibam dedup.bam | awk '{...RPM normalize...}' > coverage.bedGraph
   # -bg               Report depth in BedGraph format (chrom, start, end, depth)
   # -ibam             Input is a coordinate-sorted BAM file
+  # awk normalizes each depth value to RPM: depth * 1,000,000 / total_mapped_reads
+  # Output values are floats (e.g., 0.1147 for depth=1 at 8.7M mapped reads)
 
 bedGraphToBigWig coverage.bedGraph chrom.sizes output.bw
   # Positional args: input BedGraph, chrom sizes, output BigWig
@@ -130,7 +137,7 @@ bedToBigBed peaks.bed chrom.sizes output.bb
 
 | File | Description |
 |------|-------------|
-| `{id}.bw` | Coverage BigWig (single-bp resolution) |
+| `{id}.bw` | Coverage BigWig (RPM-normalized, single-bp resolution) |
 | `{id}.05_peaks.narrowPeak` | Peaks at q-value 1e-5 |
 | `{id}.10_peaks.narrowPeak` | Peaks at q-value 1e-10 |
 | `{id}.20_peaks.narrowPeak` | Peaks at q-value 1e-20 |
