@@ -108,10 +108,15 @@ log "Step 1 done: $((STEP1_END - STEP1_START))s"
 log "Step 2: BigWig + MACS3 (parallel)"
 STEP2_START=$(date +%s)
 
-# BigWig via bedtools genomecov (single-bp resolution)
+# Count mapped reads for RPM normalization (reads per million mapped reads)
+MAPPED=$(samtools view -c -F 4 "$DEDUP_BAM")
+log "  Mapped reads (post-dedup): $MAPPED"
+
+# BigWig via bedtools genomecov → RPM normalize → bedGraphToBigWig
 # BAM is coordinate-sorted → output is already sorted → no re-sort needed
 BEDGRAPH="$WORK/${SAMPLE_ID}.bedGraph"
 (bedtools genomecov -bg -ibam "$DEDUP_BAM" \
+  | awk -v total="$MAPPED" -v OFS='\t' '{print $1, $2, $3, $4*1000000/total}' \
   > "$BEDGRAPH" \
   && bedGraphToBigWig "$BEDGRAPH" "$CHROM_SIZES" "$OUTDIR/${SAMPLE_ID}.bw" \
   && rm -f "$BEDGRAPH") &
