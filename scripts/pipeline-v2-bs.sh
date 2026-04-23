@@ -69,10 +69,10 @@ mkdir -p "$WORK"
 # ============================================================
 IS_PAIRED=false
 FORMAT_SE_FLAG=""
-LAYOUT_FLAG=1
+LAYOUT_FLAG=0
 if [ -n "$FASTQ_REV" ] && [ -e "$FASTQ_REV" ]; then
   IS_PAIRED=true
-  LAYOUT_FLAG=2
+  LAYOUT_FLAG=1
 else
   FORMAT_SE_FLAG="-single-end"
 fi
