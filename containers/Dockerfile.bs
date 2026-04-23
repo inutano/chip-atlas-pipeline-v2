@@ -4,7 +4,7 @@
 # Tool versions are pinned for reproducibility.
 #
 # Build:
-#   docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0 \
+#   docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.1.0 \
 #     -t ghcr.io/inutano/chip-atlas-pipeline-v2-bs:latest \
 #     -f containers/Dockerfile.bs containers/
 #
@@ -12,7 +12,7 @@ FROM condaforge/mambaforge:latest
 
 LABEL org.opencontainers.image.source="https://github.com/inutano/chip-atlas-pipeline-v2"
 LABEL org.opencontainers.image.description="ChIP-Atlas Pipeline v2 BS-seq container (DNMTools + samtools + UCSC tools)"
-LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.version="1.1.0"
 
 # Note: dnmtools 1.5.1 requires htslib <1.23, which constrains samtools to
 # 1.22.x. samtools 1.23.1 (CVE-2026-31973 fix) cannot coexist. The CVE is a
@@ -22,12 +22,14 @@ RUN mamba install -y -c bioconda -c conda-forge \
     dnmtools=1.5.1 \
     samtools=1.22.1 \
     ucsc-bedgraphtobigwig=482 \
+    fastp=1.3.1 \
     && mamba clean -afy
 
 RUN printf '#!/bin/bash\n\
 echo "dnmtools $(dnmtools 2>&1 | grep -i version | head -1)"\n\
 echo "samtools $(samtools --version | head -1)"\n\
-echo "bedGraphToBigWig $(bedGraphToBigWig 2>&1 | head -1)"\n' > /usr/local/bin/versions.sh \
+echo "bedGraphToBigWig $(bedGraphToBigWig 2>&1 | head -1)"\n\
+echo "fastp $(fastp --version 2>&1 | head -1)"\n' > /usr/local/bin/versions.sh \
     && chmod +x /usr/local/bin/versions.sh
 
 RUN versions.sh
