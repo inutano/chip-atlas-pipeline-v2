@@ -177,6 +177,62 @@ else
 fi
 
 # ============================================================
+# Step 4: Statistics TSV (v1-compatible, 15 columns)
+# ============================================================
+log "Step 4: Writing statistics TSV"
+
+FASTP_JSON="$WORK/${SAMPLE_ID}_fastp.json"
+
+# Read counts from fastp JSON
+READS_BEFORE=$(python3 -c "import json; d=json.load(open('$FASTP_JSON')); print(d['summary']['before_filtering']['total_reads'])" 2>/dev/null || echo 0)
+READS_AFTER=$(python3 -c "import json; d=json.load(open('$FASTP_JSON')); print(d['summary']['after_filtering']['total_reads'])" 2>/dev/null || echo 0)
+
+# Rates (guard against zero READS_AFTER)
+if [ "${READS_AFTER:-0}" -gt 0 ] 2>/dev/null; then
+  MAP_RATE=$(awk "BEGIN {printf \"%.1f\", $MAPPED / $READS_AFTER * 100}")
+  DUP_RATE=$(awk "BEGIN {printf \"%.1f\", (1 - $MAPPED / $READS_AFTER) * 100}")
+else
+  MAP_RATE=0
+  DUP_RATE=0
+fi
+
+# File sizes (0 for intermediates not kept)
+FASTQ_SIZE=$(wc -c < "$FASTQ_FWD" 2>/dev/null || echo 0)
+BW_SIZE=$(wc -c < "$OUTDIR/${SAMPLE_ID}.bw" 2>/dev/null || echo 0)
+
+# Peak counts
+PEAKS_05_N=$(wc -l < "$OUTDIR/${SAMPLE_ID}.05_peaks.narrowPeak" 2>/dev/null || echo 0)
+PEAKS_10_N=$(wc -l < "$OUTDIR/${SAMPLE_ID}.10_peaks.narrowPeak" 2>/dev/null || echo 0)
+PEAKS_20_N=$(wc -l < "$OUTDIR/${SAMPLE_ID}.20_peaks.narrowPeak" 2>/dev/null || echo 0)
+
+# Elapsed time in minutes
+TOTAL_MIN=$(awk "BEGIN {printf \"%.2f\", ($(date +%s) - $STEP1_START) / 60}")
+
+# SE=0, PE=1
+PE_FLAG=0
+[ "$IS_PAIRED" = true ] && PE_FLAG=1
+
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  "$SAMPLE_ID" \
+  "$PE_FLAG" \
+  "$FASTQ_SIZE" \
+  "0" \
+  "$READS_BEFORE" \
+  "$READS_AFTER" \
+  "$MAP_RATE" \
+  "$DUP_RATE" \
+  "0" \
+  "0" \
+  "$BW_SIZE" \
+  "$PEAKS_05_N" \
+  "$PEAKS_10_N" \
+  "$PEAKS_20_N" \
+  "$TOTAL_MIN" \
+  > "$OUTDIR/${SAMPLE_ID}.stats.tsv"
+
+log "Stats: reads_before=$READS_BEFORE reads_after=$READS_AFTER mapped=$MAPPED map_rate=${MAP_RATE}% peaks_q05=$PEAKS_05_N time=${TOTAL_MIN}m"
+
+# ============================================================
 # Move fastp report to final output, cleanup work dir
 # ============================================================
 mv "$WORK/${SAMPLE_ID}_fastp.json" "$OUTDIR/" 2>/dev/null || true
