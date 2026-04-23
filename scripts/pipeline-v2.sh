@@ -75,29 +75,37 @@ SORT_MEM="4G"
 # ============================================================
 # Step 1: Piped alignment
 # ============================================================
-log "Step 1: fastp → bwa-mem2 → collate → fixmate → sort → markdup"
-
 DEDUP_BAM="$WORK/${SAMPLE_ID}.dedup.bam"
 RG="@RG\\tID:${SAMPLE_ID}\\tSM:${SAMPLE_ID}\\tPL:ILLUMINA"
 
-# Build fastp args
-FASTP_ARGS="--stdout --json $WORK/${SAMPLE_ID}_fastp.json --thread $FASTP_T"
+# Detect paired-end vs single-end
 if [ -n "$FASTQ_REV" ] && [ -e "$FASTQ_REV" ]; then
-  FASTP_ARGS="--in1 $FASTQ_FWD --in2 $FASTQ_REV $FASTP_ARGS"
-  BWA_INTERLEAVED="-p"
+  IS_PAIRED=true
 else
-  FASTP_ARGS="--in1 $FASTQ_FWD $FASTP_ARGS"
-  BWA_INTERLEAVED=""
+  IS_PAIRED=false
 fi
 
 STEP1_START=$(date +%s)
 
-fastp $FASTP_ARGS 2>"$WORK/fastp.stderr" \
-  | bwa-mem2 mem -t "$ALIGN_T" -R "$RG" $BWA_INTERLEAVED "$GENOME_FA" - 2>"$WORK/bwamem2.stderr" \
-  | samtools collate -O -T "$WORK/collate" - \
-  | samtools fixmate -m - - \
-  | samtools sort -@ "$SORT_T" -m "$SORT_MEM" -T "$WORK/sort" - \
-  | samtools markdup -r - "$DEDUP_BAM"
+if [ "$IS_PAIRED" = true ]; then
+  log "Step 1: fastp → bwa-mem2 -p → collate → fixmate → sort → markdup (paired-end)"
+  fastp --in1 "$FASTQ_FWD" --in2 "$FASTQ_REV" \
+      --stdout --json "$WORK/${SAMPLE_ID}_fastp.json" --thread $FASTP_T \
+      2>"$WORK/fastp.stderr" \
+    | bwa-mem2 mem -t "$ALIGN_T" -R "$RG" -p "$GENOME_FA" - 2>"$WORK/bwamem2.stderr" \
+    | samtools collate -O -T "$WORK/collate" - \
+    | samtools fixmate -m - - \
+    | samtools sort -@ "$SORT_T" -m "$SORT_MEM" -T "$WORK/sort" - \
+    | samtools markdup -r - "$DEDUP_BAM"
+else
+  log "Step 1: fastp → bwa-mem2 → sort → markdup (single-end)"
+  fastp --in1 "$FASTQ_FWD" \
+      --stdout --json "$WORK/${SAMPLE_ID}_fastp.json" --thread $FASTP_T \
+      2>"$WORK/fastp.stderr" \
+    | bwa-mem2 mem -t "$ALIGN_T" -R "$RG" "$GENOME_FA" - 2>"$WORK/bwamem2.stderr" \
+    | samtools sort -@ "$SORT_T" -m "$SORT_MEM" -T "$WORK/sort" - \
+    | samtools markdup -r - "$DEDUP_BAM"
+fi
 
 STEP1_END=$(date +%s)
 log "Step 1 done: $((STEP1_END - STEP1_START))s"
