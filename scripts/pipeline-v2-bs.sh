@@ -18,6 +18,7 @@
 #     --sample-id SRX12345678 \
 #     --fastq-fwd reads_1.fastq.gz \
 #     [--fastq-rev reads_2.fastq.gz] \
+#     --genome hg38 \
 #     --genome-fasta hg38.fa \
 #     --abismal-index hg38.abismal.idx \
 #     --chrom-sizes hg38.chrom.sizes \
@@ -36,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     --sample-id)     SAMPLE_ID="$2"; shift 2 ;;
     --fastq-fwd)     FASTQ_FWD="$2"; shift 2 ;;
     --fastq-rev)     FASTQ_REV="$2"; shift 2 ;;
+    --genome)        GENOME="$2"; shift 2 ;;
     --genome-fasta)  GENOME_FA="$2"; shift 2 ;;
     --abismal-index) ABISMAL_IDX="$2"; shift 2 ;;
     --chrom-sizes)   CHROM_SIZES="$2"; shift 2 ;;
@@ -45,7 +47,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-for var in SAMPLE_ID FASTQ_FWD GENOME_FA ABISMAL_IDX CHROM_SIZES OUTDIR; do
+for var in SAMPLE_ID FASTQ_FWD GENOME GENOME_FA ABISMAL_IDX CHROM_SIZES OUTDIR; do
   if [ -z "${!var}" ]; then
     echo "ERROR: --$(echo $var | tr '_' '-' | tr '[:upper:]' '[:lower:]') is required"
     exit 1
@@ -67,8 +69,10 @@ mkdir -p "$WORK"
 # ============================================================
 IS_PAIRED=false
 FORMAT_SE_FLAG=""
+LAYOUT_FLAG=1
 if [ -n "$FASTQ_REV" ] && [ -e "$FASTQ_REV" ]; then
   IS_PAIRED=true
+  LAYOUT_FLAG=2
 else
   FORMAT_SE_FLAG="-single-end"
 fi
@@ -79,6 +83,22 @@ fi
 # Every step that scales with threads gets all of them. samtools sort and
 # the dnmtools tools all use thread pools internally.
 SORT_MEM="2G"
+
+# ============================================================
+# CpG count lookup for coverage calculation
+# ============================================================
+declare -A CPG_COUNTS=(
+  [hg38]=61959486
+  [mm10]=43816016
+  [rn6]=53698106
+  [ce11]=6263050
+  [dm6]=11787346
+  [sacCer3]=710598
+)
+CPG_COUNT="${CPG_COUNTS[$GENOME]:-0}"
+if [ "$CPG_COUNT" -eq 0 ]; then
+  log "WARNING: Unknown genome '$GENOME', CpG coverage will be 0"
+fi
 
 # ============================================================
 # FASTP output paths
@@ -242,6 +262,46 @@ log "Step 3 done: $((STEP3_END - STEP3_START))s"
 # Move diagnostic files to output and cleanup
 # ============================================================
 cp "$WORK/abismal.stats" "$OUTDIR/${SAMPLE_ID}.abismal.stats" 2>/dev/null || true
+cp "$FASTP_JSON" "$OUTDIR/${SAMPLE_ID}_fastp.json" 2>/dev/null || true
+
+# ============================================================
+# Collect statistics for v1-compatible stats TSV
+# ============================================================
+TOTAL_MIN=$(( ($(date +%s) - STEP1_START) / 60 ))
+
+# Read count and mapping rate from abismal stats YAML
+if [ "$IS_PAIRED" = true ]; then
+  READ_COUNT=$(grep "total_pairs:" "$WORK/abismal.stats" | head -1 | awk '{print $2}')
+else
+  READ_COUNT=$(grep "total_reads:" "$WORK/abismal.stats" | head -1 | awk '{print $2}')
+fi
+MAP_RATE=$(grep "percent_mapped:" "$WORK/abismal.stats" | head -1 | awk '{print $2}')
+
+# Methylation rate and CpG coverage from counts.tsv
+METH_STATS=$(awk -F'\t' -v cpg="$CPG_COUNT" '{
+  met += $6 * $5; total += $6
+} END {
+  if (total > 0) printf "%.1f\t%.1f", met/total*100, total/cpg
+  else printf "0.0\t0.0"
+}' "$WORK/counts.tsv")
+METH_RATE=$(echo "$METH_STATS" | cut -f1)
+CPG_COVERAGE=$(echo "$METH_STATS" | cut -f2)
+
+# Region counts
+HMR_N=0; PMD_N=0; HYPERMR_N=0
+[ -f "$OUTDIR/${SAMPLE_ID}.hmr.bed" ]     && HMR_N=$(wc -l     < "$OUTDIR/${SAMPLE_ID}.hmr.bed")
+[ -f "$OUTDIR/${SAMPLE_ID}.pmd.bed" ]     && PMD_N=$(wc -l     < "$OUTDIR/${SAMPLE_ID}.pmd.bed")
+[ -f "$OUTDIR/${SAMPLE_ID}.hypermr.bed" ] && HYPERMR_N=$(wc -l < "$OUTDIR/${SAMPLE_ID}.hypermr.bed")
+
+# FASTQ file size (bytes), sum for PE
+FASTQ_SIZE=$(du -sb "$FASTQ_FWD" ${FASTQ_REV:+"$FASTQ_REV"} 2>/dev/null | awk '{s+=$1} END {print s+0}')
+
+# Write v1-compatible stats TSV (15 columns; cols 12-14 empty for BS-seq)
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\t\t\t%s\n' \
+  "$SAMPLE_ID" "$LAYOUT_FLAG" "$FASTQ_SIZE" "0" \
+  "$READ_COUNT" "$MAP_RATE" "$METH_RATE" "$CPG_COVERAGE" \
+  "$HMR_N" "$PMD_N" "$HYPERMR_N" "$TOTAL_MIN" \
+  > "$OUTDIR/${SAMPLE_ID}.stats.tsv"
 
 # Report summary
 echo ""
