@@ -81,6 +81,35 @@ fi
 SORT_MEM="2G"
 
 # ============================================================
+# FASTP output paths
+# ============================================================
+FASTP_JSON="$WORK/fastp.json"
+
+# ============================================================
+# Step 0: fastp QC/trimming via named pipes
+# ============================================================
+log "Step 0: fastp trimming (streaming via named pipes)"
+STEP0_START=$(date +%s)
+
+if [ "$IS_PAIRED" = true ]; then
+  mkfifo "$WORK/trim_1.fq" "$WORK/trim_2.fq"
+  fastp --in1 "$FASTQ_FWD" --in2 "$FASTQ_REV" \
+    --out1 "$WORK/trim_1.fq" --out2 "$WORK/trim_2.fq" \
+    --json "$FASTP_JSON" --thread 2 2>"$WORK/fastp.stderr" &
+  PID_FASTP=$!
+  FASTQ_ARGS=("$WORK/trim_1.fq" "$WORK/trim_2.fq")
+else
+  mkfifo "$WORK/trim.fq"
+  fastp --in1 "$FASTQ_FWD" \
+    --out1 "$WORK/trim.fq" \
+    --json "$FASTP_JSON" --thread 2 2>"$WORK/fastp.stderr" &
+  PID_FASTP=$!
+  FASTQ_ARGS=("$WORK/trim.fq")
+fi
+
+log "Step 0 done: fastp started (PID $PID_FASTP)"
+
+# ============================================================
 # Step 1: Sequential alignment + format + sort + dedup
 # ============================================================
 # Each intermediate lives on local NVMe ($WORK) and is deleted as soon as
@@ -91,14 +120,7 @@ DEDUP_BAM="$WORK/${SAMPLE_ID}.dedup.bam"
 
 STEP1_START=$(date +%s)
 
-# Build fastq input args as an array (handles SE/PE without word splitting)
-if [ "$IS_PAIRED" = true ]; then
-  FASTQ_ARGS=("$FASTQ_FWD" "$FASTQ_REV")
-else
-  FASTQ_ARGS=("$FASTQ_FWD")
-fi
-
-# 1a. abismal alignment
+# 1a. abismal alignment — reads trimmed reads from the named pipes
 T0=$(date +%s)
 dnmtools abismal \
     -i "$ABISMAL_IDX" \
@@ -108,6 +130,17 @@ dnmtools abismal \
     -s "$WORK/abismal.stats" \
     "${FASTQ_ARGS[@]}" 2>"$WORK/abismal.stderr"
 log "  abismal: $(($(date +%s) - T0))s"
+
+# Wait for fastp and clean up named pipes
+wait $PID_FASTP
+if [ "$IS_PAIRED" = true ]; then
+  rm -f "$WORK/trim_1.fq" "$WORK/trim_2.fq"
+else
+  rm -f "$WORK/trim.fq"
+fi
+
+STEP0_END=$(date +%s)
+log "Step 0+1a done: fastp+abismal $((STEP0_END - STEP0_START))s"
 
 # 1b. dnmtools format → drop mapped.bam
 T0=$(date +%s)
