@@ -106,10 +106,11 @@ fi
 FASTP_JSON="$WORK/fastp.json"
 
 # ============================================================
-# Step 0: fastp QC/trimming → NVMe scratch
+# Step 0: fastp QC/trimming
 # ============================================================
-# Named pipes (FIFOs) deadlock inside Docker containers, so fastp writes
-# trimmed FASTQs to NVMe scratch. They are deleted after abismal consumes them.
+# PE: fastp writes trimmed FASTQs to NVMe scratch (two output streams
+#     can't be piped through a single process substitution).
+# SE: abismal reads directly from process substitution (no disk write).
 log "Step 0: fastp QC/trimming"
 T0=$(date +%s)
 
@@ -118,14 +119,15 @@ if [ "$IS_PAIRED" = true ]; then
     --out1 "$WORK/trim_1.fq.gz" --out2 "$WORK/trim_2.fq.gz" \
     --json "$FASTP_JSON" --thread 2 2>"$WORK/fastp.stderr"
   FASTQ_ARGS=("$WORK/trim_1.fq.gz" "$WORK/trim_2.fq.gz")
+  TRIM_CLEANUP=true
+  log "  fastp: $(($(date +%s) - T0))s (PE, trimmed to NVMe)"
 else
-  fastp --in1 "$FASTQ_FWD" \
-    --out1 "$WORK/trim.fq.gz" \
-    --json "$FASTP_JSON" --thread 2 2>"$WORK/fastp.stderr"
-  FASTQ_ARGS=("$WORK/trim.fq.gz")
+  # SE: fastp streams directly into abismal via process substitution
+  # FASTQ_ARGS is set as a single-element array; the actual process
+  # substitution is constructed at the abismal invocation below.
+  TRIM_CLEANUP=false
+  log "  fastp: will stream via process substitution (SE)"
 fi
-
-log "  fastp: $(($(date +%s) - T0))s"
 
 # ============================================================
 # Step 1: Sequential alignment + format + sort + dedup
@@ -138,16 +140,30 @@ DEDUP_BAM="$WORK/${SAMPLE_ID}.dedup.bam"
 
 STEP1_START=$(date +%s)
 
-# 1a. abismal alignment (reads trimmed FASTQs from NVMe scratch)
+# 1a. abismal alignment
 T0=$(date +%s)
-dnmtools abismal \
-    -i "$ABISMAL_IDX" \
-    -t "$THREADS" \
-    -B \
-    -o "$WORK/mapped.bam" \
-    -s "$WORK/abismal.stats" \
-    "${FASTQ_ARGS[@]}" 2>"$WORK/abismal.stderr"
-rm -f "$WORK"/trim*.fq.gz
+if [ "$IS_PAIRED" = true ]; then
+  # PE: read trimmed FASTQs from NVMe scratch
+  dnmtools abismal \
+      -i "$ABISMAL_IDX" \
+      -t "$THREADS" \
+      -B \
+      -o "$WORK/mapped.bam" \
+      -s "$WORK/abismal.stats" \
+      "${FASTQ_ARGS[@]}" 2>"$WORK/abismal.stderr"
+  rm -f "$WORK"/trim*.fq.gz
+else
+  # SE: fastp streams directly into abismal via process substitution
+  dnmtools abismal \
+      -i "$ABISMAL_IDX" \
+      -t "$THREADS" \
+      -B \
+      -o "$WORK/mapped.bam" \
+      -s "$WORK/abismal.stats" \
+      <(fastp --in1 "$FASTQ_FWD" --stdout \
+          --json "$FASTP_JSON" --thread 2 2>"$WORK/fastp.stderr") \
+      2>"$WORK/abismal.stderr"
+fi
 log "  abismal: $(($(date +%s) - T0))s"
 
 STEP0_END=$(date +%s)
