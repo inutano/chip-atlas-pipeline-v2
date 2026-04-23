@@ -106,28 +106,26 @@ fi
 FASTP_JSON="$WORK/fastp.json"
 
 # ============================================================
-# Step 0: fastp QC/trimming via named pipes
+# Step 0: fastp QC/trimming → NVMe scratch
 # ============================================================
-log "Step 0: fastp trimming (streaming via named pipes)"
-STEP0_START=$(date +%s)
+# Named pipes (FIFOs) deadlock inside Docker containers, so fastp writes
+# trimmed FASTQs to NVMe scratch. They are deleted after abismal consumes them.
+log "Step 0: fastp QC/trimming"
+T0=$(date +%s)
 
 if [ "$IS_PAIRED" = true ]; then
-  mkfifo "$WORK/trim_1.fq" "$WORK/trim_2.fq"
   fastp --in1 "$FASTQ_FWD" --in2 "$FASTQ_REV" \
-    --out1 "$WORK/trim_1.fq" --out2 "$WORK/trim_2.fq" \
-    --json "$FASTP_JSON" --thread 2 2>"$WORK/fastp.stderr" &
-  PID_FASTP=$!
-  FASTQ_ARGS=("$WORK/trim_1.fq" "$WORK/trim_2.fq")
+    --out1 "$WORK/trim_1.fq.gz" --out2 "$WORK/trim_2.fq.gz" \
+    --json "$FASTP_JSON" --thread 2 2>"$WORK/fastp.stderr"
+  FASTQ_ARGS=("$WORK/trim_1.fq.gz" "$WORK/trim_2.fq.gz")
 else
-  mkfifo "$WORK/trim.fq"
   fastp --in1 "$FASTQ_FWD" \
-    --out1 "$WORK/trim.fq" \
-    --json "$FASTP_JSON" --thread 2 2>"$WORK/fastp.stderr" &
-  PID_FASTP=$!
-  FASTQ_ARGS=("$WORK/trim.fq")
+    --out1 "$WORK/trim.fq.gz" \
+    --json "$FASTP_JSON" --thread 2 2>"$WORK/fastp.stderr"
+  FASTQ_ARGS=("$WORK/trim.fq.gz")
 fi
 
-log "Step 0 done: fastp started (PID $PID_FASTP)"
+log "  fastp: $(($(date +%s) - T0))s"
 
 # ============================================================
 # Step 1: Sequential alignment + format + sort + dedup
@@ -140,7 +138,7 @@ DEDUP_BAM="$WORK/${SAMPLE_ID}.dedup.bam"
 
 STEP1_START=$(date +%s)
 
-# 1a. abismal alignment — reads trimmed reads from the named pipes
+# 1a. abismal alignment (reads trimmed FASTQs from NVMe scratch)
 T0=$(date +%s)
 dnmtools abismal \
     -i "$ABISMAL_IDX" \
@@ -149,15 +147,8 @@ dnmtools abismal \
     -o "$WORK/mapped.bam" \
     -s "$WORK/abismal.stats" \
     "${FASTQ_ARGS[@]}" 2>"$WORK/abismal.stderr"
+rm -f "$WORK"/trim*.fq.gz
 log "  abismal: $(($(date +%s) - T0))s"
-
-# Wait for fastp and clean up named pipes
-wait $PID_FASTP
-if [ "$IS_PAIRED" = true ]; then
-  rm -f "$WORK/trim_1.fq" "$WORK/trim_2.fq"
-else
-  rm -f "$WORK/trim.fq"
-fi
 
 STEP0_END=$(date +%s)
 log "Step 0+1a done: fastp+abismal $((STEP0_END - STEP0_START))s"
