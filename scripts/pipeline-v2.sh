@@ -130,10 +130,16 @@ BEDGRAPH="$WORK/${SAMPLE_ID}.bedGraph"
   && rm -f "$BEDGRAPH") &
 PID_BIGWIG=$!
 
-# MACS3 peak calling
+# MACS3 peak calling — use BAMPE for paired-end, BAM for single-end
+if [ "$IS_PAIRED" = true ]; then
+  MACS3_FMT="BAMPE"
+else
+  MACS3_FMT="BAM"
+fi
+
 macs3 callpeak \
   -t "$DEDUP_BAM" -n "${SAMPLE_ID}" -g "$GENOME_SIZE" \
-  -q 1e-05 -f BAM --outdir "$WORK" \
+  -q 1e-05 -f "$MACS3_FMT" --outdir "$WORK" \
   2>"$WORK/macs3.stderr" || true
 
 wait $PID_BIGWIG || log "WARNING: BigWig generation failed"
