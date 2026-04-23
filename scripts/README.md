@@ -23,16 +23,25 @@ Single-pass piped pipeline for chromatin profiling assays.
 **Processing steps:**
 
 ```
-Step 1 (piped):  fastp → bwa-mem2 → samtools collate → fixmate → sort → markdup → dedup.bam
+Step 1 (piped) — paired-end:
+  fastp → bwa-mem2 -p → collate → fixmate → sort → markdup → dedup.bam
+
+Step 1 (piped) — single-end:
+  fastp → bwa-mem2    →                      sort → markdup → dedup.bam
+
 Step 2 (parallel):
   ├── samtools view -c (mapped count) → bedtools genomecov → RPM normalize → bedGraphToBigWig → coverage.bw
-  └── MACS3 callpeak (q=1e-5) → filter q=1e-10, q=1e-20
+  └── MACS3 callpeak -f BAMPE (PE) / -f BAM (SE)  (q=1e-5) → filter q=1e-10, q=1e-20
+
 Step 3:  narrowPeak → bedToBigBed → .bb (×3 thresholds)
+
+Step 4:  collect stats → {id}.stats.tsv
 ```
 
 **Tool options used in Step 1:**
 
 ```bash
+# Paired-end
 fastp --in1 R1.fq --in2 R2.fq --stdout --json fastp.json --thread 2
   # --stdout          Stream passing-filters reads to STDOUT as interleaved FASTQ (PE)
   # --json            Write QC report in JSON format
@@ -62,6 +71,16 @@ fastp --in1 R1.fq --in2 R2.fq --stdout --json fastp.json --thread 2
 | samtools markdup -r - dedup.bam
   # -r                Remove duplicate reads (not just flag them)
   # Reads the ms:i: mate score tag from fixmate to resolve duplicates
+
+# Single-end (collate and fixmate are skipped — not needed without mate pairs)
+fastp --in1 R1.fq --stdout --json fastp.json --thread 2
+
+| bwa-mem2 mem -t $THREADS -R '@RG\tID:SRX\tSM:SRX\tPL:ILLUMINA' genome.fa -
+  # No -p flag (not interleaved; single FASTQ on stdin)
+
+| samtools sort -@ $SORT_T -m $SORT_MEM -T $WORK/sort -
+
+| samtools markdup -r - dedup.bam
 ```
 
 **Tool options used in Step 2:**
@@ -82,7 +101,8 @@ bedGraphToBigWig coverage.bedGraph chrom.sizes output.bw
   # Positional args: input BedGraph, chrom sizes, output BigWig
   # BedGraph must be sorted by chrom then start position
 
-macs3 callpeak -t dedup.bam -n $SAMPLE -g $GENOME_SIZE -q 1e-05 -f BAM --outdir $WORK
+macs3 callpeak -t dedup.bam -n $SAMPLE -g $GENOME_SIZE -q 1e-05 -f BAMPE --outdir $WORK  # PE
+macs3 callpeak -t dedup.bam -n $SAMPLE -g $GENOME_SIZE -q 1e-05 -f BAM  --outdir $WORK  # SE
   # -t FILE           Treatment file (input BAM)
   # -n NAME           Experiment name (used as output filename prefix)
   # -g SIZE           Effective genome size: 'hs' (2.7e9), 'mm' (1.87e9),
@@ -90,10 +110,11 @@ macs3 callpeak -t dedup.bam -n $SAMPLE -g $GENOME_SIZE -q 1e-05 -f BAM --outdir 
   # -q FLOAT          Minimum FDR (q-value) cutoff for peak detection (default: 0.05)
   #                   We use 1e-05 as the most permissive threshold, then filter
   #                   narrowPeak column 9 (-log10 q-value) for 1e-10 and 1e-20
-  # -f FORMAT         Input format: BAM (single-end mode, not BAMPE) — reads are
-  #                   extended by the estimated fragment size for peak calling.
-  #                   Using BAM (not BAMPE) gives consistent treatment of SE and PE
-  #                   data (ChIP-Atlas policy: uniform processing without controls)
+  # -f FORMAT         BAMPE for paired-end: uses actual fragment lengths from mate
+  #                   pairs rather than estimating a shift model, giving more accurate
+  #                   peak boundaries for PE data.
+  #                   BAM for single-end: reads are extended by the estimated fragment
+  #                   size using MACS3's shifting model.
   # --outdir DIR      Output directory
   # Note: MACS3 uses default --nomodel=false, so it builds a shifting model.
   #       If model building fails (low-signal samples), no peaks are produced.
@@ -144,6 +165,7 @@ bedToBigBed peaks.bed chrom.sizes output.bb
 | `{id}.05.bb` / `.10.bb` / `.20.bb` | BigBed versions of each peak set |
 | `{id}.05_peaks.xls` | MACS3 statistics |
 | `{id}_fastp.json` | fastp QC report |
+| `{id}.stats.tsv` | 15-column v1-compatible stats (sample ID, SE/PE flag, FASTQ size, reads before/after filtering, mapping rate, duplication rate, BigWig size, peak counts at q05/10/20, elapsed minutes) |
 
 **Example:**
 
@@ -166,10 +188,11 @@ apptainer exec --bind /data1/tmp:/tmp pipeline-v2.sif \
 
 Whole-genome bisulfite sequencing pipeline using DNMTools.
 
-**Container:** `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0`
+**Container:** `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.1.0`
 
 | Tool | Version | Purpose |
 |------|---------|---------|
+| fastp | 1.3.1 | Adapter trimming, QC (Step 0, via named pipes) |
 | abismal (DNMTools) | 1.5.1 | Bisulfite-aware alignment |
 | dnmtools format | 1.5.1 | Convert abismal BAM to standard format |
 | samtools sort | 1.22.1 | Coordinate sort |
@@ -184,8 +207,11 @@ Whole-genome bisulfite sequencing pipeline using DNMTools.
 **Processing steps:**
 
 ```
+Step 0 (streaming via named pipes):
+  fastp → FIFO(s) → (consumed by Step 1)
+
 Step 1 (sequential, intermediates deleted as consumed):
-  abismal → dnmtools format → samtools sort → dnmtools uniq → dedup.bam
+  abismal (reads from FIFOs) → dnmtools format → samtools sort → dnmtools uniq → dedup.bam
 
 Step 2:
   dnmtools counts → counts.tsv (CpG sites with coverage > 0)
@@ -197,21 +223,39 @@ Step 3 (parallel fan-out after dnmtools sym):
   └── sort → awk → bedGraphToBigWig → methyl.bw + cover.bw
 ```
 
-Step 1 uses file-based intermediates rather than a Unix pipe because
-`dnmtools format` and `dnmtools uniq` require seekable BAM input (htslib
-constraint). All intermediates live on local NVMe and are deleted as soon
-as the next step consumes them.
+Step 0 runs fastp in the background writing to named pipes (FIFOs), which
+abismal consumes directly — no trimmed FASTQ is written to disk. Step 1 uses
+file-based intermediates rather than a Unix pipe because `dnmtools format` and
+`dnmtools uniq` require seekable BAM input (htslib constraint). All
+intermediates live on local NVMe and are deleted as soon as the next step
+consumes them.
+
+**Tool options used in Step 0:**
+
+```bash
+# Paired-end: two named pipes
+mkfifo trim_1.fq trim_2.fq
+fastp --in1 R1.fq --in2 R2.fq --out1 trim_1.fq --out2 trim_2.fq --json fastp.json --thread 2 &
+  # --out1/--out2     Write trimmed reads to named pipes (FIFOs) instead of files
+  # --json            Write QC report (copied to outdir after abismal finishes)
+  # --thread 2        I/O-bound; 2 threads is sufficient
+  # &                 Run in background so abismal can consume the pipes simultaneously
+
+# Single-end: one named pipe
+mkfifo trim.fq
+fastp --in1 R1.fq --out1 trim.fq --json fastp.json --thread 2 &
+```
 
 **Tool options used in Step 1:**
 
 ```bash
-dnmtools abismal -i genome.abismal.idx -t $THREADS -B -o mapped.bam -s abismal.stats R1.fq R2.fq
+dnmtools abismal -i genome.abismal.idx -t $THREADS -B -o mapped.bam -s abismal.stats trim_1.fq trim_2.fq
   # -i FILE    abismal index file (built with `dnmtools abismalidx genome.fa genome.abismal.idx`)
   # -t INT     Number of threads
   # -B         Output BAM format (default: SAM)
   # -o FILE    Output file (aligned reads)
   # -s FILE    Mapping statistics file (YAML format)
-  # Positional: one FASTQ for SE, two FASTQs for PE
+  # Positional: trim_1.fq / trim_2.fq (FIFOs from Step 0) for PE; trim.fq for SE
 
 dnmtools format -t $THREADS -f abismal -B [-single-end] mapped.bam formatted.bam
   # -t INT          Number of threads
@@ -294,6 +338,7 @@ bedGraphToBigWig cover.bg  chrom.sizes output.cover.bw
 | `--sample-id` | yes | Experiment accession (e.g. SRX12345678) |
 | `--fastq-fwd` | yes | Forward reads (FASTQ or FASTQ.gz) |
 | `--fastq-rev` | no | Reverse reads (omit for single-end; auto-detects and passes `-single-end` to format) |
+| `--genome` | yes | Genome name (`hg38`, `mm10`, `rn6`, `ce11`, `dm6`, `sacCer3`) — used to look up CpG count for coverage calculation |
 | `--genome-fasta` | yes | Reference genome FASTA |
 | `--abismal-index` | yes | abismal index file (built with `dnmtools abismalidx`) |
 | `--chrom-sizes` | yes | Chromosome sizes file |
@@ -314,6 +359,8 @@ hypermr, pmd, BigWig) are single-threaded but run simultaneously.
 | `{id}.hypermr.bed` | Hypermethylated regions |
 | `{id}.pmd.bed` | Partially methylated domains |
 | `{id}.abismal.stats` | Alignment statistics (YAML) |
+| `{id}_fastp.json` | fastp QC report |
+| `{id}.stats.tsv` | 11-column v1-compatible stats (sample ID, SE/PE flag, FASTQ size, read count, mapping rate, methylation rate, CpG coverage, HMR/PMD/hyperMR counts, elapsed minutes) |
 
 **Example:**
 
@@ -323,6 +370,7 @@ apptainer exec --bind /data1/tmp:/tmp pipeline-v2-bs.sif \
     --sample-id SRX12345678 \
     --fastq-fwd reads_1.fastq.gz \
     --fastq-rev reads_2.fastq.gz \
+    --genome hg38 \
     --genome-fasta /ref/hg38.fa \
     --abismal-index /ref/hg38.abismal.idx \
     --chrom-sizes /ref/hg38.chrom.sizes \
@@ -466,7 +514,7 @@ Built via GitHub Actions (`.github/workflows/container.yml`) and published to GH
 | Container | Dockerfile | Tools |
 |-----------|------------|-------|
 | `ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0` | `containers/Dockerfile` | fastp 1.3.1, bwa-mem2 2.3, samtools 1.23.1, MACS3 3.0.4, bedtools 2.31.1, UCSC 482 |
-| `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0` | `containers/Dockerfile.bs` | DNMTools 1.5.1, samtools 1.22.1, UCSC 482 |
+| `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.1.0` | `containers/Dockerfile.bs` | fastp 1.3.1, DNMTools 1.5.1, samtools 1.22.1, UCSC 482 |
 
 Both containers use `condaforge/mambaforge` as the base image with tools installed from bioconda and conda-forge. All tool versions are pinned in the Dockerfiles for reproducibility.
 
