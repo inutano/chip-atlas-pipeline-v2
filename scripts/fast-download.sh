@@ -1,202 +1,183 @@
 #!/bin/bash
 #
-# Fast FASTQ download with source-aware routing + aria2c.
+# Fast FASTQ download for ChIP-Atlas experiments.
 #
-# Usage: fast-download.sh <run_accession> <output_dir>
+# Accepts an experiment accession (SRX/DRX/ERX), resolves all run accessions
+# via the ENA API, downloads FASTQs, and concatenates multiple runs into a
+# single FASTQ pair per experiment.
 #
-# Routes downloads based on accession prefix to the origin repository:
-#   DRR (DDBJ/Japan) → DDBJ first → ENA → fasterq-dump
-#   ERR (ENA/Europe) → ENA first → fasterq-dump
-#   SRR (NCBI/US)    → ENA first → fasterq-dump
+# Usage: fast-download.sh <experiment_accession> <output_dir>
 #
-# Uses aria2c with 8 parallel connections for HTTP/FTP downloads.
-# Falls back to fasterq-dump via container when mirrored FASTQs aren't available.
-# Container runtime: uses apptainer/singularity if available, then docker.
+# Output:
+#   PE: <output_dir>/<experiment>_1.fastq.gz, <experiment>_2.fastq.gz
+#   SE: <output_dir>/<experiment>.fastq.gz
+#
+# Download routing (per run):
+#   DRR → DDBJ local bz2 (NIG only) → ENA HTTPS → fasterq-dump
+#   ERR → ENA HTTPS → fasterq-dump
+#   SRR → ENA HTTPS → fasterq-dump
 #
 set -eo pipefail
 
-RUN_ACC="$1"
+EXP_ACC="$1"
 OUTDIR="$2"
 SRA_IMG="quay.io/biocontainers/sra-tools:3.0.10--h9f5acd7_0"
 
-if [ -z "$RUN_ACC" ] || [ -z "$OUTDIR" ]; then
-  echo "Usage: $0 <run_accession> <output_dir>"
+if [ -z "$EXP_ACC" ] || [ -z "$OUTDIR" ]; then
+  echo "Usage: $0 <experiment_accession> <output_dir>"
   exit 1
 fi
 
 mkdir -p "$OUTDIR"
 
 # Check if already downloaded
-if ls "$OUTDIR"/${RUN_ACC}*.fastq 1>/dev/null 2>&1 || ls "$OUTDIR"/${RUN_ACC}*.fastq.gz 1>/dev/null 2>&1; then
-  echo "[CACHE] $RUN_ACC already downloaded"
+if ls "$OUTDIR"/${EXP_ACC}*.fastq.gz 1>/dev/null 2>&1; then
+  echo "[CACHE] $EXP_ACC already downloaded"
   exit 0
 fi
 
-# Detect prefix
-PREFIX="${RUN_ACC:0:3}"
-
 # ============================================================
-# Download functions
+# Resolve experiment → runs via ENA API
 # ============================================================
 
-download_from_ena() {
-  local acc="$1"
-  echo "[ENA] Querying filereport API for $acc..."
-  local ena_report
-  ena_report=$(curl -sf "https://www.ebi.ac.uk/ena/portal/api/filereport?accession=${acc}&result=read_run&fields=run_accession,fastq_ftp,fastq_md5,fastq_bytes&format=tsv" 2>/dev/null || true)
+echo "[ENA] Resolving runs for $EXP_ACC..."
+ENA_REPORT=$(curl -sf "https://www.ebi.ac.uk/ena/portal/api/filereport?accession=${EXP_ACC}&result=read_run&fields=run_accession,library_layout,fastq_ftp,fastq_md5,fastq_bytes&format=tsv" 2>/dev/null || true)
 
-  local ena_lines
-  ena_lines=$(echo "$ena_report" | wc -l)
+NUM_RUNS=$(echo "$ENA_REPORT" | tail -n +2 | grep -c . || echo 0)
 
-  if [ "$ena_lines" -le 1 ]; then
-    echo "[ENA] No data found for $acc"
-    return 1
-  fi
+if [ "$NUM_RUNS" -eq 0 ]; then
+  echo "[ERROR] No runs found for $EXP_ACC"
+  exit 1
+fi
 
-  local fastq_ftp fastq_md5
-  fastq_ftp=$(echo "$ena_report" | tail -1 | cut -f2)
-  fastq_md5=$(echo "$ena_report" | tail -1 | cut -f3)
+# Detect layout from first run (consistent across runs per experiment)
+LAYOUT=$(echo "$ENA_REPORT" | tail -n +2 | head -1 | cut -f2)
+echo "[ENA] $EXP_ACC: $NUM_RUNS run(s), layout=$LAYOUT"
 
-  if [ -z "$fastq_ftp" ] || [ "$fastq_ftp" = "" ]; then
-    echo "[ENA] No FASTQ URLs for $acc"
-    return 1
-  fi
+# Temporary directory for per-run downloads
+TMPDIR_DL="${TMPDIR:-/tmp}/${EXP_ACC}_dl_$$"
+mkdir -p "$TMPDIR_DL"
+trap "rm -rf $TMPDIR_DL" EXIT
 
-  echo "[ENA] FASTQ available, downloading with aria2c..."
-  IFS=';' read -ra URLS <<< "$fastq_ftp"
-  IFS=';' read -ra MD5S <<< "$fastq_md5"
+# ============================================================
+# Download functions (per run)
+# ============================================================
+
+download_run_from_ena() {
+  local run="$1"
+  local ftp="$2"
+  local md5="$3"
+
+  IFS=';' read -ra URLS <<< "$ftp"
+  IFS=';' read -ra MD5S <<< "$md5"
 
   for i in "${!URLS[@]}"; do
     local url="https://${URLS[$i]}"
-    local md5="${MD5S[$i]:-}"
-    local filename
-    filename=$(basename "$url")
+    local checksum="${MD5S[$i]:-}"
+    local fname
+    fname=$(basename "$url")
 
-    echo "  Downloading: $filename"
-    local aria2_args="-x 8 -s 8 -d $OUTDIR --console-log-level=warn"
-    if [ -n "$md5" ]; then
-      aria2_args="$aria2_args --checksum=md5=$md5"
+    echo "  Downloading: $fname"
+    local aria2_args="-x 8 -s 8 -d $TMPDIR_DL --console-log-level=warn"
+    if [ -n "$checksum" ]; then
+      aria2_args="$aria2_args --checksum=md5=$checksum"
     fi
     aria2c $aria2_args "$url" || return 1
   done
-
-  # Decompress .fastq.gz to .fastq
-  for gz in "$OUTDIR"/${acc}*.fastq.gz; do
-    if [ -f "$gz" ]; then
-      echo "  Decompressing: $(basename "$gz")"
-      gunzip "$gz"
-    fi
-  done
-
-  echo "[ENA] Download complete"
   return 0
 }
 
-download_from_ddbj() {
-  local acc="$1"
-  echo "[DDBJ] Looking up $acc in fastqlist..."
+download_run_from_ddbj_local() {
+  local run="$1"
+  local exp_prefix="${EXP_ACC:0:3}"
 
-  # Use cached DDBJ fastqlist (file_path, md5, bytes, audit_time)
-  # Cache at /data3/chip-atlas-v2/cache/ddbj-fastqlist.tsv
-  local FASTQLIST="${FASTQLIST:-/data3/chip-atlas-v2/cache/ddbj-fastqlist.tsv}"
+  # Only DRX experiments have local bz2 on NIG
+  [ "$exp_prefix" = "DRX" ] || return 1
 
-  if [ ! -f "$FASTQLIST" ]; then
-    echo "[DDBJ] fastqlist cache not found, downloading..."
-    mkdir -p "$(dirname "$FASTQLIST")"
-    curl -sf "https://ddbj.nig.ac.jp/public/ddbj_database/dra/meta/list/fastqlist" -o "$FASTQLIST" || {
-      echo "[DDBJ] Failed to download fastqlist"
-      return 1
-    }
-  fi
+  local DDBJ_BASE="/lustre9/open/database/ddbj-dbt/dra-public/dra/fastq"
+  local found_dir
+  found_dir=$(ls -d "$DDBJ_BASE"/DRA*/DRA*/"$EXP_ACC"/ 2>/dev/null | head -1)
 
-  # Grep for matching files (may return multiple lines for PE)
-  local matches
-  matches=$(grep "/${acc}" "$FASTQLIST" || true)
-
-  if [ -z "$matches" ]; then
-    echo "[DDBJ] $acc not found in fastqlist"
+  if [ -z "$found_dir" ]; then
     return 1
   fi
 
-  echo "[DDBJ] FASTQ available, downloading with aria2c..."
+  local bz2_files
+  bz2_files=$(ls "$found_dir"/${run}*.fastq.bz2 2>/dev/null)
 
-  local downloaded=false
-  while IFS=$'\t' read -r fpath md5 bytes audit; do
-    local url="https://ddbj.nig.ac.jp/public${fpath}"
-    local filename
-    filename=$(basename "$fpath")
-
-    echo "  Downloading: $filename ($(echo "$bytes" | awk '{printf "%.0fMB", $1/1048576}'))"
-    local aria2_args="-x 8 -s 8 -d $OUTDIR --console-log-level=warn"
-    if [ -n "$md5" ]; then
-      aria2_args="$aria2_args --checksum=md5=$md5"
-    fi
-    aria2c $aria2_args "$url" || return 1
-    downloaded=true
-  done <<< "$matches"
-
-  if [ "$downloaded" = false ]; then
+  if [ -z "$bz2_files" ]; then
     return 1
   fi
 
-  # Decompress .fastq.bz2 to .fastq
-  for bz2 in "$OUTDIR"/${acc}*.fastq.bz2; do
-    if [ -f "$bz2" ]; then
-      echo "  Decompressing: $(basename "$bz2")"
-      bunzip2 "$bz2"
-    fi
+  echo "  [DDBJ-LOCAL] Copying + decompressing bz2 from Lustre"
+  for bz2 in $bz2_files; do
+    local base
+    base=$(basename "$bz2" .bz2)
+    echo "    $bz2 → ${base}.gz"
+    bzcat "$bz2" | gzip > "$TMPDIR_DL/${base}.gz"
   done
-
-  echo "[DDBJ] Download complete"
   return 0
 }
 
-download_from_sra() {
-  local acc="$1"
-  echo "[SRA] Falling back to fasterq-dump for $acc..."
+download_run_from_sra() {
+  local run="$1"
+  echo "  [SRA] Falling back to fasterq-dump for $run..."
   if command -v apptainer &>/dev/null; then
     apptainer exec "docker://$SRA_IMG" \
-      fasterq-dump "$acc" --split-files --skip-technical --threads 4 --outdir "$OUTDIR" 2>&1 \
-      | tail -3
+      fasterq-dump "$run" --split-files --skip-technical --threads 4 --outdir "$TMPDIR_DL" 2>&1 | tail -3
   elif command -v singularity &>/dev/null; then
     singularity exec "docker://$SRA_IMG" \
-      fasterq-dump "$acc" --split-files --skip-technical --threads 4 --outdir "$OUTDIR" 2>&1 \
-      | tail -3
+      fasterq-dump "$run" --split-files --skip-technical --threads 4 --outdir "$TMPDIR_DL" 2>&1 | tail -3
   elif command -v docker &>/dev/null; then
-    docker run --rm -v "$OUTDIR":/data -w /data "$SRA_IMG" \
-      fasterq-dump "$acc" --split-files --skip-technical --threads 4 --outdir . 2>&1 \
-      | tail -3
+    docker run --rm -v "$TMPDIR_DL":/data -w /data "$SRA_IMG" \
+      fasterq-dump "$run" --split-files --skip-technical --threads 4 --outdir . 2>&1 | tail -3
   else
-    echo "[SRA] ERROR: No container runtime (apptainer/singularity/docker) found"
+    echo "  [SRA] ERROR: No container runtime found"
     return 1
   fi
-  echo "[SRA] Download complete"
+  # Compress fasterq-dump output (produces uncompressed .fastq)
+  for fq in "$TMPDIR_DL"/${run}*.fastq; do
+    [ -f "$fq" ] && gzip "$fq"
+  done
   return 0
 }
 
 # ============================================================
-# Route based on accession prefix
+# Download all runs
 # ============================================================
 
-case "$PREFIX" in
-  DRR)
-    echo "[ROUTE] $RUN_ACC → DDBJ (Japanese origin)"
-    download_from_ddbj "$RUN_ACC" || \
-    download_from_ena "$RUN_ACC" || \
-    download_from_sra "$RUN_ACC"
-    ;;
-  ERR)
-    echo "[ROUTE] $RUN_ACC → ENA (European origin)"
-    download_from_ena "$RUN_ACC" || \
-    download_from_sra "$RUN_ACC"
-    ;;
-  SRR)
-    echo "[ROUTE] $RUN_ACC → ENA mirror (US origin)"
-    download_from_ena "$RUN_ACC" || \
-    download_from_sra "$RUN_ACC"
-    ;;
-  *)
-    echo "[ROUTE] $RUN_ACC → Unknown prefix '$PREFIX', using fasterq-dump"
-    download_from_sra "$RUN_ACC"
-    ;;
-esac
+echo "$ENA_REPORT" | tail -n +2 | while IFS=$'\t' read -r run layout ftp md5 bytes; do
+  echo "[RUN] $run ($layout)"
+
+  local_prefix="${run:0:3}"
+
+  # Try sources in priority order
+  if [ "$local_prefix" = "DRR" ]; then
+    download_run_from_ddbj_local "$run" 2>/dev/null || \
+    download_run_from_ena "$run" "$ftp" "$md5" || \
+    download_run_from_sra "$run"
+  else
+    download_run_from_ena "$run" "$ftp" "$md5" || \
+    download_run_from_sra "$run"
+  fi
+done
+
+# ============================================================
+# Concatenate runs into per-experiment FASTQs
+# ============================================================
+
+echo "[CONCAT] Merging $NUM_RUNS run(s) → $EXP_ACC"
+
+if [ "$LAYOUT" = "PAIRED" ]; then
+  # Concatenate all _1.fastq.gz and _2.fastq.gz files
+  cat "$TMPDIR_DL"/*_1.fastq.gz > "$OUTDIR/${EXP_ACC}_1.fastq.gz"
+  cat "$TMPDIR_DL"/*_2.fastq.gz > "$OUTDIR/${EXP_ACC}_2.fastq.gz"
+  echo "  → ${EXP_ACC}_1.fastq.gz ($(du -h "$OUTDIR/${EXP_ACC}_1.fastq.gz" | cut -f1))"
+  echo "  → ${EXP_ACC}_2.fastq.gz ($(du -h "$OUTDIR/${EXP_ACC}_2.fastq.gz" | cut -f1))"
+else
+  # SE: concatenate all .fastq.gz files (may be .fastq.gz or _1.fastq.gz without _2)
+  cat "$TMPDIR_DL"/*.fastq.gz > "$OUTDIR/${EXP_ACC}.fastq.gz"
+  echo "  → ${EXP_ACC}.fastq.gz ($(du -h "$OUTDIR/${EXP_ACC}.fastq.gz" | cut -f1))"
+fi
+
+echo "[DONE] $EXP_ACC: $NUM_RUNS run(s) downloaded and merged"
