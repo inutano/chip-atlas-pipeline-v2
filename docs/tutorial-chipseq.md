@@ -4,6 +4,10 @@ This tutorial walks you through running the ChIP-Atlas v2 ChIP-seq pipeline from
 
 The pipeline runs entirely inside a single container — no local tool installation required beyond a container runtime.
 
+> **NIG users:** Pre-built references, container images, and output data are available in the shared directory at `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/`. This directory is accessible only to members of the `so-ddmku` group.
+>
+> **NIG ユーザー:** ビルド済みリファレンス、コンテナイメージ、出力データは共有ディレクトリ `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/` にあります。`so-ddmku` グループのメンバーのみアクセス可能です。
+
 **Example experiments used throughout this tutorial:**
 
 | Accession | Layout | Organism | Description |
@@ -38,7 +42,7 @@ For hg38 you need:
 On NIG, pre-built hg38 references are available at:
 
 ```
-~/chip-atlas-v2/references/hg38/
+/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/
 ```
 
 ### A list of SRA experiment accessions
@@ -70,7 +74,7 @@ Move the SIF to a stable location (pre-built SIF already exists on NIG):
 
 ```bash
 # On NIG, use the existing SIF:
-SIF=~/chip-atlas-v2/containers/pipeline-v2.sif
+SIF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif
 ```
 
 **On Docker:**
@@ -93,12 +97,12 @@ docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
 
 ## Step 2: Prepare the reference genome
 
-Skip this step if you are on NIG and using the pre-built references at `~/chip-atlas-v2/references/hg38/`.
+Skip this step if you are on NIG and using the pre-built references at `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/`.
 
 ### Option A: Use the automated script (recommended)
 
 ```bash
-bash scripts/prepare-genomes.sh ~/chip-atlas-v2/references
+bash scripts/prepare-genomes.sh /lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references
 ```
 
 This downloads hg38 from UCSC, builds the bwa-mem2 index, and creates `chrom.sizes`. It takes 30–60 minutes; bwa-mem2 indexing requires ~60 GB RAM.
@@ -106,7 +110,7 @@ This downloads hg38 from UCSC, builds the bwa-mem2 index, and creates `chrom.siz
 ### Option B: Manual steps
 
 ```bash
-REF_DIR=~/chip-atlas-v2/references/hg38
+REF_DIR=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
 mkdir -p $REF_DIR
 cd $REF_DIR
 
@@ -188,8 +192,8 @@ Expected output:
 **NIG (Apptainer):**
 
 ```bash
-SIF=~/chip-atlas-v2/containers/pipeline-v2.sif
-REF=~/chip-atlas-v2/references/hg38
+SIF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif
+REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
 
 apptainer exec --bind /data1/tmp:/tmp $SIF \
   bash scripts/pipeline-v2.sh \
@@ -208,7 +212,7 @@ apptainer exec --bind /data1/tmp:/tmp $SIF \
 ```bash
 docker run --rm \
   -v $(pwd):/work \
-  -v ~/chip-atlas-v2/references:/ref \
+  -v /lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references:/ref \
   -w /work \
   ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 \
   bash scripts/pipeline-v2.sh \
@@ -343,8 +347,8 @@ The 15-column TSV has no header. Column meanings:
 ### Simple loop
 
 ```bash
-SIF=~/chip-atlas-v2/containers/pipeline-v2.sif
-REF=~/chip-atlas-v2/references/hg38
+SIF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif
+REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
 
 while read acc; do
   echo "=== $acc ==="
@@ -417,8 +421,8 @@ export SLURM_ACCOUNT=kumamoto-group
 | Item | Path |
 |------|------|
 | Apptainer binary | `/opt/pkg/apptainer/1.4.5/bin/apptainer` |
-| Pipeline SIF | `~/chip-atlas-v2/containers/pipeline-v2.sif` |
-| hg38 reference | `~/chip-atlas-v2/references/hg38/` |
+| Pipeline SIF | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif` |
+| hg38 reference | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/` |
 | NVMe scratch | `/data1/tmp` (bind as `/tmp` for intermediates) |
 | SLURM partition | `kumamoto-c768` |
 | SLURM account | `kumamoto-group` |
@@ -429,7 +433,7 @@ Add to your `~/.bashrc` on NIG:
 
 ```bash
 export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
-export CHIP_ATLAS_BASE=~/chip-atlas-v2
+export CHIP_ATLAS_BASE=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2
 export SLURM_PARTITION=kumamoto-c768
 export SLURM_ACCOUNT=kumamoto-group
 ```
@@ -529,7 +533,7 @@ hg38に必要なファイル:
 NIGでは、事前構築済みhg38リファレンスが以下のパスで利用可能です:
 
 ```
-~/chip-atlas-v2/references/hg38/
+/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/
 ```
 
 ### SRA実験アクセッションのリスト
@@ -561,7 +565,7 @@ SIFを安定した場所に移動します（NIGでは事前構築済みSIFが�
 
 ```bash
 # NIGでは既存のSIFを使用:
-SIF=~/chip-atlas-v2/containers/pipeline-v2.sif
+SIF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif
 ```
 
 **Dockerの場合:**
@@ -584,12 +588,12 @@ docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
 
 ## ステップ2: リファレンスゲノムの準備
 
-NIGを使用しており、`~/chip-atlas-v2/references/hg38/`の事前構築済みリファレンスを使用する場合、このステップはスキップできます。
+NIGを使用しており、`/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/`の事前構築済みリファレンスを使用する場合、このステップはスキップできます。
 
 ### オプションA: 自動化スクリプトの使用（推奨）
 
 ```bash
-bash scripts/prepare-genomes.sh ~/chip-atlas-v2/references
+bash scripts/prepare-genomes.sh /lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references
 ```
 
 このスクリプトはUCSCからhg38をダウンロードし、bwa-mem2インデックスを構築し、`chrom.sizes`を作成します。30〜60分かかります。bwa-mem2インデックスの構築には約60 GBのRAMが必要です。
@@ -597,7 +601,7 @@ bash scripts/prepare-genomes.sh ~/chip-atlas-v2/references
 ### オプションB: 手動手順
 
 ```bash
-REF_DIR=~/chip-atlas-v2/references/hg38
+REF_DIR=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
 mkdir -p $REF_DIR
 cd $REF_DIR
 
@@ -679,8 +683,8 @@ bash scripts/fast-download.sh DRX127555   ./fastq/
 **NIGの場合（Apptainer）:**
 
 ```bash
-SIF=~/chip-atlas-v2/containers/pipeline-v2.sif
-REF=~/chip-atlas-v2/references/hg38
+SIF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif
+REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
 
 apptainer exec --bind /data1/tmp:/tmp $SIF \
   bash scripts/pipeline-v2.sh \
@@ -699,7 +703,7 @@ apptainer exec --bind /data1/tmp:/tmp $SIF \
 ```bash
 docker run --rm \
   -v $(pwd):/work \
-  -v ~/chip-atlas-v2/references:/ref \
+  -v /lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references:/ref \
   -w /work \
   ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 \
   bash scripts/pipeline-v2.sh \
@@ -834,8 +838,8 @@ output/DRX127555/
 ### シンプルなループ
 
 ```bash
-SIF=~/chip-atlas-v2/containers/pipeline-v2.sif
-REF=~/chip-atlas-v2/references/hg38
+SIF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif
+REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
 
 while read acc; do
   echo "=== $acc ==="
@@ -908,8 +912,8 @@ export SLURM_ACCOUNT=kumamoto-group
 | 項目 | パス |
 |------|------|
 | Apptainerバイナリ | `/opt/pkg/apptainer/1.4.5/bin/apptainer` |
-| パイプラインSIF | `~/chip-atlas-v2/containers/pipeline-v2.sif` |
-| hg38リファレンス | `~/chip-atlas-v2/references/hg38/` |
+| パイプラインSIF | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif` |
+| hg38リファレンス | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/` |
 | NVMeスクラッチ | `/data1/tmp`（中間ファイル用に`/tmp`としてバインド） |
 | SLURMパーティション | `kumamoto-c768` |
 | SLURMアカウント | `kumamoto-group` |
@@ -920,7 +924,7 @@ NIGの`~/.bashrc`に以下を追加します:
 
 ```bash
 export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
-export CHIP_ATLAS_BASE=~/chip-atlas-v2
+export CHIP_ATLAS_BASE=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2
 export SLURM_PARTITION=kumamoto-c768
 export SLURM_ACCOUNT=kumamoto-group
 ```

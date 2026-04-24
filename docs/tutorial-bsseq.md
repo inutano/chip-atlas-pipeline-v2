@@ -6,6 +6,10 @@ uses [DNMTools](https://github.com/smithlabcode/dnmtools) (abismal aligner +
 downstream methylation tools) and is packaged in a single container that runs
 on Apptainer (NIG supercomputer) or Docker (any machine).
 
+> **NIG users:** Pre-built references (including abismal index), container images, and output data are available in the shared directory at `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/`. This directory is accessible only to members of the `so-ddmku` group.
+>
+> **NIG ユーザー:** ビルド済みリファレンス（abismal インデックス含む）、コンテナイメージ、出力データは共有ディレクトリ `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/` にあります。`so-ddmku` グループのメンバーのみアクセス可能です。
+
 **Example sample throughout this tutorial:** SRX22130352 — human plasma
 cell-free DNA (cfDNA), paired-end, ~1M read pairs, hg38.
 
@@ -33,7 +37,7 @@ Three files are required per genome:
 
 On NIG, pre-built hg38 files are available at:
 ```
-~/chip-atlas-v2/references/
+/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/
 ```
 
 For other genomes or a fresh setup, see **Step 2** below.
@@ -71,7 +75,7 @@ docker pull ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.1.0
 ## Step 2: Prepare the reference genome
 
 Skip this step if you are using NIG and the pre-built references at
-`~/chip-atlas-v2/references/`.
+`/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/`.
 
 ### 2a. Download hg38
 
@@ -170,7 +174,7 @@ sbatch \
 
 If using the pre-built NIG references:
 ```bash
-REF=~/chip-atlas-v2/references
+REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references
 # then pass: --genome-fasta $REF/hg38.fa --abismal-index $REF/hg38.abismal.idx --chrom-sizes $REF/chrom.sizes
 ```
 
@@ -350,7 +354,7 @@ to avoid ENA throttling), see `docs/production-download-design.md`.
 |-------|--------|
 | Apptainer binary | `/opt/pkg/apptainer/1.4.5/bin/apptainer` |
 | NVMe scratch | `/data1/tmp` per node — bind as TMPDIR to keep intermediates off Lustre |
-| Pre-built hg38 references | `~/chip-atlas-v2/references/` (hg38.fa, hg38.abismal.idx, chrom.sizes) |
+| Pre-built hg38 references | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/` (hg38.fa, hg38.abismal.idx, chrom.sizes) |
 | SLURM partition | `kumamoto-c768` |
 | SLURM account | `kumamoto-group` |
 | Lustre quota | 954 GB — FASTQ files are large; clean up after each job completes |
@@ -460,7 +464,7 @@ Docker（任意のマシン）で動作する単一コンテナにパッケー�
 
 NIG では、事前構築済みの hg38 ファイルが以下にあります：
 ```
-~/chip-atlas-v2/references/
+/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/
 ```
 
 他のゲノムや初めてセットアップする場合は、後述の **ステップ 2** を参照してください。
@@ -497,7 +501,7 @@ docker pull ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.1.0
 
 ## ステップ 2: リファレンスゲノムを準備する
 
-NIG の `~/chip-atlas-v2/references/` にある事前構築済みリファレンスを使用する場合は
+NIG の `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/` にある事前構築済みリファレンスを使用する場合は
 このステップを省略できます。
 
 ### 2a. hg38 をダウンロード
@@ -597,7 +601,7 @@ sbatch \
 
 NIG の事前構築済みリファレンスを使用する場合：
 ```bash
-REF=~/chip-atlas-v2/references
+REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references
 # 以下を渡す: --genome-fasta $REF/hg38.fa --abismal-index $REF/hg38.abismal.idx --chrom-sizes $REF/chrom.sizes
 ```
 
@@ -776,7 +780,7 @@ bash scripts/production-run.sh submit hg38 samples.tsv \
 |------|------|
 | Apptainer バイナリ | `/opt/pkg/apptainer/1.4.5/bin/apptainer` |
 | NVMe スクラッチ | ノードごとの `/data1/tmp` — TMPDIR としてバインドして中間ファイルを Lustre に書かないようにする |
-| 事前構築済み hg38 リファレンス | `~/chip-atlas-v2/references/`（hg38.fa、hg38.abismal.idx、chrom.sizes） |
+| 事前構築済み hg38 リファレンス | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/`（hg38.fa、hg38.abismal.idx、chrom.sizes） |
 | SLURM パーティション | `kumamoto-c768` |
 | SLURM アカウント | `kumamoto-group` |
 | Lustre クォータ | 954 GB — FASTQ ファイルは大きいため、ジョブ完了後に削除する |
