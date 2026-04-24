@@ -217,7 +217,8 @@ dnmtools counts \
     "$DEDUP_BAM" \
   | awk -F'\t' -v OFS='\t' '$6 > 0' > "$WORK/counts.tsv"
 
-# Delete the dedup BAM now — no other step needs it
+# Capture dedup BAM size for stats, then delete
+DEDUP_BAM_SIZE=$(wc -c < "$DEDUP_BAM" 2>/dev/null || echo 0)
 rm -f "$DEDUP_BAM"
 
 STEP2_END=$(date +%s)
@@ -305,7 +306,7 @@ FASTQ_SIZE=$(du -sb "$FASTQ_FWD" ${FASTQ_REV:+"$FASTQ_REV"} 2>/dev/null | awk '{
 
 # Write v1-compatible stats TSV (15 columns; cols 12-14 empty for BS-seq)
 printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\t\t\t%s\n' \
-  "$SAMPLE_ID" "$LAYOUT_FLAG" "$FASTQ_SIZE" "0" \
+  "$SAMPLE_ID" "$LAYOUT_FLAG" "$FASTQ_SIZE" "$DEDUP_BAM_SIZE" \
   "$READ_COUNT" "$MAP_RATE" "$METH_RATE" "$CPG_COVERAGE" \
   "$HMR_N" "$PMD_N" "$HYPERMR_N" "$TOTAL_MIN" \
   > "$OUTDIR/${SAMPLE_ID}.stats.tsv"

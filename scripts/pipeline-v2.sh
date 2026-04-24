@@ -110,6 +110,9 @@ fi
 STEP1_END=$(date +%s)
 log "Step 1 done: $((STEP1_END - STEP1_START))s"
 
+# Capture dedup BAM size for stats (before any step deletes it)
+DEDUP_BAM_SIZE=$(wc -c < "$DEDUP_BAM" 2>/dev/null || echo 0)
+
 # ============================================================
 # Step 2: BigWig + MACS3 in parallel (both read dedup BAM from NVMe)
 # ============================================================
@@ -126,6 +129,7 @@ BEDGRAPH="$WORK/${SAMPLE_ID}.bedGraph"
 (bedtools genomecov -bg -ibam "$DEDUP_BAM" \
   | awk -v total="$MAPPED" -v OFS='\t' '{print $1, $2, $3, $4*1000000/total}' \
   > "$BEDGRAPH" \
+  && wc -c < "$BEDGRAPH" > "$WORK/.bedgraph_size" \
   && bedGraphToBigWig "$BEDGRAPH" "$CHROM_SIZES" "$OUTDIR/${SAMPLE_ID}.bw" \
   && rm -f "$BEDGRAPH") &
 PID_BIGWIG=$!
@@ -196,9 +200,11 @@ else
   DUP_RATE=0
 fi
 
-# File sizes (0 for intermediates not kept)
+# File sizes
 FASTQ_SIZE=$(wc -c < "$FASTQ_FWD" 2>/dev/null || echo 0)
+[ "$IS_PAIRED" = true ] && [ -e "$FASTQ_REV" ] && FASTQ_SIZE=$((FASTQ_SIZE + $(wc -c < "$FASTQ_REV")))
 BW_SIZE=$(wc -c < "$OUTDIR/${SAMPLE_ID}.bw" 2>/dev/null || echo 0)
+BEDGRAPH_SIZE=$(cat "$WORK/.bedgraph_size" 2>/dev/null || echo 0)
 
 # Peak counts
 PEAKS_05_N=$(wc -l < "$OUTDIR/${SAMPLE_ID}.05_peaks.narrowPeak" 2>/dev/null || echo 0)
@@ -221,8 +227,8 @@ printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
   "$READS_AFTER" \
   "$MAP_RATE" \
   "$DUP_RATE" \
-  "0" \
-  "0" \
+  "$DEDUP_BAM_SIZE" \
+  "$BEDGRAPH_SIZE" \
   "$BW_SIZE" \
   "$PEAKS_05_N" \
   "$PEAKS_10_N" \
