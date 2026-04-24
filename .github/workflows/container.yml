@@ -1,23 +1,22 @@
-name: Build and publish container image
+name: Build and publish container images
 
 on:
   push:
     paths:
       - 'containers/Dockerfile'
+      - 'containers/Dockerfile.bs'
     branches: [master]
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  build-chipseq:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
       - uses: actions/checkout@v4
 
@@ -28,24 +27,45 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=sha,prefix=
-            type=raw,value={{date 'YYYYMMDD'}}
-
-      - name: Build and push
+      - name: Build and push ChIP-seq container
         uses: docker/build-push-action@v6
         with:
           context: containers
+          file: containers/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2:v1.0.0
+            ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2:latest
 
-      - name: Print versions
+      - name: Verify
         run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest versions.sh
+          docker run --rm ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
+
+  build-bsseq:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push BS-seq container
+        uses: docker/build-push-action@v6
+        with:
+          context: containers
+          file: containers/Dockerfile.bs
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2-bs:v1.1.0
+            ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2-bs:latest
+
+      - name: Verify
+        run: |
+          docker run --rm ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2-bs:v1.1.0 versions.sh
