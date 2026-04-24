@@ -165,7 +165,7 @@ bedToBigBed peaks.bed chrom.sizes output.bb
 | `{id}.05.bb` / `.10.bb` / `.20.bb` | BigBed versions of each peak set |
 | `{id}.05_peaks.xls` | MACS3 statistics |
 | `{id}_fastp.json` | fastp QC report |
-| `{id}.stats.tsv` | 15-column v1-compatible stats (sample ID, SE/PE flag, FASTQ size, reads before/after filtering, mapping rate, duplication rate, BigWig size, peak counts at q05/10/20, elapsed minutes) |
+| `{id}.stats.tsv` | 15-column v1-compatible stats (sample ID, SE/PE flag, FASTQ size (PE: sum of fwd+rev), reads before/after filtering, mapping rate, duplication rate, dedup BAM size, BedGraph size, BigWig size, peak counts at q05/10/20, elapsed minutes) |
 
 **Example:**
 
@@ -360,7 +360,7 @@ hypermr, pmd, BigWig) are single-threaded but run simultaneously.
 | `{id}.pmd.bed` | Partially methylated domains |
 | `{id}.abismal.stats` | Alignment statistics (YAML) |
 | `{id}_fastp.json` | fastp QC report |
-| `{id}.stats.tsv` | 11-column v1-compatible stats (sample ID, SE/PE flag, FASTQ size, read count, mapping rate, methylation rate, CpG coverage, HMR/PMD/hyperMR counts, elapsed minutes) |
+| `{id}.stats.tsv` | 11-column v1-compatible stats (sample ID, SE/PE flag, FASTQ size, dedup BAM size, read count, mapping rate, methylation rate, CpG coverage, HMR/PMD/hyperMR counts, elapsed minutes) |
 
 **Example:**
 
