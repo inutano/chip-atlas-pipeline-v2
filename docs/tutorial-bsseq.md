@@ -49,6 +49,30 @@ in batch, or use a single accession for a test run.
 
 ---
 
+## NIG environment setup
+
+On NIG (kumamoto partition), set these variables once before running any commands in this tutorial:
+
+```bash
+# NIG environment setup
+export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
+SHARED=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2
+SIF=$SHARED/containers/pipeline-v2-bs.sif
+REF=$SHARED/references
+SCRIPTS=$SHARED/scripts
+```
+
+The scripts are available in the shared directory at `$SHARED/scripts/`:
+- `pipeline-v2-bs.sh` — main BS-seq pipeline
+- `fast-download.sh` — FASTQ downloader (ENA API + DDBJ local mirror)
+
+For the full repository (docs, sample lists, etc.):
+```bash
+git clone https://github.com/inutano/chip-atlas-pipeline-v2.git
+```
+
+---
+
 ## Step 1: Pull the container
 
 The pipeline uses a dedicated container with DNMTools 1.5.1, samtools 1.22.1,
@@ -115,7 +139,7 @@ The script resolves all run accessions automatically via the ENA API and
 concatenates multiple runs into a single FASTQ pair.
 
 ```bash
-bash scripts/fast-download.sh SRX22130352 ./fastq/
+bash $SCRIPTS/fast-download.sh SRX22130352 ./fastq/
 ```
 
 Expected output:
@@ -159,23 +183,17 @@ sbatch \
   --output=logs/SRX22130352.log \
   --wrap="apptainer exec \
     --bind /data1/tmp:/tmp \
-    pipeline-v2-bs.sif \
-    bash scripts/pipeline-v2-bs.sh \
+    $SIF \
+    bash $SCRIPTS/pipeline-v2-bs.sh \
       --sample-id SRX22130352 \
       --fastq-fwd fastq/SRX22130352_1.fastq.gz \
       --fastq-rev fastq/SRX22130352_2.fastq.gz \
-      --genome-fasta /path/to/ref/hg38.fa \
-      --abismal-index /path/to/ref/hg38.abismal.idx \
-      --chrom-sizes /path/to/ref/chrom.sizes \
+      --genome-fasta $REF/hg38.fa \
+      --abismal-index $REF/hg38.abismal.idx \
+      --chrom-sizes $REF/chrom.sizes \
       --genome hg38 \
       --outdir output/SRX22130352 \
       --threads 16"
-```
-
-If using the pre-built NIG references:
-```bash
-REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references
-# then pass: --genome-fasta $REF/hg38.fa --abismal-index $REF/hg38.abismal.idx --chrom-sizes $REF/chrom.sizes
 ```
 
 ### On any machine with Docker
@@ -187,7 +205,7 @@ docker run --rm \
   -e TMPDIR=/tmp \
   -w /work \
   ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.1.0 \
-  bash scripts/pipeline-v2-bs.sh \
+  bash pipeline-v2-bs.sh \
     --sample-id SRX22130352 \
     --fastq-fwd fastq/SRX22130352_1.fastq.gz \
     --fastq-rev fastq/SRX22130352_2.fastq.gz \
@@ -334,7 +352,7 @@ For production runs on NIG, use `production-run.sh`, which manages batched
 SLURM submission, disk quota monitoring, and error recovery:
 
 ```bash
-bash scripts/production-run.sh submit hg38 samples.tsv \
+bash $SCRIPTS/production-run.sh submit hg38 samples.tsv \
   --batch-size 90 \
   --threads 8 \
   --time-limit 0-02:00:00
@@ -423,7 +441,7 @@ Common causes: corrupted FASTQ, wrong index path, or out-of-memory.
 ---
 
 *Container:* `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.1.0`  
-*Pipeline script:* `scripts/pipeline-v2-bs.sh`  
+*Pipeline script:* `pipeline-v2-bs.sh` (in shared `scripts/` dir on NIG)  
 *Investigation notes:* `docs/bisulfite-seq-investigation.md`
 
 ---
@@ -473,6 +491,31 @@ NIG では、事前構築済みの hg38 ファイルが以下にあります：
 
 処理する SRX/DRX/ERX アクセッション番号を 1 行に 1 件記載したテキストファイルを
 用意するか、テスト実行では 1 件のみ使用します。
+
+---
+
+## NIG 環境設定
+
+NIG（kumamoto パーティション）では、このチュートリアルのコマンドを実行する前に
+以下の変数を設定してください：
+
+```bash
+# NIG環境設定
+export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
+SHARED=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2
+SIF=$SHARED/containers/pipeline-v2-bs.sif
+REF=$SHARED/references
+SCRIPTS=$SHARED/scripts
+```
+
+スクリプトは共有ディレクトリ `$SHARED/scripts/` に用意されています：
+- `pipeline-v2-bs.sh` — BS-seq メインパイプライン
+- `fast-download.sh` — FASTQ ダウンローダー（ENA API + DDBJ ローカルミラー）
+
+リポジトリ全体（ドキュメント、サンプルリストなど）が必要な場合：
+```bash
+git clone https://github.com/inutano/chip-atlas-pipeline-v2.git
+```
 
 ---
 
@@ -542,7 +585,7 @@ apptainer exec pipeline-v2-bs.sif dnmtools abismalidx hg38.fa hg38.abismal.idx
 1 つの FASTQ ペアに結合します。
 
 ```bash
-bash scripts/fast-download.sh SRX22130352 ./fastq/
+bash $SCRIPTS/fast-download.sh SRX22130352 ./fastq/
 ```
 
 期待される出力：
@@ -586,23 +629,17 @@ sbatch \
   --output=logs/SRX22130352.log \
   --wrap="apptainer exec \
     --bind /data1/tmp:/tmp \
-    pipeline-v2-bs.sif \
-    bash scripts/pipeline-v2-bs.sh \
+    $SIF \
+    bash $SCRIPTS/pipeline-v2-bs.sh \
       --sample-id SRX22130352 \
       --fastq-fwd fastq/SRX22130352_1.fastq.gz \
       --fastq-rev fastq/SRX22130352_2.fastq.gz \
-      --genome-fasta /path/to/ref/hg38.fa \
-      --abismal-index /path/to/ref/hg38.abismal.idx \
-      --chrom-sizes /path/to/ref/chrom.sizes \
+      --genome-fasta $REF/hg38.fa \
+      --abismal-index $REF/hg38.abismal.idx \
+      --chrom-sizes $REF/chrom.sizes \
       --genome hg38 \
       --outdir output/SRX22130352 \
       --threads 16"
-```
-
-NIG の事前構築済みリファレンスを使用する場合：
-```bash
-REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references
-# 以下を渡す: --genome-fasta $REF/hg38.fa --abismal-index $REF/hg38.abismal.idx --chrom-sizes $REF/chrom.sizes
 ```
 
 ### Docker を使う場合（任意のマシン）
@@ -614,7 +651,7 @@ docker run --rm \
   -e TMPDIR=/tmp \
   -w /work \
   ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.1.0 \
-  bash scripts/pipeline-v2-bs.sh \
+  bash pipeline-v2-bs.sh \
     --sample-id SRX22130352 \
     --fastq-fwd fastq/SRX22130352_1.fastq.gz \
     --fastq-rev fastq/SRX22130352_2.fastq.gz \
@@ -760,7 +797,7 @@ NIG での本番実行には `production-run.sh` を使用します。バッチ 
 ディスククォータの監視、エラーリカバリーを自動管理します：
 
 ```bash
-bash scripts/production-run.sh submit hg38 samples.tsv \
+bash $SCRIPTS/production-run.sh submit hg38 samples.tsv \
   --batch-size 90 \
   --threads 8 \
   --time-limit 0-02:00:00

@@ -42,7 +42,7 @@ For hg38 you need:
 On NIG, pre-built hg38 references are available at:
 
 ```
-/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/
+/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/
 ```
 
 ### A list of SRA experiment accessions
@@ -52,6 +52,30 @@ Prepare a plain text file with one accession per line (SRX/DRX/ERX format):
 ```
 SRX26106775
 DRX127555
+```
+
+---
+
+## NIG environment setup
+
+On NIG (kumamoto partition), set these variables once before running any commands in this tutorial:
+
+```bash
+# NIG environment setup
+export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
+SHARED=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2
+SIF=$SHARED/containers/pipeline-v2.sif
+REF=$SHARED/references
+SCRIPTS=$SHARED/scripts
+```
+
+The scripts are available in the shared directory at `$SHARED/scripts/`:
+- `pipeline-v2.sh` — main ChIP-seq pipeline
+- `fast-download.sh` — FASTQ downloader (ENA API + DDBJ local mirror)
+
+For the full repository (docs, sample lists, etc.):
+```bash
+git clone https://github.com/inutano/chip-atlas-pipeline-v2.git
 ```
 
 ---
@@ -87,7 +111,7 @@ Verify the tools are available:
 
 ```bash
 # Apptainer
-apptainer exec pipeline-v2.sif bash /opt/conda/bin/versions.sh
+apptainer exec pipeline-v2.sif versions.sh
 
 # Docker
 docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
@@ -97,11 +121,12 @@ docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
 
 ## Step 2: Prepare the reference genome
 
-Skip this step if you are on NIG and using the pre-built references at `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/`.
+Skip this step if you are on NIG and using the pre-built references at `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/`.
 
 ### Option A: Use the automated script (recommended)
 
 ```bash
+# From the cloned repo directory:
 bash scripts/prepare-genomes.sh /lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references
 ```
 
@@ -110,7 +135,7 @@ This downloads hg38 from UCSC, builds the bwa-mem2 index, and creates `chrom.siz
 ### Option B: Manual steps
 
 ```bash
-REF_DIR=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
+REF_DIR=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references
 mkdir -p $REF_DIR
 cd $REF_DIR
 
@@ -146,11 +171,11 @@ apptainer exec pipeline-v2.sif bwa-mem2 index hg38.fa
 
 ## Step 3: Download FASTQ files
 
-Use `scripts/fast-download.sh` to fetch reads for an experiment accession. The script queries the ENA API to resolve the accession to run IDs, downloads FASTQs via aria2c, and concatenates multiple runs into a single FASTQ pair per experiment.
+Use `fast-download.sh` to fetch reads for an experiment accession. The script queries the ENA API to resolve the accession to run IDs, downloads FASTQs via aria2c, and concatenates multiple runs into a single FASTQ pair per experiment.
 
 ```bash
-bash scripts/fast-download.sh SRX26106775 ./fastq/
-bash scripts/fast-download.sh DRX127555   ./fastq/
+bash $SCRIPTS/fast-download.sh SRX26106775 ./fastq/
+bash $SCRIPTS/fast-download.sh DRX127555   ./fastq/
 ```
 
 Expected output:
@@ -192,11 +217,8 @@ Expected output:
 **NIG (Apptainer):**
 
 ```bash
-SIF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif
-REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
-
 apptainer exec --bind /data1/tmp:/tmp $SIF \
-  bash scripts/pipeline-v2.sh \
+  bash $SCRIPTS/pipeline-v2.sh \
     --sample-id   SRX26106775 \
     --fastq-fwd   fastq/SRX26106775_1.fastq.gz \
     --fastq-rev   fastq/SRX26106775_2.fastq.gz \
@@ -215,12 +237,12 @@ docker run --rm \
   -v /lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references:/ref \
   -w /work \
   ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 \
-  bash scripts/pipeline-v2.sh \
+  bash pipeline-v2.sh \
     --sample-id   SRX26106775 \
     --fastq-fwd   fastq/SRX26106775_1.fastq.gz \
     --fastq-rev   fastq/SRX26106775_2.fastq.gz \
-    --genome-fasta /ref/hg38/hg38.fa \
-    --chrom-sizes  /ref/hg38/chrom.sizes \
+    --genome-fasta /ref/hg38.fa \
+    --chrom-sizes  /ref/chrom.sizes \
     --genome-size  hs \
     --outdir       output/SRX26106775 \
     --threads      8
@@ -232,7 +254,7 @@ Omit `--fastq-rev`. Everything else is the same:
 
 ```bash
 apptainer exec --bind /data1/tmp:/tmp $SIF \
-  bash scripts/pipeline-v2.sh \
+  bash $SCRIPTS/pipeline-v2.sh \
     --sample-id   DRX127555 \
     --fastq-fwd   fastq/DRX127555.fastq.gz \
     --genome-fasta $REF/hg38.fa \
@@ -347,14 +369,11 @@ The 15-column TSV has no header. Column meanings:
 ### Simple loop
 
 ```bash
-SIF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif
-REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
-
 while read acc; do
   echo "=== $acc ==="
 
   # Download
-  bash scripts/fast-download.sh "$acc" ./fastq/
+  bash $SCRIPTS/fast-download.sh "$acc" ./fastq/
 
   # Detect PE vs SE from output
   if [ -f "fastq/${acc}_1.fastq.gz" ]; then
@@ -367,7 +386,7 @@ while read acc; do
 
   # Run pipeline
   apptainer exec --bind /data1/tmp:/tmp $SIF \
-    bash scripts/pipeline-v2.sh \
+    bash $SCRIPTS/pipeline-v2.sh \
       --sample-id   "$acc" \
       --fastq-fwd   "$FWD" \
       $REV_ARG \
@@ -382,7 +401,7 @@ done < samples.txt
 
 ### SLURM batch processing on NIG
 
-For large batches, use `scripts/production-run.sh`, which handles SLURM submission, disk quota monitoring, and automatic retry:
+For large batches, use `production-run.sh`, which handles SLURM submission, disk quota monitoring, and automatic retry:
 
 ```bash
 # Prepare sample list (TSV with header: accession, genome, experiment_type, num_reads)
@@ -393,16 +412,16 @@ DRX127555	hg38	TFs and others	4122448
 EOF
 
 # Submit to SLURM
-bash scripts/production-run.sh submit hg38 samples.tsv \
+bash $SCRIPTS/production-run.sh submit hg38 samples.tsv \
   --threads 8 \
   --batch-size 90 \
   --output-base /path/to/results
 
 # Monitor progress
-bash scripts/production-run.sh status hg38
+bash $SCRIPTS/production-run.sh status hg38
 
 # Retry failed jobs
-bash scripts/production-run.sh retry hg38
+bash $SCRIPTS/production-run.sh retry hg38
 ```
 
 SLURM defaults (can be overridden with environment variables):
@@ -422,7 +441,7 @@ export SLURM_ACCOUNT=kumamoto-group
 |------|------|
 | Apptainer binary | `/opt/pkg/apptainer/1.4.5/bin/apptainer` |
 | Pipeline SIF | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif` |
-| hg38 reference | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/` |
+| hg38 reference | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/` |
 | NVMe scratch | `/data1/tmp` (bind as `/tmp` for intermediates) |
 | SLURM partition | `kumamoto-c768` |
 | SLURM account | `kumamoto-group` |
@@ -482,7 +501,7 @@ MACS3 prints "not enough paired peaks at different fold-enrichment levels" when 
 - Verify the FASTQ is not corrupted: `zcat fastq/{acc}.fastq.gz | head -8`
 
 **`bwa-mem2: error while loading shared libraries`:**
-This means bwa-mem2 is being run outside the container. Make sure you use `apptainer exec ... bash scripts/pipeline-v2.sh` and not `bash scripts/pipeline-v2.sh` directly.
+This means bwa-mem2 is being run outside the container. Make sure you use `apptainer exec ... bash $SCRIPTS/pipeline-v2.sh` and not `bash $SCRIPTS/pipeline-v2.sh` directly outside the container.
 
 **Out-of-space error:**
 The dedup BAM for a 50M-read human sample is ~500 MB. Check that `$TMPDIR` (typically `/data1/tmp` on NIG) has at least 2 GB free per concurrent job.
@@ -533,7 +552,7 @@ hg38に必要なファイル:
 NIGでは、事前構築済みhg38リファレンスが以下のパスで利用可能です:
 
 ```
-/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/
+/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/
 ```
 
 ### SRA実験アクセッションのリスト
@@ -543,6 +562,30 @@ NIGでは、事前構築済みhg38リファレンスが以下のパスで利用�
 ```
 SRX26106775
 DRX127555
+```
+
+---
+
+## NIG環境設定
+
+NIG（kumamotoパーティション）では、このチュートリアルのコマンドを実行する前に以下の変数を設定してください:
+
+```bash
+# NIG環境設定
+export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
+SHARED=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2
+SIF=$SHARED/containers/pipeline-v2.sif
+REF=$SHARED/references
+SCRIPTS=$SHARED/scripts
+```
+
+スクリプトは共有ディレクトリ `$SHARED/scripts/` に用意されています:
+- `pipeline-v2.sh` — ChIP-seqメインパイプライン
+- `fast-download.sh` — FASTQダウンローダー（ENA API + DDBJローカルミラー）
+
+リポジトリ全体（ドキュメント、サンプルリストなど）が必要な場合:
+```bash
+git clone https://github.com/inutano/chip-atlas-pipeline-v2.git
 ```
 
 ---
@@ -578,7 +621,7 @@ docker pull ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0
 
 ```bash
 # Apptainer
-apptainer exec pipeline-v2.sif bash /opt/conda/bin/versions.sh
+apptainer exec pipeline-v2.sif versions.sh
 
 # Docker
 docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
@@ -588,11 +631,12 @@ docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
 
 ## ステップ2: リファレンスゲノムの準備
 
-NIGを使用しており、`/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/`の事前構築済みリファレンスを使用する場合、このステップはスキップできます。
+NIGを使用しており、`/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/`の事前構築済みリファレンスを使用する場合、このステップはスキップできます。
 
 ### オプションA: 自動化スクリプトの使用（推奨）
 
 ```bash
+# クローンしたリポジトリのディレクトリから実行:
 bash scripts/prepare-genomes.sh /lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references
 ```
 
@@ -601,7 +645,7 @@ bash scripts/prepare-genomes.sh /lustre10/home/inutano-chiba/shared/chip-atlas-p
 ### オプションB: 手動手順
 
 ```bash
-REF_DIR=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
+REF_DIR=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references
 mkdir -p $REF_DIR
 cd $REF_DIR
 
@@ -637,11 +681,11 @@ apptainer exec pipeline-v2.sif bwa-mem2 index hg38.fa
 
 ## ステップ3: FASTQファイルのダウンロード
 
-`scripts/fast-download.sh`を使用して実験アクセッションのリードを取得します。このスクリプトはENA APIを照会してアクセッションをランIDに解決し、aria2cでFASTQをダウンロードし、複数のランを実験ごとに1つのFASTQペアに結合します。
+`fast-download.sh`を使用して実験アクセッションのリードを取得します。このスクリプトはENA APIを照会してアクセッションをランIDに解決し、aria2cでFASTQをダウンロードし、複数のランを実験ごとに1つのFASTQペアに結合します。
 
 ```bash
-bash scripts/fast-download.sh SRX26106775 ./fastq/
-bash scripts/fast-download.sh DRX127555   ./fastq/
+bash $SCRIPTS/fast-download.sh SRX26106775 ./fastq/
+bash $SCRIPTS/fast-download.sh DRX127555   ./fastq/
 ```
 
 期待される出力:
@@ -683,11 +727,8 @@ bash scripts/fast-download.sh DRX127555   ./fastq/
 **NIGの場合（Apptainer）:**
 
 ```bash
-SIF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif
-REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
-
 apptainer exec --bind /data1/tmp:/tmp $SIF \
-  bash scripts/pipeline-v2.sh \
+  bash $SCRIPTS/pipeline-v2.sh \
     --sample-id   SRX26106775 \
     --fastq-fwd   fastq/SRX26106775_1.fastq.gz \
     --fastq-rev   fastq/SRX26106775_2.fastq.gz \
@@ -706,12 +747,12 @@ docker run --rm \
   -v /lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references:/ref \
   -w /work \
   ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 \
-  bash scripts/pipeline-v2.sh \
+  bash pipeline-v2.sh \
     --sample-id   SRX26106775 \
     --fastq-fwd   fastq/SRX26106775_1.fastq.gz \
     --fastq-rev   fastq/SRX26106775_2.fastq.gz \
-    --genome-fasta /ref/hg38/hg38.fa \
-    --chrom-sizes  /ref/hg38/chrom.sizes \
+    --genome-fasta /ref/hg38.fa \
+    --chrom-sizes  /ref/chrom.sizes \
     --genome-size  hs \
     --outdir       output/SRX26106775 \
     --threads      8
@@ -723,7 +764,7 @@ docker run --rm \
 
 ```bash
 apptainer exec --bind /data1/tmp:/tmp $SIF \
-  bash scripts/pipeline-v2.sh \
+  bash $SCRIPTS/pipeline-v2.sh \
     --sample-id   DRX127555 \
     --fastq-fwd   fastq/DRX127555.fastq.gz \
     --genome-fasta $REF/hg38.fa \
@@ -838,14 +879,11 @@ output/DRX127555/
 ### シンプルなループ
 
 ```bash
-SIF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif
-REF=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38
-
 while read acc; do
   echo "=== $acc ==="
 
   # ダウンロード
-  bash scripts/fast-download.sh "$acc" ./fastq/
+  bash $SCRIPTS/fast-download.sh "$acc" ./fastq/
 
   # PE vs SEを出力ファイルから判定
   if [ -f "fastq/${acc}_1.fastq.gz" ]; then
@@ -858,7 +896,7 @@ while read acc; do
 
   # パイプラインの実行
   apptainer exec --bind /data1/tmp:/tmp $SIF \
-    bash scripts/pipeline-v2.sh \
+    bash $SCRIPTS/pipeline-v2.sh \
       --sample-id   "$acc" \
       --fastq-fwd   "$FWD" \
       $REV_ARG \
@@ -873,7 +911,7 @@ done < samples.txt
 
 ### NIGでのSLURMバッチ処理
 
-大規模なバッチには、SLURMジョブ投入・ディスク使用量監視・自動リトライを管理する`scripts/production-run.sh`を使用します:
+大規模なバッチには、SLURMジョブ投入・ディスク使用量監視・自動リトライを管理する`production-run.sh`を使用します:
 
 ```bash
 # サンプルリストを準備（ヘッダー付きTSV: accession, genome, experiment_type, num_reads）
@@ -884,16 +922,16 @@ DRX127555	hg38	TFs and others	4122448
 EOF
 
 # SLURMに投入
-bash scripts/production-run.sh submit hg38 samples.tsv \
+bash $SCRIPTS/production-run.sh submit hg38 samples.tsv \
   --threads 8 \
   --batch-size 90 \
   --output-base /path/to/results
 
 # 進捗の確認
-bash scripts/production-run.sh status hg38
+bash $SCRIPTS/production-run.sh status hg38
 
 # 失敗したジョブのリトライ
-bash scripts/production-run.sh retry hg38
+bash $SCRIPTS/production-run.sh retry hg38
 ```
 
 SLURMのデフォルト設定（環境変数で上書き可能）:
@@ -913,7 +951,7 @@ export SLURM_ACCOUNT=kumamoto-group
 |------|------|
 | Apptainerバイナリ | `/opt/pkg/apptainer/1.4.5/bin/apptainer` |
 | パイプラインSIF | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/containers/pipeline-v2.sif` |
-| hg38リファレンス | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/hg38/` |
+| hg38リファレンス | `/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2/references/` |
 | NVMeスクラッチ | `/data1/tmp`（中間ファイル用に`/tmp`としてバインド） |
 | SLURMパーティション | `kumamoto-c768` |
 | SLURMアカウント | `kumamoto-group` |
@@ -973,7 +1011,7 @@ MACS3は信号が低すぎてシフトモデルを構築できない場合に「
 - FASTQが破損していないか確認: `zcat fastq/{acc}.fastq.gz | head -8`
 
 **`bwa-mem2: error while loading shared libraries`:**
-コンテナ外でbwa-mem2が実行されていることを意味します。`bash scripts/pipeline-v2.sh`を直接実行するのではなく、`apptainer exec ... bash scripts/pipeline-v2.sh`を使用していることを確認してください。
+コンテナ外でbwa-mem2が実行されていることを意味します。`bash $SCRIPTS/pipeline-v2.sh`を直接実行するのではなく、`apptainer exec ... bash $SCRIPTS/pipeline-v2.sh`を使用していることを確認してください。
 
 **ディスク容量不足エラー:**
 50Mリードのヒトサンプルのdedup BAMは約500 MBです。`$TMPDIR`（NIGでは通常`/data1/tmp`）に同時実行ジョブ1件あたり少なくとも2 GBの空き容量があることを確認してください。
