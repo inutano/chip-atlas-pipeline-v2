@@ -251,3 +251,123 @@ Smaller genomes have much smaller index sizes:
 
 For small genomes, 4 cores/job (32 concurrent) works without memory issues.
 The `--threads` parameter in `production-run.sh` can be set per genome.
+
+## SLURM メモリ制限の動作 / SLURM Memory Enforcement
+
+### NIG kumamoto パーティションの設定
+
+NIG kumamoto ノードは cgroup v2 によるメモリ制限が有効です。
+
+```
+TaskPlugin              = task/cgroup,task/affinity
+ConstrainRAMSpace       = yes
+ConstrainSwapSpace      = yes
+SelectTypeParameters    = CR_CORE_MEMORY
+DefMemPerCPU            = 8000 (8 GB)
+```
+
+- `ConstrainRAMSpace=yes`: `--mem` で指定したメモリ量を cgroup で厳密に制限
+- `ConstrainSwapSpace=yes`: スワップへの退避も不可
+- `CR_CORE_MEMORY`: ジョブスケジューリング時に CPU とメモリの両方を考慮
+- `DefMemPerCPU=8000`: `--mem` 未指定時のデフォルトは 8 GB × コア数
+
+### メモリ超過時の動作
+
+| `--mem` 設定 | ジョブが制限超過した場合 |
+|-------------|----------------------|
+| `--mem=18g` | **即座に OOM kill**（exit 137 = SIGKILL）。警告なし。 |
+| `--mem=0` + `--exclusive` | ノード全体のメモリを使用可能（他ジョブなし）。安全。 |
+| `--mem=0`（共有ノード） | cgroup 制限なし。メモリ過剰使用時にカーネル OOM killer が発動し、**自分または他ユーザーのプロセスが不定に kill される**。非推奨。 |
+
+### 実測に基づく `--mem` 推奨値
+
+パイプライン実行時のピーク RSS 実測値と、Docker `--memory` による cgroup テスト結果に基づく推奨値:
+
+| ゲノム | パイプ処理ピーク | bwa-mem2 単体最小 | `--mem` 推奨値 | 備考 |
+|--------|---------------:|------------------:|---------------:|------|
+| hg38 | 19.4 GB | 18 GB | **20g** | パイプ処理で +1.4 GB のオーバーヘッド |
+| ce11 | ~2 GB | ~2 GB | **16g** | samtools sort バッファ (-m 4G×3) が律速 |
+| dm6 | ~2 GB | ~2 GB | **16g** | 同上 |
+| sacCer3 | ~2 GB | ~2 GB | **16g** | 同上 |
+
+小ゲノムでは bwa-mem2 インデックスは小さいが、`samtools sort -m 4G` のバッファ割り当て
+（最大 4 GB × 3 スレッド = 12 GB）が制約となるため、16 GB が安全な最小値です。
+sacCer3 production で `--mem=8g` を設定した際に sort バッファが 8 GB を超過し、
+多数の OOM kill が発生しました（`--mem=16g` に変更後は解消）。
+
+### 同時実行数の計算
+
+SLURM の `CR_CORE_MEMORY` では、同時実行数は CPU とメモリの**両方**で制限されます:
+
+```
+同時実行数 = min(ノード CPU 数 / コア数, ノードメモリ / --mem)
+```
+
+kumamoto ノード（128 コア / 515 GB）での例:
+
+| コア/ジョブ | `--mem` | CPU による制限 | メモリによる制限 | 実際の同時実行 |
+|-----------|---------|--------------|----------------|-------------|
+| 4c | 16g | 32 | 32 | 32 (CPU 律速) |
+| 4c | 20g | 32 | 25 | 25 (メモリ律速) |
+| 6c | 20g | 21 | 25 | 21 (CPU 律速) |
+| 8c | 20g | 16 | 25 | 16 (CPU 律速) |
+
+---
+
+### NIG kumamoto Partition Configuration
+
+NIG kumamoto nodes enforce memory limits via cgroup v2.
+
+```
+TaskPlugin              = task/cgroup,task/affinity
+ConstrainRAMSpace       = yes
+ConstrainSwapSpace      = yes
+SelectTypeParameters    = CR_CORE_MEMORY
+DefMemPerCPU            = 8000 (8 GB)
+```
+
+- `ConstrainRAMSpace=yes`: `--mem` value is strictly enforced via cgroup
+- `ConstrainSwapSpace=yes`: no escape via swap
+- `CR_CORE_MEMORY`: scheduler considers both CPU and memory for placement
+- `DefMemPerCPU=8000`: default is 8 GB per core if `--mem` not specified
+
+### Behavior When Memory Is Exceeded
+
+| `--mem` setting | What happens if the job exceeds it |
+|----------------|-----------------------------------|
+| `--mem=18g` | **Immediate OOM kill** (exit 137 = SIGKILL). No warning. |
+| `--mem=0` + `--exclusive` | Job can use all node memory (no other jobs). Safe. |
+| `--mem=0` (shared node) | No cgroup limit. If job over-consumes, the kernel OOM killer fires and **unpredictably kills your or other users' processes**. Do not use. |
+
+### Recommended `--mem` Values (Based on Measured Peak RSS)
+
+Based on pipeline peak RSS measurements and Docker `--memory` cgroup tests:
+
+| Genome | Piped peak RSS | bwa-mem2 alone min | Recommended `--mem` | Notes |
+|--------|---------------:|-----------------:|--------------------:|-------|
+| hg38 | 19.4 GB | 18 GB | **20g** | Piped adds ~1.4 GB overhead |
+| ce11 | ~2 GB | ~2 GB | **16g** | samtools sort buffers (-m 4G×3) dominate |
+| dm6 | ~2 GB | ~2 GB | **16g** | Same |
+| sacCer3 | ~2 GB | ~2 GB | **16g** | Same |
+
+For small genomes, bwa-mem2 index is tiny, but `samtools sort -m 4G` buffer
+allocation (up to 4 GB × 3 threads = 12 GB) is the constraint. 16 GB is the
+safe minimum. Our sacCer3 production initially used `--mem=8g` and suffered
+widespread OOM kills from sort buffers; resolved by switching to `--mem=16g`.
+
+### Concurrent Job Calculation
+
+With SLURM's `CR_CORE_MEMORY`, concurrent jobs are limited by **both** CPU and memory:
+
+```
+concurrent = min(node_cpus / cpus_per_job, node_mem / mem_per_job)
+```
+
+Examples for kumamoto nodes (128 cores / 515 GB):
+
+| Cores/job | `--mem` | CPU limit | Memory limit | Actual concurrent |
+|-----------|---------|-----------|-------------|-------------------|
+| 4c | 16g | 32 | 32 | 32 (CPU-bound) |
+| 4c | 20g | 32 | 25 | 25 (memory-bound) |
+| 6c | 20g | 21 | 25 | 21 (CPU-bound) |
+| 8c | 20g | 16 | 25 | 16 (CPU-bound) |
