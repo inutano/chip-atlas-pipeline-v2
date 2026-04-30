@@ -89,22 +89,26 @@ bwa-mem2 単体よりも多くのメモリが必要です（5コアでの測定�
 
 ## 推奨構成
 
-**パイプ処理、6コア/ジョブ、20 GB/ジョブ** を推奨します。
+**パイプ処理、5コア/ジョブ、`--mem=20g`** を推奨します（hg38 の場合）。
 
-| 項目 | パイプ 6c | 逐次 5c | 逐次 4c |
-|------|----------|---------|---------|
-| スループット | ~150/時 | ~150/時 | ~150/時 |
-| メモリ/ジョブ | 20 GB | 18 GB | 18 GB |
-| メモリ余裕 | 95 GB（安全） | 65 GB（十分） | 11 GB（危険） |
-| NVMe I/O | 最小（パイプ） | 重い（中間 BAM） | 重い |
-| 中間ファイル | なし | ~3-5 GB/ジョブ | ~3-5 GB/ジョブ |
-| 障害時の挙動 | パイプ全体が失敗 | ステップ単位で再試行可 | ステップ単位で再試行可 |
+| 項目 | パイプ 5c | パイプ 6c | 逐次 5c |
+|------|----------|----------|---------|
+| 同時実行 | **25** | 21 | 25 |
+| スループット | **~168/時** | ~149/時 | ~150/時 |
+| ピーク RSS | 18.8 GB | 19.4 GB | 17.6 GB |
+| cgroup マージン | 1.2 GB | 0.6 GB | 2.4 GB |
+| NVMe I/O | 最小（パイプ） | 最小（パイプ） | 重い（中間 BAM） |
+| 中間ファイル | なし | なし | ~3-5 GB/ジョブ |
+| 使用コア | 125/128（3 余り） | 126/128（2 余り） | 125/128（3 余り） |
 
-パイプ処理が推奨される理由:
-- スループットが同等で、NVMe への I/O 負荷が少ない
-- 中間ファイルを書かないため、ディスク容量を節約
-- NIG kumamoto での 6 時間ベンチマークで 29.7 サンプル/時の実績あり
-- 95 GB のメモリ余裕で本番運用に十分なマージン
+パイプ 5c が最適な理由:
+- 6c より 19% 多い同時実行数（25 vs 21）で、スループットが ~13% 向上
+- ピーク RSS が 18.8 GB と 6c（19.4 GB）より低い — コア数が少ない分、
+  sort/collate のバッファが小さくなる
+- cgroup マージンは 1.2 GB（20 GB - 18.8 GB）で、6c の 0.6 GB より余裕がある
+- SLURM の `CR_CORE_MEMORY` が cgroup で各ジョブを 20 GB に隔離するため、
+  ノード全体の空きメモリ（15 GB）は安全性に影響しない
+- NIG kumamoto での 6 時間ベンチマークで実証済み（6c で 29.7/時）
 
 ## 小ゲノムでの考慮事項
 
@@ -220,22 +224,26 @@ cancel out.
 
 ## Recommended Configuration
 
-**Piped, 6 cores/job, 20 GB/job.**
+**Piped, 5 cores/job, `--mem=20g`** (for hg38).
 
-| | Piped 6c | Sequential 5c | Sequential 4c |
+| | Piped 5c | Piped 6c | Sequential 5c |
 |---|---|---|---|
-| Throughput | ~150/hr | ~150/hr | ~150/hr |
-| Memory/job | 20 GB | 18 GB | 18 GB |
-| Memory headroom | 95 GB (safe) | 65 GB (ok) | 11 GB (risky) |
-| NVMe I/O | Minimal (piped) | Heavy (intermediate BAMs) | Heavy |
-| Intermediates | None | ~3-5 GB/job | ~3-5 GB/job |
-| Failure mode | Whole pipe fails | Per-step retry possible | Per-step retry possible |
+| Concurrent | **25** | 21 | 25 |
+| Throughput | **~168/hr** | ~149/hr | ~150/hr |
+| Peak RSS | 18.8 GB | 19.4 GB | 17.6 GB |
+| Cgroup margin | 1.2 GB | 0.6 GB | 2.4 GB |
+| NVMe I/O | Minimal (piped) | Minimal (piped) | Heavy (intermediate BAMs) |
+| Intermediates | None | None | ~3-5 GB/job |
+| Cores used | 125/128 (3 wasted) | 126/128 (2 wasted) | 125/128 (3 wasted) |
 
-Piped is recommended because:
-- Same throughput with less NVMe I/O pressure
-- No intermediate files — saves disk space
-- Proven at 29.7 samples/hr sustained in the 6-hour NIG benchmark
-- 95 GB memory headroom provides a safe production margin
+Piped 5c is optimal because:
+- 19% more concurrent jobs than 6c (25 vs 21), ~13% higher throughput
+- Peak RSS is 18.8 GB — actually LOWER than 6c (19.4 GB) because fewer
+  cores means smaller sort/collate thread buffers
+- Cgroup margin of 1.2 GB (20 GB - 18.8 GB) is larger than 6c's 0.6 GB
+- SLURM's `CR_CORE_MEMORY` isolates each job to its 20 GB cgroup, so
+  node-level free memory (15 GB) does not affect per-job safety
+- Validated in the 6-hour NIG benchmark (6c measured at 29.7/hr sustained)
 
 ## Smaller Genomes
 
