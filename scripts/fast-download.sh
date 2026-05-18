@@ -122,15 +122,23 @@ download_run_from_ddbj_local() {
 download_run_from_sra() {
   local run="$1"
   echo "  [SRA] Falling back to fasterq-dump for $run..."
+  # --temp pins fasterq-dump's internal scratch under TMPDIR_DL.
+  # Without it, fasterq-dump writes fasterq.tmp.<host>.<pid> in CWD ($HOME on
+  # SLURM jobs without --workdir), and on killed jobs those orphan dirs are
+  # not removed by the EXIT trap on TMPDIR_DL — they accumulate in $HOME and
+  # eventually fill the user's quota.
   if command -v apptainer &>/dev/null; then
     apptainer exec "docker://$SRA_IMG" \
-      fasterq-dump "$run" --split-files --skip-technical --threads 4 --outdir "$TMPDIR_DL" 2>&1 | tail -3
+      fasterq-dump "$run" --split-files --skip-technical --threads 4 \
+        --temp "$TMPDIR_DL" --outdir "$TMPDIR_DL" 2>&1 | tail -3
   elif command -v singularity &>/dev/null; then
     singularity exec "docker://$SRA_IMG" \
-      fasterq-dump "$run" --split-files --skip-technical --threads 4 --outdir "$TMPDIR_DL" 2>&1 | tail -3
+      fasterq-dump "$run" --split-files --skip-technical --threads 4 \
+        --temp "$TMPDIR_DL" --outdir "$TMPDIR_DL" 2>&1 | tail -3
   elif command -v docker &>/dev/null; then
     docker run --rm -v "$TMPDIR_DL":/data -w /data "$SRA_IMG" \
-      fasterq-dump "$run" --split-files --skip-technical --threads 4 --outdir . 2>&1 | tail -3
+      fasterq-dump "$run" --split-files --skip-technical --threads 4 \
+        --temp . --outdir . 2>&1 | tail -3
   else
     echo "  [SRA] ERROR: No container runtime found"
     return 1
