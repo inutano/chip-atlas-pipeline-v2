@@ -1,7 +1,6 @@
-data/experimentList.tab
-
-# Test run data (large files)
+# Test fixtures — regenerate locally via scripts/prepare-genomes.sh and SRA download
 test-run/*/*.fastq
+test-run/*/*.fastq.gz
 test-run/*/*.bam
 test-run/*/*.bam.bai
 test-run/*/*.fa

@@ -382,50 +382,23 @@ apptainer exec --bind /data1/tmp:/tmp pipeline-v2-bs.sif \
 
 ## Production Management
 
-### `production-run.sh` — Batch job submission on NIG/SLURM
+The single-script `production-run.sh` was superseded by two complementary
+models. Pick one per genome based on sample size / pipeline cost:
 
-Manages batched SLURM submission of 100K+ samples with progress tracking, disk quota awareness, and automatic retry.
+| Model | When to use | Entry script |
+|---|---|---|
+| **Array** | Small genomes (sacCer3, ce11) where per-sample wall is short and download dominates | `nig/submit-sacCer3.sh` — SLURM array, one task per sample, each task downloads + runs inline |
+| **Separated dl/proc** | Larger genomes (dm6, rn6, mm10, hg38) where pipeline cost dominates and a dedicated downloader keeps the processor fed | `nig/submit-separated.sh` → runs `production-download.sh` (general) + `nig/production-process.sh` (NIG-bound) |
 
-**Subcommands:**
+Both models share:
 
-| Command | Description |
-|---------|-------------|
-| `submit <genome> <samples.tsv>` | Submit a batch of samples to SLURM |
-| `status <genome>` | Show progress (done/failed/running counts) |
-| `retry <genome>` | Re-submit failed jobs |
-| `summary <genome>` | Print per-tier timing summary |
+- `nig/run-sample.sh` — per-sample wrapper (array model) that downloads + dispatches to pipeline
+- `production-download.sh` — long-running download daemon (general)
+- `nig/production-process.sh` — staging-dir-polling processor (NIG-bound paths)
 
-**Key options for `submit`:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--batch-size` | 90 | Jobs per submission wave |
-| `--max-concurrent` | 90 | Max SLURM jobs queued+running |
-| `--threads` | 8 | CPUs per job |
-| `--disk-limit-gb` | 800 | Pause when Lustre usage exceeds this |
-| `--output-base` | `production-{genome}/results` | Override output directory |
-| `--time-limit` | 3h | SLURM time limit per job |
-| `--dry-run` | — | Print plan without submitting |
-
-**Sample TSV format** (tab-separated, with header):
-
-```
-accession	genome	experiment_type	num_reads
-SRX12345678	hg38	TFs and others	25000000
-```
-
-**Environment variables:**
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CHIP_ATLAS_BASE` | `~/chip-atlas-v2` | Base directory for references, containers, production data |
-| `SLURM_PARTITION` | `kumamoto-c768` | SLURM partition |
-| `SLURM_ACCOUNT` | `kumamoto-group` | SLURM account |
-
-Note: `production-run.sh` is being refactored into a separated
-download/processing architecture. See
-[`docs/production-download-design.md`](../docs/production-download-design.md)
-for the new design.
+See [`docs/production-download-design.md`](../docs/production-download-design.md)
+for the separated-model design. See [`nig/README.md`](nig/README.md) for
+NIG-specific deployment notes.
 
 ---
 
