@@ -48,7 +48,7 @@ See [Benchmark Results](benchmark-results.md) for detailed data and [Progress Lo
 | [Cluster Setup Guide](cluster-setup-guide.md) | HPC deployment instructions |
 | [CWL Zen Design](cwl-zen-design.md) | JavaScript-free CWL specification |
 | [Secondary Analysis Plan](secondary-analysis-plan.md) | Target genes, colocalization, enrichment |
-| [Current Pipeline](current-pipeline.md) | v1 pipeline documentation |
+| [Current Pipeline](v1-pipeline-survey.md) | v1 pipeline documentation |
 
 ---
 
@@ -225,8 +225,8 @@ chip-atlas-pipeline-v2/
 │   ├── metadata-filter.py            # SRA metadata filtering (replace shell logic)
 │   └── validate-vs-v1.py             # Consistency comparison tool
 ├── docs/
-│   ├── current-pipeline.md
-│   └── v2-plan.md
+│   ├── v1-pipeline-survey.md
+│   └── v2-initial-plan.md
 └── tests/
     ├── test-samples.yml               # Representative sample set for testing
     └── expected/                      # Expected outputs for CI

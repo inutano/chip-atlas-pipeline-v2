@@ -127,12 +127,15 @@ data/                 Experiment metadata (gitignored)
 
 ## Documentation
 
+Start with [`docs/README.md`](docs/README.md) for the project narrative
+(v1 survey → v2 plan → investigations → final v2 state) and a full
+table of contents. Quick links to the most-used docs:
+
+- [`docs/v2-final-architecture.md`](docs/v2-final-architecture.md) -- What was actually built (current state)
+- [`docs/v2-initial-plan.md`](docs/v2-initial-plan.md) -- Original v2 plan (historical)
+- [`docs/v1-pipeline-survey.md`](docs/v1-pipeline-survey.md) -- v1 architecture we're replacing
 - [`scripts/README.md`](scripts/README.md) -- Pipeline arguments, outputs, runtime characteristics
-- [`docs/v2-plan.md`](docs/v2-plan.md) -- Architecture and design rationale
-- [`docs/benchmark-results.md`](docs/benchmark-results.md) -- v1 vs v2 benchmark comparison
-- [`docs/bisulfite-seq-investigation.md`](docs/bisulfite-seq-investigation.md) -- BS-seq pipeline design
-- [`docs/cluster-setup-guide.md`](docs/cluster-setup-guide.md) -- NIG supercomputer setup
-- [`docs/production-lessons-ce11.md`](docs/production-lessons-ce11.md) -- Production lessons learned
+- [`docs/tutorial-chipseq.md`](docs/tutorial-chipseq.md), [`docs/tutorial-bsseq.md`](docs/tutorial-bsseq.md) -- Step-by-step user tutorials
 
 
 ## Requirements

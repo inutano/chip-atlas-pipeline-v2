@@ -48,7 +48,7 @@
 | [クラスタセットアップガイド](cluster-setup-guide.md) | HPCデプロイ手順 |
 | [CWL Zen設計](cwl-zen-design.md) | JavaScript不使用CWL仕様 |
 | [二次解析計画](secondary-analysis-plan.md) | ターゲット遺伝子、共局在、エンリッチメント |
-| [現行パイプライン](current-pipeline.md) | v1パイプラインのドキュメント |
+| [現行パイプライン](v1-pipeline-survey.md) | v1パイプラインのドキュメント |
 
 ---
 
@@ -209,8 +209,8 @@ chip-atlas-pipeline-v2/
 │   ├── metadata-filter.py            # SRAメタデータフィルタリング（シェルロジックの置換）
 │   └── validate-vs-v1.py             # v1との一貫性比較ツール
 ├── docs/
-│   ├── current-pipeline.md
-│   └── v2-plan.md
+│   ├── v1-pipeline-survey.md
+│   └── v2-initial-plan.md
 └── tests/
     ├── test-samples.yml               # テスト用代表サンプルセット
     └── expected/                      # CI用の期待出力
