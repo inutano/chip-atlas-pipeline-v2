@@ -16,6 +16,10 @@ SAMPLE_LIST="$1"
 STAGING_DIR="$2"
 MAX_CONCURRENT="${3:-6}"
 MAX_BUFFER="${4:-100}"
+# How many download attempts before marking a sample permanently failed.
+# A sample's .fail file holds the attempt count; when it reaches this, future
+# runs of this daemon skip the sample entirely.
+MAX_ATTEMPTS="${MAX_ATTEMPTS:-3}"
 
 if [ -z "$SAMPLE_LIST" ] || [ -z "$STAGING_DIR" ]; then
   echo "Usage: $0 <sample_list> <staging_dir> [max_concurrent] [max_buffer]"
@@ -39,34 +43,61 @@ TOTAL=$(wc -l < "$SAMPLE_LIST")
 DONE=0
 FAIL=0
 
+# Return 0 if the sample is in a terminal state (ready/running/done or
+# permanently failed after MAX_ATTEMPTS). 1 if it's a candidate for download.
+sample_terminal() {
+  local outdir="$1"
+  [ -f "$outdir/.ready" ] && return 0
+  [ -f "$outdir/.running" ] && return 0
+  [ -f "$outdir/.done" ] && return 0
+  if [ -f "$outdir/.fail" ]; then
+    local attempts
+    attempts=$(cat "$outdir/.fail" 2>/dev/null || echo 0)
+    [ "$attempts" -ge "$MAX_ATTEMPTS" ] && return 0
+  fi
+  return 1
+}
+
 download_one() {
   local exp_acc="$1"
   local outdir="$STAGING_DIR/$exp_acc"
 
-  # Skip if already ready, running, or done
-  if [ -f "$outdir/.ready" ] || [ -f "$outdir/.running" ] || [ -f "$outdir/.done" ]; then
+  if sample_terminal "$outdir"; then
     return 0
   fi
 
   mkdir -p "$outdir"
 
-  # Download
+  # Wipe partial state from prior failed attempt so the new download starts
+  # clean — fast-download.sh's cache check is loose and may otherwise see
+  # leftover _1.fastq.gz from a previous interrupted run as "cached".
+  rm -f "$outdir"/*.fastq.gz "$outdir"/*.fastq 2>/dev/null || true
+
   if bash "$SCRIPTS_DIR/fast-download.sh" "$exp_acc" "$outdir" >>"$outdir/download.log" 2>&1; then
+    rm -f "$outdir/.fail"
     touch "$outdir/.ready"
     log "[OK] $exp_acc"
     return 0
-  else
-    log "[FAIL] $exp_acc (see $outdir/download.log)"
-    return 1
   fi
+
+  local attempts
+  attempts=$(cat "$outdir/.fail" 2>/dev/null || echo 0)
+  attempts=$((attempts + 1))
+  echo "$attempts" > "$outdir/.fail"
+
+  if [ "$attempts" -ge "$MAX_ATTEMPTS" ]; then
+    log "[FAIL-PERM] $exp_acc (attempt $attempts) — will not retry, see $outdir/download.log"
+  else
+    log "[FAIL] $exp_acc (attempt $attempts/$MAX_ATTEMPTS, see $outdir/download.log)"
+  fi
+  return 1
 }
 
 # Main loop: iterate through sample list, rate-limit concurrent downloads
 while IFS=$'\t' read -r exp_acc genome strategy layout; do
-  # Skip if already handled
-  if [ -f "$STAGING_DIR/$exp_acc/.ready" ] || \
-     [ -f "$STAGING_DIR/$exp_acc/.running" ] || \
-     [ -f "$STAGING_DIR/$exp_acc/.done" ]; then
+  # Skip if in any terminal state (downloaded, processing, done, or
+  # permanently failed after MAX_ATTEMPTS).
+  if sample_terminal "$STAGING_DIR/$exp_acc"; then
     continue
   fi
 

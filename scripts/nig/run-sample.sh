@@ -54,7 +54,18 @@ if [ -f "$OUTDIR/${EXP_ACC}.stats.tsv" ]; then
   exit 0
 fi
 
+# Clean any partial outputs from a prior interrupted run. stats.tsv is the
+# completion marker; if it's missing, any other files in OUTDIR are stale.
+if [ -n "$(ls -A "$OUTDIR" 2>/dev/null)" ]; then
+  rm -f "$OUTDIR"/*
+fi
+
 mkdir -p "$OUTDIR" "$WORK/fastq"
+
+# Trap-clean WORK on any exit (success, error, signal — including SLURM TIMEOUT
+# / OOM kill). Without this, killed jobs leak ~50 GB scratch dirs on /data1/tmp
+# that admins have to clean (see 2026-05 incident: 924 GB across kumamoto).
+trap "rm -rf '$WORK'" EXIT
 
 log() { echo "[$(date '+%H:%M:%S')] $EXP_ACC: $*"; }
 
@@ -122,8 +133,5 @@ fi
 PIPE_END=$(date +%s)
 log "Pipeline: $((PIPE_END - PIPE_START))s"
 
-# ============================================================
-# Cleanup
-# ============================================================
-rm -rf "$WORK"
+# WORK cleanup happens via EXIT trap above.
 log "Done: total $((PIPE_END - DL_START))s"
