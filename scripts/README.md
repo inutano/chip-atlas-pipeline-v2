@@ -8,7 +8,7 @@ Production pipelines for processing ChIP-seq, ATAC-seq, DNase-seq, and Bisulfite
 
 Single-pass piped pipeline for chromatin profiling assays.
 
-**Container:** `ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0`
+**Container:** `ghcr.io/inutano/chip-atlas-pipeline-v2:v1.1.0`
 
 | Tool | Version | Purpose |
 |------|---------|---------|
@@ -19,6 +19,7 @@ Single-pass piped pipeline for chromatin profiling assays.
 | bedtools | 2.31.1 | Genome coverage (BedGraph) |
 | bedGraphToBigWig | 482 (UCSC) | BedGraph to BigWig conversion |
 | bedToBigBed | 482 (UCSC) | BED to BigBed conversion |
+| deeptools | 3.5.6 | multiBigwigSummary (binned coverage matrix) |
 
 **Processing steps:**
 
@@ -35,7 +36,9 @@ Step 2 (parallel):
 
 Step 3:  narrowPeak → bedToBigBed → .bb (×3 thresholds)
 
-Step 4:  collect stats → {id}.stats.tsv
+Step 4:  multiBigwigSummary bins → {id}.npz (matrix + labels + regions)
+
+Step 5:  collect stats → {id}.stats.tsv
 ```
 
 **Tool options used in Step 1:**
@@ -131,6 +134,36 @@ bedToBigBed peaks.bed chrom.sizes output.bb
   # Positional args: input BED (columns 1–4, sorted), chrom sizes, output BigBed
 ```
 
+**Tool options used in Step 4:**
+
+```bash
+multiBigwigSummary bins \
+    --numberOfProcessors $THREADS \
+    --bwfiles {id}.bw \
+    --outFileName {id}.tmp.npz \
+    --outRawCounts {id}.tmp.tsv \
+    --labels {id}
+  # bins              Subcommand: equal-sized bins over the genome
+  # --numberOfProcessors  Worker count (one per --bwfiles input; harmless to pass $THREADS)
+  # --bwfiles         Input BigWig(s)
+  # --outFileName     Compressed npz with 'matrix' (n_bins × n_files) and 'labels'
+  # --outRawCounts    TSV: chrom, start, end, value(s). One header line with quoted columns.
+  # --labels          Column labels (sample IDs); written as 'labels' array in the npz
+  # Default --binSize is 10000 bp; --distanceBetweenBins is 0 (contiguous).
+```
+
+After multiBigwigSummary, the script reconstructs region coordinates from
+`--outRawCounts` (chrom:start-end strings) and rewrites the npz so the final
+`{id}.npz` contains three arrays: `matrix` (float32, shape `(n_bins, 1)`),
+`labels` (sample IDs), and `regions` (per-bin coordinates). The temporary
+`.tmp.npz` and `.tmp.tsv` live on NVMe scratch and are deleted with the work
+directory.
+
+Binning failure is non-blocking: `.bw` is the canonical artifact, `.npz` is
+derived. A failed binning step logs a WARNING and the pipeline still writes
+`stats.tsv` (completion marker), so the upstream wrapper does not retry the
+sample on binning-only failure.
+
 **Arguments:**
 
 | Flag | Required | Description |
@@ -164,6 +197,7 @@ bedToBigBed peaks.bed chrom.sizes output.bb
 | `{id}.20_peaks.narrowPeak` | Peaks at q-value 1e-20 |
 | `{id}.05.bb` / `.10.bb` / `.20.bb` | BigBed versions of each peak set |
 | `{id}.05_peaks.xls` | MACS3 statistics |
+| `{id}.npz` | Binned coverage matrix from `multiBigwigSummary bins` (default 10 kb bins) with `matrix` (float32, `(n_bins, 1)`), `labels` (sample IDs), `regions` (per-bin `chr:start-end` strings) |
 | `{id}_fastp.json` | fastp QC report |
 | `{id}.stats.tsv` | 15-column v1-compatible stats (sample ID, SE/PE flag, FASTQ size (PE: sum of fwd+rev), reads before/after filtering, mapping rate, duplication rate, dedup BAM size, BedGraph size, BigWig size, peak counts at q05/10/20, elapsed minutes) |
 
@@ -188,7 +222,7 @@ apptainer exec --bind /data1/tmp:/tmp pipeline-v2.sif \
 
 Whole-genome bisulfite sequencing pipeline using DNMTools.
 
-**Container:** `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.1.0`
+**Container:** `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.2.0`
 
 | Tool | Version | Purpose |
 |------|---------|---------|
@@ -203,6 +237,7 @@ Whole-genome bisulfite sequencing pipeline using DNMTools.
 | dnmtools hypermr | 1.5.1 | Hypermethylated region calling |
 | dnmtools pmd | 1.5.1 | Partially methylated domain calling |
 | bedGraphToBigWig | 482 (UCSC) | BedGraph to BigWig conversion |
+| deeptools | 3.5.6 | multiBigwigSummary (binned methylation matrix) |
 
 **Processing steps:**
 
@@ -221,6 +256,9 @@ Step 3 (parallel fan-out after dnmtools sym):
   ├── dnmtools hypermr  → hypermr.bed
   ├── dnmtools pmd      → pmd.bed
   └── sort → awk → bedGraphToBigWig → methyl.bw + cover.bw
+
+Step 4:
+  multiBigwigSummary bins (methyl.bw only) → {id}.npz (matrix + labels + regions)
 ```
 
 Step 0 runs fastp in the background writing to named pipes (FIFOs), which
@@ -331,6 +369,23 @@ bedGraphToBigWig methyl.bg chrom.sizes output.methyl.bw
 bedGraphToBigWig cover.bg  chrom.sizes output.cover.bw
 ```
 
+**Tool options used in Step 4:**
+
+```bash
+multiBigwigSummary bins \
+    --numberOfProcessors $THREADS \
+    --bwfiles {id}.methyl.bw \
+    --outFileName {id}.tmp.npz \
+    --outRawCounts {id}.tmp.tsv \
+    --labels {id}
+  # Bins methyl.bw only (cover.bw is not binned). Default 10kb bin size.
+  # See ChIP-seq Step 4 above for flag details — identical pattern.
+```
+
+Same npz repack as the ChIP-seq pipeline: final `{id}.npz` carries
+`matrix`, `labels`, and `regions`. Binning failure is non-blocking; the
+canonical outputs are `methyl.bw` and `cover.bw`.
+
 **Arguments:**
 
 | Flag | Required | Description |
@@ -359,6 +414,7 @@ hypermr, pmd, BigWig) are single-threaded but run simultaneously.
 | `{id}.hypermr.bed` | Hypermethylated regions |
 | `{id}.pmd.bed` | Partially methylated domains |
 | `{id}.abismal.stats` | Alignment statistics (YAML) |
+| `{id}.npz` | Binned methylation matrix from `multiBigwigSummary bins` on `methyl.bw` (default 10 kb bins) with `matrix`, `labels`, `regions` |
 | `{id}_fastp.json` | fastp QC report |
 | `{id}.stats.tsv` | 11-column v1-compatible stats (sample ID, SE/PE flag, FASTQ size, dedup BAM size, read count, mapping rate, methylation rate, CpG coverage, HMR/PMD/hyperMR counts, elapsed minutes) |
 
@@ -494,8 +550,8 @@ Built via GitHub Actions (`.github/workflows/container.yml`) and published to GH
 
 | Container | Dockerfile | Tools |
 |-----------|------------|-------|
-| `ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0` | `containers/Dockerfile` | fastp 1.3.1, bwa-mem2 2.3, samtools 1.23.1, MACS3 3.0.4, bedtools 2.31.1, UCSC 482 |
-| `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.1.0` | `containers/Dockerfile.bs` | fastp 1.3.1, DNMTools 1.5.1, samtools 1.22.1, UCSC 482 |
+| `ghcr.io/inutano/chip-atlas-pipeline-v2:v1.1.0` | `containers/Dockerfile` | fastp 1.3.1, bwa-mem2 2.3, samtools 1.23.1, MACS3 3.0.4, bedtools 2.31.1, UCSC 482, deeptools 3.5.6 |
+| `ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.2.0` | `containers/Dockerfile.bs` | fastp 1.3.1, DNMTools 1.5.1, samtools 1.22.1, UCSC 482, deeptools 3.5.6 |
 
 Both containers use `condaforge/mambaforge` as the base image with tools installed from bioconda and conda-forge. All tool versions are pinned in the Dockerfiles for reproducibility.
 

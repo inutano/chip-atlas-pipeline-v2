@@ -18,10 +18,11 @@ Single-pass piped pipeline: fastp, bwa-mem2, samtools, MACS3, bedtools, UCSC too
 ```
 fastp → bwa-mem2 → samtools (collate → fixmate → sort → markdup) → dedup.bam
   ├── bedtools genomecov → bedGraphToBigWig → coverage.bw
-  └── MACS3 callpeak (q=1e-5) → filter q=1e-10, q=1e-20 → bedToBigBed
+  ├── MACS3 callpeak (q=1e-5) → filter q=1e-10, q=1e-20 → bedToBigBed
+  └── multiBigwigSummary bins (on coverage.bw) → .npz
 ```
 
-**Outputs:** `.bw` (coverage), `.narrowPeak` + `.bb` (peaks at 3 q-value thresholds), fastp QC JSON.
+**Outputs:** `.bw` (coverage), `.narrowPeak` + `.bb` (peaks at 3 q-value thresholds), `.npz` (binned coverage matrix), fastp QC JSON.
 
 See [`scripts/README.md`](scripts/README.md) for full argument and output documentation.
 
@@ -33,9 +34,10 @@ DNMTools-based pipeline: abismal, dnmtools (format/uniq/counts/sym/hmr/hypermr/p
 abismal → dnmtools format → samtools sort → dnmtools uniq → dedup.bam
   → dnmtools counts → counts.tsv
   → dnmtools sym → parallel: hmr + hypermr + pmd + BigWig
+  → multiBigwigSummary bins (on methyl.bw) → .npz
 ```
 
-**Outputs:** `.methyl.bw` + `.cover.bw` (methylation/coverage), `.hmr.bed`, `.hypermr.bed`, `.pmd.bed`, alignment stats.
+**Outputs:** `.methyl.bw` + `.cover.bw` (methylation/coverage), `.hmr.bed`, `.hypermr.bed`, `.pmd.bed`, `.npz` (binned methylation matrix), alignment stats.
 
 See [`scripts/README.md`](scripts/README.md) for full argument and output documentation.
 
@@ -44,19 +46,19 @@ See [`scripts/README.md`](scripts/README.md) for full argument and output docume
 
 | Image | Tag | Tools |
 |-------|-----|-------|
-| `ghcr.io/inutano/chip-atlas-pipeline-v2` | `v1.0.0` | fastp 1.3.1, bwa-mem2 2.3, samtools 1.23.1, MACS3 3.0.4, bedtools 2.31.1, UCSC 482 |
-| `ghcr.io/inutano/chip-atlas-pipeline-v2-bs` | `v1.0.0` | DNMTools 1.5.1, samtools 1.22.1, UCSC 482 |
+| `ghcr.io/inutano/chip-atlas-pipeline-v2` | `v1.1.0` | fastp 1.3.1, bwa-mem2 2.3, samtools 1.23.1, MACS3 3.0.4, bedtools 2.31.1, UCSC 482, deeptools 3.5.6 |
+| `ghcr.io/inutano/chip-atlas-pipeline-v2-bs` | `v1.2.0` | DNMTools 1.5.1, samtools 1.22.1, UCSC 482, fastp 1.3.1, deeptools 3.5.6 |
 
 All tool versions are pinned in the Dockerfiles for reproducibility. Built via GitHub Actions and published to GHCR.
 
 ```bash
 # Build locally
-docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 -f containers/Dockerfile containers/
-docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0 -f containers/Dockerfile.bs containers/
+docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2:v1.1.0 -f containers/Dockerfile containers/
+docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.2.0 -f containers/Dockerfile.bs containers/
 
 # Verify
-docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
-docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0 versions.sh
+docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.1.0 versions.sh
+docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.2.0 versions.sh
 ```
 
 

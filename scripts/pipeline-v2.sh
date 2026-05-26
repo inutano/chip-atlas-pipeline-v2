@@ -8,7 +8,7 @@
 #   3. Single MACS3 + awk filter for 3 q-value thresholds
 #   4. No intermediate files on shared filesystem, no container restart overhead
 #
-# Container: ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0
+# Container: ghcr.io/inutano/chip-atlas-pipeline-v2:v1.1.0
 #
 # Usage:
 #   apptainer exec --bind /data1/tmp:/tmp pipeline-v2.sif bash pipeline-v2.sh \
@@ -185,7 +185,59 @@ else
 fi
 
 # ============================================================
-# Step 4: Statistics TSV (v1-compatible, 15 columns)
+# Step 4: deeptools multiBigwigSummary (binned coverage matrix)
+#
+# Produces a per-bin coverage matrix from the RPM BigWig. Failure here is
+# non-blocking: .npz is a derived artifact, .bw remains the canonical output.
+# ============================================================
+log "Step 4: deeptools multiBigwigSummary (binning)"
+STEP4_START=$(date +%s)
+
+BIN_RC=0
+if [ -s "$OUTDIR/${SAMPLE_ID}.bw" ]; then
+  TMP_NPZ="$WORK/${SAMPLE_ID}.tmp.npz"
+  TMP_TSV="$WORK/${SAMPLE_ID}.tmp.tsv"
+  REG_TXT="$WORK/${SAMPLE_ID}.regions.txt"
+
+  multiBigwigSummary bins \
+      --numberOfProcessors "$THREADS" \
+      --bwfiles "$OUTDIR/${SAMPLE_ID}.bw" \
+      --outFileName "$TMP_NPZ" \
+      --outRawCounts "$TMP_TSV" \
+      --labels "$SAMPLE_ID" \
+      2>"$WORK/multiBigwigSummary.stderr" || BIN_RC=$?
+
+  if [ "$BIN_RC" -eq 0 ] && [ -s "$TMP_NPZ" ] && [ -s "$TMP_TSV" ]; then
+    # deeptools --outRawCounts emits one header line starting with '#';
+    # data rows are chrom\tstart\tend\tvalue. NR>1 skips the header.
+    awk -F'\t' 'NR > 1 { print $1 ":" $2 "-" $3 }' "$TMP_TSV" > "$REG_TXT"
+
+    python3 - "$TMP_NPZ" "$REG_TXT" "$OUTDIR/${SAMPLE_ID}.npz" <<'PY' || BIN_RC=$?
+import numpy as np, sys
+src_npz, reg_txt, out_npz = sys.argv[1:4]
+with open(reg_txt, encoding="utf-8") as f:
+    regions = np.array([line.rstrip("\n") for line in f], dtype="<U")
+z = np.load(src_npz, allow_pickle=True)
+matrix = z["matrix"].astype(np.float32, copy=False)
+labels = z["labels"]
+if labels.dtype == object:
+    labels = np.array([str(x) for x in labels.tolist()], dtype="<U")
+np.savez_compressed(out_npz, matrix=matrix, labels=labels, regions=regions)
+PY
+  fi
+else
+  log "  Skipping: $OUTDIR/${SAMPLE_ID}.bw not present"
+  BIN_RC=1
+fi
+
+if [ "$BIN_RC" -ne 0 ] || [ ! -s "$OUTDIR/${SAMPLE_ID}.npz" ]; then
+  log "WARNING: binning failed (rc=$BIN_RC) — see $WORK/multiBigwigSummary.stderr; continuing"
+fi
+
+log "Step 4 done: $(($(date +%s) - STEP4_START))s"
+
+# ============================================================
+# Step 5: Statistics TSV (v1-compatible, 15 columns)
 #
 # stats.tsv is the completion marker — its presence tells the upstream
 # wrapper (run-sample.sh / production-process.sh) "this sample is done,
@@ -205,7 +257,7 @@ if [ "$MACS3_RC" -ne 0 ] && [ ! -f "$WORK/${SAMPLE_ID}_peaks.xls" ]; then
   exit 1
 fi
 
-log "Step 4: Writing statistics TSV"
+log "Step 5: Writing statistics TSV"
 
 FASTP_JSON="$WORK/${SAMPLE_ID}_fastp.json"
 

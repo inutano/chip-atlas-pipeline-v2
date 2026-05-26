@@ -11,7 +11,7 @@
 # so step 1 uses file-based intermediates rather than a Unix pipe. The big
 # wins are NVMe locality, container reuse, and the parallel step 3 fan-out.
 #
-# Container: ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.0.0
+# Container: ghcr.io/inutano/chip-atlas-pipeline-v2-bs:v1.2.0
 #
 # Usage:
 #   apptainer exec --bind /data1/tmp:/tmp pipeline-v2-bs.sif bash pipeline-v2-bs.sh \
@@ -272,6 +272,58 @@ BIGWIG_RC=0;  wait $PID_BIGWIG  || BIGWIG_RC=$?
 
 STEP3_END=$(date +%s)
 log "Step 3 done: $((STEP3_END - STEP3_START))s"
+
+# ============================================================
+# Step 4: deeptools multiBigwigSummary (binned methylation matrix)
+#
+# Bins the methylation BigWig (methyl.bw). Failure here is non-blocking:
+# .npz is derived; methyl.bw / cover.bw remain the canonical outputs.
+# ============================================================
+log "Step 4: deeptools multiBigwigSummary (binning methyl.bw)"
+STEP4_START=$(date +%s)
+
+BIN_RC=0
+if [ -s "$OUTDIR/${SAMPLE_ID}.methyl.bw" ]; then
+  TMP_NPZ="$WORK/${SAMPLE_ID}.tmp.npz"
+  TMP_TSV="$WORK/${SAMPLE_ID}.tmp.tsv"
+  REG_TXT="$WORK/${SAMPLE_ID}.regions.txt"
+
+  multiBigwigSummary bins \
+      --numberOfProcessors "$THREADS" \
+      --bwfiles "$OUTDIR/${SAMPLE_ID}.methyl.bw" \
+      --outFileName "$TMP_NPZ" \
+      --outRawCounts "$TMP_TSV" \
+      --labels "$SAMPLE_ID" \
+      2>"$WORK/multiBigwigSummary.stderr" || BIN_RC=$?
+
+  if [ "$BIN_RC" -eq 0 ] && [ -s "$TMP_NPZ" ] && [ -s "$TMP_TSV" ]; then
+    # deeptools --outRawCounts emits one header line starting with '#';
+    # data rows are chrom\tstart\tend\tvalue. NR>1 skips the header.
+    awk -F'\t' 'NR > 1 { print $1 ":" $2 "-" $3 }' "$TMP_TSV" > "$REG_TXT"
+
+    python3 - "$TMP_NPZ" "$REG_TXT" "$OUTDIR/${SAMPLE_ID}.npz" <<'PY' || BIN_RC=$?
+import numpy as np, sys
+src_npz, reg_txt, out_npz = sys.argv[1:4]
+with open(reg_txt, encoding="utf-8") as f:
+    regions = np.array([line.rstrip("\n") for line in f], dtype="<U")
+z = np.load(src_npz, allow_pickle=True)
+matrix = z["matrix"].astype(np.float32, copy=False)
+labels = z["labels"]
+if labels.dtype == object:
+    labels = np.array([str(x) for x in labels.tolist()], dtype="<U")
+np.savez_compressed(out_npz, matrix=matrix, labels=labels, regions=regions)
+PY
+  fi
+else
+  log "  Skipping: $OUTDIR/${SAMPLE_ID}.methyl.bw not present"
+  BIN_RC=1
+fi
+
+if [ "$BIN_RC" -ne 0 ] || [ ! -s "$OUTDIR/${SAMPLE_ID}.npz" ]; then
+  log "WARNING: binning failed (rc=$BIN_RC) — see $WORK/multiBigwigSummary.stderr; continuing"
+fi
+
+log "Step 4 done: $(($(date +%s) - STEP4_START))s"
 
 # ============================================================
 # Move diagnostic files to output and cleanup

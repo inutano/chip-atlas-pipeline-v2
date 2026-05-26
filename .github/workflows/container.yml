@@ -34,12 +34,12 @@ jobs:
           file: containers/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2:v1.0.0
+            ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2:v1.1.0
             ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2:latest
 
       - name: Verify
         run: |
-          docker run --rm ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
+          docker run --rm ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2:v1.1.0 versions.sh
 
   build-bsseq:
     runs-on: ubuntu-latest
@@ -63,9 +63,9 @@ jobs:
           file: containers/Dockerfile.bs
           push: true
           tags: |
-            ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2-bs:v1.1.0
+            ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2-bs:v1.2.0
             ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2-bs:latest
 
       - name: Verify
         run: |
-          docker run --rm ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2-bs:v1.1.0 versions.sh
+          docker run --rm ${{ env.REGISTRY }}/inutano/chip-atlas-pipeline-v2-bs:v1.2.0 versions.sh

@@ -4,18 +4,18 @@
 # Tool versions are pinned for reproducibility.
 #
 # Build:
-#   docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 \
+#   docker build -t ghcr.io/inutano/chip-atlas-pipeline-v2:v1.1.0 \
 #     -t ghcr.io/inutano/chip-atlas-pipeline-v2:latest \
 #     -f containers/Dockerfile containers/
 #
 # Test:
-#   docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.0.0 versions.sh
+#   docker run --rm ghcr.io/inutano/chip-atlas-pipeline-v2:v1.1.0 versions.sh
 #
 FROM condaforge/mambaforge:latest
 
 LABEL org.opencontainers.image.source="https://github.com/inutano/chip-atlas-pipeline-v2"
 LABEL org.opencontainers.image.description="ChIP-Atlas Pipeline v2 all-in-one container"
-LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.version="1.1.0"
 
 RUN mamba install -y -c bioconda -c conda-forge \
     fastp=1.3.1 \
@@ -25,6 +25,7 @@ RUN mamba install -y -c bioconda -c conda-forge \
     bedtools=2.31.1 \
     ucsc-bedgraphtobigwig=482 \
     ucsc-bedtobigbed=482 \
+    deeptools=3.5.6 \
     && mamba clean -afy
 
 # Version check script
@@ -35,7 +36,8 @@ echo "samtools $(samtools --version | head -1)"\n\
 echo "macs3 $(macs3 --version 2>&1)"\n\
 echo "bedtools $(bedtools --version 2>&1)"\n\
 echo "bedGraphToBigWig $(bedGraphToBigWig 2>&1 | head -1)"\n\
-echo "bedToBigBed $(bedToBigBed 2>&1 | head -1)"\n' > /usr/local/bin/versions.sh \
+echo "bedToBigBed $(bedToBigBed 2>&1 | head -1)"\n\
+echo "deeptools $(multiBigwigSummary --version 2>&1)"\n' > /usr/local/bin/versions.sh \
     && chmod +x /usr/local/bin/versions.sh
 
 # Verify all tools work
