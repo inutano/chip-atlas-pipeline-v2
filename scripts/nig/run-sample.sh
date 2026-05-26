@@ -74,8 +74,23 @@ log() { echo "[$(date '+%H:%M:%S')] $EXP_ACC: $*"; }
 # ============================================================
 log "Downloading FASTQ"
 DL_START=$(date +%s)
-TMPDIR=$WORK bash $SCRIPTS/fast-download.sh "$EXP_ACC" "$WORK/fastq" 2>&1 | tail -3
+DL_OK=false
+for dl_attempt in 1 2 3; do
+  if TMPDIR=$WORK bash "$SCRIPTS/fast-download.sh" "$EXP_ACC" "$WORK/fastq" 2>&1 | tail -3; then
+    DL_OK=true
+    break
+  fi
+  if [ "$dl_attempt" -lt 3 ]; then
+    log "Download attempt $dl_attempt failed, retrying in $((60 * dl_attempt))s"
+    sleep $((60 * dl_attempt))
+    rm -rf "$WORK/fastq"/* 2>/dev/null || true
+  fi
+done
 DL_END=$(date +%s)
+if [ "$DL_OK" != true ]; then
+  log "ERROR: Download failed after 3 attempts ($((DL_END - DL_START))s total)"
+  exit 1
+fi
 log "Download: $((DL_END - DL_START))s"
 
 # Detect FASTQ files

@@ -257,11 +257,18 @@ PID_PMD=$!
 ) &
 PID_BIGWIG=$!
 
-# Wait for all parallel jobs
-wait $PID_HMR || log "WARNING: hmr failed"
-wait $PID_HYPERMR || log "WARNING: hypermr failed"
-wait $PID_PMD || log "WARNING: pmd failed"
-wait $PID_BIGWIG || log "WARNING: BigWig failed"
+# Wait for all parallel jobs. Capture BigWig's exit status — it's the
+# essential output. hmr/hypermr/pmd are derived analyses; if they fail
+# (e.g. low-signal sample with too few CpGs to model), we still keep the
+# BigWigs and write stats.tsv.
+HMR_RC=0;     wait $PID_HMR     || HMR_RC=$?
+HYPERMR_RC=0; wait $PID_HYPERMR || HYPERMR_RC=$?
+PMD_RC=0;     wait $PID_PMD     || PMD_RC=$?
+BIGWIG_RC=0;  wait $PID_BIGWIG  || BIGWIG_RC=$?
+[ "$HMR_RC"     -ne 0 ] && log "WARNING: hmr failed (rc=$HMR_RC)"
+[ "$HYPERMR_RC" -ne 0 ] && log "WARNING: hypermr failed (rc=$HYPERMR_RC)"
+[ "$PMD_RC"     -ne 0 ] && log "WARNING: pmd failed (rc=$PMD_RC)"
+[ "$BIGWIG_RC"  -ne 0 ] && log "WARNING: BigWig failed (rc=$BIGWIG_RC)"
 
 STEP3_END=$(date +%s)
 log "Step 3 done: $((STEP3_END - STEP3_START))s"
@@ -274,7 +281,17 @@ cp "$FASTP_JSON" "$OUTDIR/${SAMPLE_ID}_fastp.json" 2>/dev/null || true
 
 # ============================================================
 # Collect statistics for v1-compatible stats TSV
+#
+# stats.tsv is the completion marker. Only write it if BigWig (the
+# essential output) succeeded; otherwise the upstream wrapper retries.
 # ============================================================
+if [ "$BIGWIG_RC" -ne 0 ] \
+    || [ ! -s "$OUTDIR/${SAMPLE_ID}.methyl.bw" ] \
+    || [ ! -s "$OUTDIR/${SAMPLE_ID}.cover.bw" ]; then
+  log "ERROR: BigWig outputs missing or invalid — refusing to write stats.tsv (will retry)"
+  exit 1
+fi
+
 TOTAL_MIN=$(( ($(date +%s) - STEP1_START) / 60 ))
 
 # Read count and mapping rate from abismal stats YAML

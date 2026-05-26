@@ -141,12 +141,16 @@ else
   MACS3_FMT="BAM"
 fi
 
+MACS3_RC=0
 macs3 callpeak \
   -t "$DEDUP_BAM" -n "${SAMPLE_ID}" -g "$GENOME_SIZE" \
   -q 1e-05 -f "$MACS3_FMT" --outdir "$WORK" \
-  2>"$WORK/macs3.stderr" || true
+  2>"$WORK/macs3.stderr" || MACS3_RC=$?
 
-wait $PID_BIGWIG || log "WARNING: BigWig generation failed"
+BIGWIG_RC=0
+wait $PID_BIGWIG || BIGWIG_RC=$?
+[ "$BIGWIG_RC" -ne 0 ] && log "WARNING: BigWig generation failed (rc=$BIGWIG_RC)"
+[ "$MACS3_RC"  -ne 0 ] && log "WARNING: MACS3 exited rc=$MACS3_RC (see $WORK/macs3.stderr)"
 
 STEP2_END=$(date +%s)
 log "Step 2 done: $((STEP2_END - STEP2_START))s"
@@ -182,7 +186,25 @@ fi
 
 # ============================================================
 # Step 4: Statistics TSV (v1-compatible, 15 columns)
+#
+# stats.tsv is the completion marker — its presence tells the upstream
+# wrapper (run-sample.sh / production-process.sh) "this sample is done,
+# skip on resubmit". Only write it if essential outputs are present and
+# valid; otherwise the wrapper retries on next run.
 # ============================================================
+if [ "$BIGWIG_RC" -ne 0 ] || [ ! -s "$OUTDIR/${SAMPLE_ID}.bw" ]; then
+  log "ERROR: BigWig is missing or invalid — refusing to write stats.tsv (will retry)"
+  exit 1
+fi
+# MACS3 returning 0 peaks is OK (low-signal samples); MACS3 crashing is not.
+# When MACS3 exits non-zero AND there's no _peaks.xls file, the call truly
+# crashed before producing anything — refuse stats.tsv so the sample is
+# retried rather than counted as silently-broken-but-done.
+if [ "$MACS3_RC" -ne 0 ] && [ ! -f "$WORK/${SAMPLE_ID}_peaks.xls" ]; then
+  log "ERROR: MACS3 crashed before producing _peaks.xls (rc=$MACS3_RC) — refusing to write stats.tsv (will retry)"
+  exit 1
+fi
+
 log "Step 4: Writing statistics TSV"
 
 FASTP_JSON="$WORK/${SAMPLE_ID}_fastp.json"
