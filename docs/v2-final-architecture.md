@@ -92,48 +92,70 @@ These came out of the 2026-04 to 2026-05 production of sacCer3 + ce11
 (~28K samples). They're the things the next person should not have to
 rediscover.
 
-### Things to set correctly
+### Hard-won invariants in the scripts
+
+These are encoded in the scripts now. Don't regress them.
 
 - **fasterq-dump needs `--temp`** ([`scripts/fast-download.sh`](../scripts/fast-download.sh)).
   Without it, fasterq-dump writes internal scratch (`fasterq.tmp.<host>.<pid>`)
   in CWD, which on SLURM jobs without `--workdir` is `$HOME`. On killed
-  jobs the trap can't reach them and they pile up. Fix: always pass
-  `--temp $TMPDIR_DL`.
+  jobs the trap can't reach them and they pile up. The script now passes
+  `--temp $TMPDIR_DL` to every fasterq-dump invocation.
 - **Export `TMPDIR` before invoking download scripts**
-  ([`scripts/nig/run-sample.sh:66`](../scripts/nig/run-sample.sh)). Otherwise
+  ([`scripts/nig/run-sample.sh`](../scripts/nig/run-sample.sh)). Otherwise
   `${TMPDIR:-/tmp}` in `fast-download.sh` defaults to host `/tmp` (root FS),
   not the intended `/data1/tmp` NVMe. We had ~1.4 TB leak into root `/tmp`
   across nodes before we caught this (one node filled to 100%, wedging
-  sshd).
-- **`/data1` vs `/`.** The local NVMe (`/data1`) and the system root (`/`)
-  are separate partitions. sshd writes session state to root, so a full
-  `/data1` doesn't break SSH but a full `/tmp` (which lives under root)
-  does.
-- **Cleanup all per-job scratch.** Track WORK + TMPDIR_DL + fasterq temp
-  dirs. A killed job that leaves any of them behind compounds across
-  thousands of samples.
+  sshd). `run-sample.sh` now prefixes the call with `TMPDIR=$WORK`.
+- **EXIT trap on the per-job WORK dir**
+  ([`scripts/nig/run-sample.sh`](../scripts/nig/run-sample.sh)). Killed
+  jobs (SLURM TIMEOUT, OOM, manual cancel) don't reach a trailing `rm -rf`.
+  A bare `trap "rm -rf '$WORK'" EXIT` runs on every exit path. Without
+  this we cleaned 924 GB of orphans across the kumamoto nodes — they
+  would have come back every production run.
+- **stats.tsv is the completion invariant.** `pipeline-v2.sh` /
+  `pipeline-v2-bs.sh` refuse to write `stats.tsv` if BigWig or (for ChIP)
+  a crashed MACS3 didn't produce its expected outputs. `run-sample.sh`'s
+  skip-on-stats then truly means "all critical outputs are present".
+  Previously stats.tsv was written unconditionally, masking partial
+  failures as "done" (the 67 orphan `.bw` files in sacCer3 came from
+  the inverse case — BigWig wrote, then a downstream step crashed
+  before stats.tsv).
+- **Stale OUTDIR partials cleaned before retry**
+  ([`scripts/nig/run-sample.sh`](../scripts/nig/run-sample.sh)). On a
+  resubmit where `stats.tsv` is missing but other files are present
+  (interrupted prior run), the wrapper now wipes those leftovers before
+  starting fresh.
+- **`.fail` markers in staging dirs carry an attempt count.**
+  `production-download.sh` writes `.fail` with the integer attempt
+  number on each failure. The `sample_terminal()` helper treats a
+  sample as terminal once the count reaches `MAX_ATTEMPTS` (default
+  3, env-overridable). Previously failed downloads left no marker —
+  ~11% of ce11 samples ended up in limbo (no `.ready`, no `.done`,
+  no `.fail`). To manually force a retry of a permanently-failed
+  sample: `rm <staging>/<exp>/.fail`.
+- **`fast-download.sh` retries network failures and isolates source
+  attempts.** ENA report curl retries 3× with backoff. aria2c uses
+  `--max-tries=3 --retry-wait=10`. Between source attempts (DDBJ →
+  ENA → SRA), per-run scratch is wiped so a partial ENA download can't
+  collide with the SRA fallback's fasterq-dump output.
+- **`fast-download.sh` detects layout from files on disk, not metadata.**
+  ENA's `library_layout=PAIRED` doesn't guarantee `_1`/`_2` files — some
+  records serve interleaved paired data in a single `.fastq.gz`. The
+  concat step checks what's actually on disk and treats single-file PE
+  uploads as single-file (with a `[WARN]` log line).
+- **Run-sample retries `fast-download.sh` up to 3× with backoff** before
+  failing the SLURM task. Catches transient network issues that aren't
+  caught by aria2c's internal retry.
 
-### Known bugs in `fast-download.sh` (still pending)
+### `/data1` vs `/` — why root-FS leaks blocked SSH
 
-These caused ~388 / 20K sacCer3 + ~200 / 7.5K ce11 failures in production.
-Recoverable on retry once patched:
-
-1. **PAIRED metadata vs single-file reality.** ENA's `library_layout=PAIRED`
-   doesn't guarantee `_1.fastq.gz` / `_2.fastq.gz` files — some records
-   serve interleaved paired data in a single `<run>.fastq.gz`. Script
-   trusts the layout flag and does `cat *_1.fastq.gz` → no match → fail.
-2. **ENA-fallback leaves stale state.** Multi-file ENA downloads where
-   one part fails return non-zero with the other part already on disk.
-   The script then falls back to fasterq-dump which produces uncompressed
-   `.fastq`, and the gzip step collides with the existing `.gz` from the
-   partial ENA download.
-3. **No retry on transient ENA HTTPS failure.** Single 5xx triggers
-   immediate SRA fallback, which often can't recover because ENA and SRA
-   indexes drift.
-
-These three are responsible for the bulk of "failures" we saw — almost
-none were truly withdrawn samples (verified by querying ENA: failed
-accessions were still listed with valid FTP URLs).
+The local NVMe (`/data1`) and the system root (`/`) are separate
+partitions. sshd writes session state to root, so a full `/data1`
+doesn't break SSH but a full `/tmp` (which lives under root) does.
+Two leak surfaces, both addressed above: the `TMPDIR=$WORK` export
+keeps the download scratch on `/data1`, and the EXIT trap guarantees
+it gets cleaned.
 
 ### Operational nuances
 
@@ -147,14 +169,14 @@ accessions were still listed with valid FTP URLs).
   `<experiment>.stats.tsv`. Always write that file *last* so an
   interrupted job is recognisable as incomplete and re-run cleanly.
 
-## Status as of 2026-05-20
+## Status as of 2026-05-26
 
 Production progress against the 400K-sample goal:
 
 | Genome | Target | Done | % | Notes |
 |---|---:|---:|---:|---|
-| sacCer3 | 20,710 | 20,394 | 98.5% | 316 unfinished, mostly fast-download bugs (recoverable) |
-| ce11 | 7,558 | 6,476 | 85.7% | 1,082 unfinished |
+| sacCer3 | 20,710 | 20,394 | 98.5% | 316 unfinished; smoke-test target for the 2026-05-26 robustness patches |
+| ce11 | 7,558 | 6,476 | 85.7% | 1,082 unfinished; ~870 are pre-`.fail`-marker limbo dirs that the patched downloader will pick up on resubmit |
 | dm6 | 17,913 | — | — | List ready; references not yet built on NIG |
 | rn6 | 6,287 | — | — | Same |
 | mm10 | tbd | — | — | Not started; references not built |
@@ -165,8 +187,10 @@ genomes. ~93% of the 400K (concentrated in mm10 / hg38) is still ahead.
 
 ## Next steps
 
-1. Patch the three known `fast-download.sh` bug classes — recovers most of
-   the ~1.4K unfinished samples on resubmit.
+1. **Smoke-test the 2026-05-26 patches** by resubmitting the unfinished
+   sacCer3 + ce11 samples. Verify the `.fail` marker semantics work
+   (most should recover; truly broken samples should hit `MAX_ATTEMPTS=3`
+   and stop retrying).
 2. Build dm6 + rn6 references on NIG, kick off those productions.
 3. Build hg38 abismal index, run a small hg38 BS-seq pilot.
 4. Start mm10 + hg38 ChIP-seq at scale.

@@ -412,8 +412,16 @@ based on accession prefix.
 **Usage:**
 
 ```bash
-bash fast-download.sh <run_accession> <output_dir>
+bash fast-download.sh <experiment_accession> <output_dir>
 ```
+
+Takes an experiment accession (SRX/DRX/ERX), resolves its run accessions
+via the ENA API, downloads each run with source-isolated retry (per-run
+scratch is wiped between source attempts so a partial ENA download can't
+collide with the SRA fallback's fasterq-dump output), and concatenates
+the result into one SE or PE pair. ENA-metadata `layout=PAIRED` is not
+trusted blindly — the concat step detects actual layout from files on
+disk.
 
 **Routing logic:**
 
