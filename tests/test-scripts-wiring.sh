@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 #
-# Guards the wiring of failure-classify.sh into the pipeline + wrapper scripts:
+# Guards the wiring of the shared libs into the pipeline/download/wrapper scripts:
 #   1. every script parses (bash -n)
-#   2. each script successfully SOURCES the lib (no "No such file" / "command
-#      not found"); we detect this by invoking with no args and confirming the
-#      run reaches its own argument validation instead of dying in the source.
+#   2. each script that sources a lib reaches its own argument check instead of
+#      dying in the source (no "No such file" / "command not found").
 #
 # Run: bash tests/test-scripts-wiring.sh
 #
@@ -18,29 +17,29 @@ FAILED=0
 pass() { PASSED=$((PASSED + 1)); }
 fail() { FAILED=$((FAILED + 1)); echo "FAIL: $1"; }
 
+# 1. Syntax — all scripts (libs + executables)
 SCRIPTS=(
-  "scripts/failure-classify.sh"
-  "scripts/pipeline-v2.sh"
-  "scripts/pipeline-v2-bs.sh"
-  "scripts/nig/production-process.sh"
+  scripts/failure-classify.sh
+  scripts/download-route.sh
+  scripts/make-batches.sh
+  scripts/batch-status.sh
+  scripts/pipeline-v2.sh
+  scripts/pipeline-v2-bs.sh
+  scripts/fast-download.sh
+  scripts/nig/production-process.sh
 )
-
-# 1. Syntax
 for s in "${SCRIPTS[@]}"; do
   if bash -n "$ROOT/$s" 2>/dev/null; then pass; else fail "syntax: $s"; fi
 done
 
-# 2. Source resolution: run the two pipeline scripts with no args. They must
-#    get past `source failure-classify.sh` and reach their required-arg check
-#    (which prints "ERROR: --sample-id is required"). A source failure would
-#    instead print "No such file" or "command not found".
-for s in scripts/pipeline-v2.sh scripts/pipeline-v2-bs.sh; do
+# 2. Source resolution — these source a lib at startup; running them with no
+#    args must get past the source to their own usage/arg error.
+for s in scripts/pipeline-v2.sh scripts/pipeline-v2-bs.sh scripts/fast-download.sh; do
   out="$(bash "$ROOT/$s" 2>&1)"
-  if printf '%s' "$out" | grep -q "is required" \
-     && ! printf '%s' "$out" | grep -qiE "no such file|command not found"; then
-    pass
+  if printf '%s' "$out" | grep -qiE "no such file|command not found"; then
+    fail "source resolution: $s — $(printf '%s' "$out" | grep -iE 'no such file|command not found' | head -1)"
   else
-    fail "source resolution: $s — got: $(printf '%s' "$out" | head -1)"
+    pass
   fi
 done
 

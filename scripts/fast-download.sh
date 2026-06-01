@@ -12,10 +12,12 @@
 #   PE: <output_dir>/<experiment>_1.fastq.gz, <experiment>_2.fastq.gz
 #   SE: <output_dir>/<experiment>.fastq.gz
 #
-# Download routing (per run):
-#   DRR → DDBJ local bz2 (NIG only) → ENA HTTPS → fasterq-dump
-#   ERR → ENA HTTPS → fasterq-dump
-#   SRR → ENA HTTPS → fasterq-dump
+# Download routing (per run; see scripts/download-route.sh):
+#   SRR/ERR → ENA HTTPS (.gz) → fasterq-dump
+#   DRR     → ENA HTTPS (.gz) → DDBJ local bz2 (NIG /lustre9, transcoded) → fasterq-dump
+# ENA serves ready-made .gz for DRR too, so it is tried first everywhere; the
+# DDBJ-local bz2->gz transcode is only a fallback (it is CPU-heavy and, taken
+# first, stalled download slots — see download-route.sh).
 #
 # Robustness:
 #   - ENA report curl retries 3× with backoff (transient API failures)
@@ -27,6 +29,9 @@
 #   - Whole script exits non-zero if any run can't be obtained from any source
 #
 set -eo pipefail
+
+# Per-run source ordering (ENA-first; DDBJ-local is a DRR-only fallback).
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/download-route.sh"
 
 EXP_ACC="$1"
 OUTDIR="$2"
@@ -193,14 +198,18 @@ download_one_run() {
   local md5="$3"
   local prefix="${run:0:3}"
 
-  if [ "$prefix" = "DRR" ]; then
-    if download_run_from_ddbj_local "$run" 2>/dev/null; then return 0; fi
+  # Source order comes from download-route.sh: ENA first (ready .gz, no CPU
+  # transcode), DDBJ-local only as a DRR fallback, SRA last. Each failed source
+  # wipes its partial state so the next source starts clean.
+  local src
+  for src in $(download_sources_for "$prefix"); do
+    case "$src" in
+      ena)        if download_run_from_ena "$run" "$ftp" "$md5"; then return 0; fi ;;
+      ddbj_local) if download_run_from_ddbj_local "$run" 2>/dev/null; then return 0; fi ;;
+      sra)        if download_run_from_sra "$run"; then return 0; fi ;;
+    esac
     clean_run_partials "$run"
-  fi
-  if download_run_from_ena "$run" "$ftp" "$md5"; then return 0; fi
-  clean_run_partials "$run"
-  if download_run_from_sra "$run"; then return 0; fi
-  clean_run_partials "$run"
+  done
   return 1
 }
 
