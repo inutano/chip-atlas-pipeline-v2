@@ -29,6 +29,12 @@ fi
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG="$STAGING_DIR/download.log"
 
+# Apptainer is not in the default PATH on compute nodes. fast-download.sh's
+# SRA fasterq-dump fallback probes for apptainer → singularity → docker; without
+# this it falls through to docker (no daemon access on the nodes) and the
+# fallback fails, so ENA-refused runs can't be rescued. Mirror production-process.sh.
+export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
+
 mkdir -p "$STAGING_DIR"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
