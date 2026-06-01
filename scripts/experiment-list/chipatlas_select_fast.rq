@@ -1,0 +1,283 @@
+PREFIX dra_ont: <http://ddbj.nig.ac.jp/ontologies/dra/>
+PREFIX biosample_ont: <http://ddbj.nig.ac.jp/ontologies/biosample/>
+PREFIX bioproject_ont: <http://ddbj.nig.ac.jp/ontologies/bioproject/>
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?srx ?samn ?title ?library_strategy ?library_source ?library_selection
+       ?instrument_model ?taxonomy_name ?srp ?prj
+WHERE {
+  VALUES ?taxIRI {
+    <http://identifiers.org/taxonomy/3702>
+    <http://identifiers.org/taxonomy/1240361>
+    <http://identifiers.org/taxonomy/1837063>
+    <http://identifiers.org/taxonomy/869751>
+    <http://identifiers.org/taxonomy/869750>
+    <http://identifiers.org/taxonomy/6239>
+    <http://identifiers.org/taxonomy/279692>
+    <http://identifiers.org/taxonomy/7227>
+    <http://identifiers.org/taxonomy/2421388>
+    <http://identifiers.org/taxonomy/721817>
+    <http://identifiers.org/taxonomy/1128429>
+    <http://identifiers.org/taxonomy/9606>
+    <http://identifiers.org/taxonomy/2665953>
+    <http://identifiers.org/taxonomy/63221>
+    <http://identifiers.org/taxonomy/741158>
+    <http://identifiers.org/taxonomy/1849111>
+    <http://identifiers.org/taxonomy/1131344>
+    <http://identifiers.org/taxonomy/2045059>
+    <http://identifiers.org/taxonomy/1383439>
+    <http://identifiers.org/taxonomy/1573476>
+    <http://identifiers.org/taxonomy/10090>
+    <http://identifiers.org/taxonomy/947985>
+    <http://identifiers.org/taxonomy/35531>
+    <http://identifiers.org/taxonomy/116058>
+    <http://identifiers.org/taxonomy/10091>
+    <http://identifiers.org/taxonomy/10092>
+    <http://identifiers.org/taxonomy/1266728>
+    <http://identifiers.org/taxonomy/3109569>
+    <http://identifiers.org/taxonomy/2518367>
+    <http://identifiers.org/taxonomy/80274>
+    <http://identifiers.org/taxonomy/1643390>
+    <http://identifiers.org/taxonomy/179238>
+    <http://identifiers.org/taxonomy/57486>
+    <http://identifiers.org/taxonomy/39442>
+    <http://identifiers.org/taxonomy/477815>
+    <http://identifiers.org/taxonomy/477816>
+    <http://identifiers.org/taxonomy/763552>
+    <http://identifiers.org/taxonomy/186842>
+    <http://identifiers.org/taxonomy/36237>
+    <http://identifiers.org/taxonomy/1849109>
+    <http://identifiers.org/taxonomy/10116>
+    <http://identifiers.org/taxonomy/947987>
+    <http://identifiers.org/taxonomy/4932>
+    <http://identifiers.org/taxonomy/1158204>
+    <http://identifiers.org/taxonomy/765312>
+    <http://identifiers.org/taxonomy/545124>
+    <http://identifiers.org/taxonomy/764097>
+    <http://identifiers.org/taxonomy/1247190>
+    <http://identifiers.org/taxonomy/1390929>
+    <http://identifiers.org/taxonomy/1390930>
+    <http://identifiers.org/taxonomy/1390932>
+    <http://identifiers.org/taxonomy/1390931>
+    <http://identifiers.org/taxonomy/1266529>
+    <http://identifiers.org/taxonomy/717647>
+    <http://identifiers.org/taxonomy/929587>
+    <http://identifiers.org/taxonomy/889517>
+    <http://identifiers.org/taxonomy/464025>
+    <http://identifiers.org/taxonomy/929629>
+    <http://identifiers.org/taxonomy/947035>
+    <http://identifiers.org/taxonomy/643680>
+    <http://identifiers.org/taxonomy/1095001>
+    <http://identifiers.org/taxonomy/947036>
+    <http://identifiers.org/taxonomy/764102>
+    <http://identifiers.org/taxonomy/764101>
+    <http://identifiers.org/taxonomy/1416897>
+    <http://identifiers.org/taxonomy/947037>
+    <http://identifiers.org/taxonomy/471510>
+    <http://identifiers.org/taxonomy/1352824>
+    <http://identifiers.org/taxonomy/574961>
+    <http://identifiers.org/taxonomy/1391042>
+    <http://identifiers.org/taxonomy/721032>
+    <http://identifiers.org/taxonomy/1144731>
+    <http://identifiers.org/taxonomy/764098>
+    <http://identifiers.org/taxonomy/1216859>
+    <http://identifiers.org/taxonomy/1158205>
+    <http://identifiers.org/taxonomy/538975>
+    <http://identifiers.org/taxonomy/1149757>
+    <http://identifiers.org/taxonomy/1162671>
+    <http://identifiers.org/taxonomy/1162672>
+    <http://identifiers.org/taxonomy/1162673>
+    <http://identifiers.org/taxonomy/1162674>
+    <http://identifiers.org/taxonomy/1337645>
+    <http://identifiers.org/taxonomy/1201112>
+    <http://identifiers.org/taxonomy/1352823>
+    <http://identifiers.org/taxonomy/947038>
+    <http://identifiers.org/taxonomy/1330326>
+    <http://identifiers.org/taxonomy/1331972>
+    <http://identifiers.org/taxonomy/1177187>
+    <http://identifiers.org/taxonomy/1182968>
+    <http://identifiers.org/taxonomy/1220494>
+    <http://identifiers.org/taxonomy/947039>
+    <http://identifiers.org/taxonomy/1182966>
+    <http://identifiers.org/taxonomy/1182967>
+    <http://identifiers.org/taxonomy/285006>
+    <http://identifiers.org/taxonomy/559292>
+    <http://identifiers.org/taxonomy/1382555>
+    <http://identifiers.org/taxonomy/658763>
+    <http://identifiers.org/taxonomy/580239>
+    <http://identifiers.org/taxonomy/1969575>
+    <http://identifiers.org/taxonomy/929585>
+    <http://identifiers.org/taxonomy/471859>
+    <http://identifiers.org/taxonomy/947040>
+    <http://identifiers.org/taxonomy/1434269>
+    <http://identifiers.org/taxonomy/764099>
+    <http://identifiers.org/taxonomy/11008>
+    <http://identifiers.org/taxonomy/764100>
+    <http://identifiers.org/taxonomy/580240>
+    <http://identifiers.org/taxonomy/466209>
+    <http://identifiers.org/taxonomy/2305201>
+    <http://identifiers.org/taxonomy/2305207>
+    <http://identifiers.org/taxonomy/2305205>
+    <http://identifiers.org/taxonomy/1219478>
+    <http://identifiers.org/taxonomy/1684324>
+    <http://identifiers.org/taxonomy/2528333>
+    <http://identifiers.org/taxonomy/1470621>
+    <http://identifiers.org/taxonomy/2824671>
+    <http://identifiers.org/taxonomy/332112>
+    <http://identifiers.org/taxonomy/1095631>
+    <http://identifiers.org/taxonomy/2528332>
+    <http://identifiers.org/taxonomy/2305203>
+    <http://identifiers.org/taxonomy/2305204>
+    <http://identifiers.org/taxonomy/1431717>
+    <http://identifiers.org/taxonomy/1325678>
+    <http://identifiers.org/taxonomy/595493>
+    <http://identifiers.org/taxonomy/2774448>
+    <http://identifiers.org/taxonomy/489137>
+    <http://identifiers.org/taxonomy/462210>
+    <http://identifiers.org/taxonomy/471861>
+    <http://identifiers.org/taxonomy/927256>
+    <http://identifiers.org/taxonomy/927257>
+    <http://identifiers.org/taxonomy/462209>
+    <http://identifiers.org/taxonomy/927258>
+    <http://identifiers.org/taxonomy/1296266>
+    <http://identifiers.org/taxonomy/1292971>
+    <http://identifiers.org/taxonomy/1293430>
+    <http://identifiers.org/taxonomy/1294333>
+    <http://identifiers.org/taxonomy/1294334>
+    <http://identifiers.org/taxonomy/1294335>
+    <http://identifiers.org/taxonomy/1294336>
+    <http://identifiers.org/taxonomy/1294337>
+    <http://identifiers.org/taxonomy/1294338>
+    <http://identifiers.org/taxonomy/1294339>
+    <http://identifiers.org/taxonomy/1294340>
+    <http://identifiers.org/taxonomy/1294341>
+    <http://identifiers.org/taxonomy/1294342>
+    <http://identifiers.org/taxonomy/1294343>
+    <http://identifiers.org/taxonomy/1294344>
+    <http://identifiers.org/taxonomy/1294345>
+    <http://identifiers.org/taxonomy/1294346>
+    <http://identifiers.org/taxonomy/1294347>
+    <http://identifiers.org/taxonomy/1294348>
+    <http://identifiers.org/taxonomy/1294349>
+    <http://identifiers.org/taxonomy/1294350>
+    <http://identifiers.org/taxonomy/1294351>
+    <http://identifiers.org/taxonomy/1294352>
+    <http://identifiers.org/taxonomy/1294353>
+    <http://identifiers.org/taxonomy/1294354>
+    <http://identifiers.org/taxonomy/1294355>
+    <http://identifiers.org/taxonomy/1294356>
+    <http://identifiers.org/taxonomy/1294357>
+    <http://identifiers.org/taxonomy/1294358>
+    <http://identifiers.org/taxonomy/1294359>
+    <http://identifiers.org/taxonomy/1294360>
+    <http://identifiers.org/taxonomy/1294361>
+    <http://identifiers.org/taxonomy/1294362>
+    <http://identifiers.org/taxonomy/1294363>
+    <http://identifiers.org/taxonomy/1294364>
+    <http://identifiers.org/taxonomy/1294365>
+    <http://identifiers.org/taxonomy/1294366>
+    <http://identifiers.org/taxonomy/1294367>
+    <http://identifiers.org/taxonomy/1294368>
+    <http://identifiers.org/taxonomy/1294369>
+    <http://identifiers.org/taxonomy/1294370>
+    <http://identifiers.org/taxonomy/1294371>
+    <http://identifiers.org/taxonomy/1294372>
+    <http://identifiers.org/taxonomy/1294373>
+    <http://identifiers.org/taxonomy/1294374>
+    <http://identifiers.org/taxonomy/1294375>
+    <http://identifiers.org/taxonomy/1294376>
+    <http://identifiers.org/taxonomy/1294377>
+    <http://identifiers.org/taxonomy/1294378>
+    <http://identifiers.org/taxonomy/1294379>
+    <http://identifiers.org/taxonomy/1294380>
+    <http://identifiers.org/taxonomy/1294381>
+    <http://identifiers.org/taxonomy/1294382>
+    <http://identifiers.org/taxonomy/1294383>
+    <http://identifiers.org/taxonomy/1294384>
+    <http://identifiers.org/taxonomy/1294385>
+    <http://identifiers.org/taxonomy/1294386>
+    <http://identifiers.org/taxonomy/1294387>
+    <http://identifiers.org/taxonomy/1294388>
+    <http://identifiers.org/taxonomy/1294303>
+    <http://identifiers.org/taxonomy/1294304>
+    <http://identifiers.org/taxonomy/1294305>
+    <http://identifiers.org/taxonomy/1294306>
+    <http://identifiers.org/taxonomy/1294307>
+    <http://identifiers.org/taxonomy/929586>
+    <http://identifiers.org/taxonomy/1294308>
+    <http://identifiers.org/taxonomy/1294309>
+    <http://identifiers.org/taxonomy/947041>
+    <http://identifiers.org/taxonomy/947042>
+    <http://identifiers.org/taxonomy/468558>
+    <http://identifiers.org/taxonomy/947043>
+    <http://identifiers.org/taxonomy/947044>
+    <http://identifiers.org/taxonomy/1294310>
+    <http://identifiers.org/taxonomy/502869>
+    <http://identifiers.org/taxonomy/1294311>
+    <http://identifiers.org/taxonomy/1294312>
+    <http://identifiers.org/taxonomy/1294313>
+    <http://identifiers.org/taxonomy/1294314>
+    <http://identifiers.org/taxonomy/1294315>
+    <http://identifiers.org/taxonomy/1294316>
+    <http://identifiers.org/taxonomy/1294317>
+    <http://identifiers.org/taxonomy/947045>
+    <http://identifiers.org/taxonomy/1294318>
+    <http://identifiers.org/taxonomy/1294319>
+    <http://identifiers.org/taxonomy/1294320>
+    <http://identifiers.org/taxonomy/1294321>
+    <http://identifiers.org/taxonomy/1294322>
+    <http://identifiers.org/taxonomy/307796>
+    <http://identifiers.org/taxonomy/1294323>
+    <http://identifiers.org/taxonomy/1294324>
+    <http://identifiers.org/taxonomy/1294325>
+    <http://identifiers.org/taxonomy/1294326>
+    <http://identifiers.org/taxonomy/1294327>
+    <http://identifiers.org/taxonomy/1294328>
+    <http://identifiers.org/taxonomy/1294329>
+    <http://identifiers.org/taxonomy/1294330>
+    <http://identifiers.org/taxonomy/1294331>
+    <http://identifiers.org/taxonomy/1294332>
+    <http://identifiers.org/taxonomy/947046>
+    <http://identifiers.org/taxonomy/538976>
+    <http://identifiers.org/taxonomy/1227742>
+    <http://identifiers.org/taxonomy/2904582>
+    <http://identifiers.org/taxonomy/589904>
+  }
+  VALUES (?library_strategy ?library_selection) {
+    (dra_ont:ChIP-Seq                dra_ont:ChIP)
+    (dra_ont:ChIP-Seq                dra_ont:DNase)
+    (dra_ont:DNase-Hypersensitivity  dra_ont:ChIP)
+    (dra_ont:DNase-Hypersensitivity  dra_ont:DNase)
+    (dra_ont:ATAC-seq                dra_ont:PCR)
+    (dra_ont:ATAC-seq                dra_ont:other)
+    (dra_ont:Bisulfite-Seq           dra_ont:RANDOM)
+  }
+  VALUES ?library_source { dra_ont:GENOMIC }
+
+  ?exp a dra_ont:Experiment ;
+       dct:identifier ?srx ;
+       dra_ont:platform ?pl ;
+       dra_ont:design ?d ;
+       rdfs:seeAlso ?bs .
+  ?pl a dra_ont:ILLUMINA .
+  ?d dra_ont:libraryStrategy  ?library_strategy ;
+     dra_ont:librarySelection ?library_selection ;
+     dra_ont:librarySource    ?library_source .
+
+  ?bs a biosample_ont:BioSampleRecord ;
+      dct:identifier ?samn ;
+      rdfs:seeAlso ?taxIRI ;
+      biosample_ont:taxonomyName ?taxonomy_name .
+
+  OPTIONAL { ?exp dra_ont:title ?title }
+  OPTIONAL { ?pl dra_ont:instrumentModel ?instrument_model }
+  OPTIONAL {
+    ?exp rdfs:seeAlso ?srpIRI .
+    ?srpIRI a dra_ont:Study ; dct:identifier ?srp .
+  }
+  OPTIONAL {
+    ?exp rdfs:seeAlso ?prjIRI .
+    ?prjIRI a bioproject_ont:BioProjectRecord ; dct:identifier ?prj .
+  }
+}

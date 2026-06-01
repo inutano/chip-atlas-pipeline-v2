@@ -8,3 +8,9 @@ test-run/*/*.fa.*
 test-run/*/output/
 test-run/*/output-*/
 test-run/*/bwa-index/
+
+# Derived experiment lists — regenerate via scripts/make-batches.sh.
+# Source query is vendored in scripts/experiment-list/; see its README.md
+sample-lists/
+chipatlas_fast.tsv
+chipatlas_other.tsv
