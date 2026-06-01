@@ -23,6 +23,10 @@
 #
 set -eo pipefail
 
+# Shared failure-classification helpers (deterministic data vs transient/infra
+# failures). Lives alongside this script in the flat cluster layout.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/failure-classify.sh"
+
 # ============================================================
 # Parse arguments
 # ============================================================
@@ -249,13 +253,21 @@ if [ "$BIGWIG_RC" -ne 0 ] || [ ! -s "$OUTDIR/${SAMPLE_ID}.bw" ]; then
   exit 1
 fi
 # MACS3 returning 0 peaks is OK (low-signal samples); MACS3 crashing is not.
-# When MACS3 exits non-zero AND there's no _peaks.xls file, the call truly
-# crashed before producing anything — refuse stats.tsv so the sample is
-# retried rather than counted as silently-broken-but-done.
-if [ "$MACS3_RC" -ne 0 ] && [ ! -f "$WORK/${SAMPLE_ID}_peaks.xls" ]; then
-  log "ERROR: MACS3 crashed before producing _peaks.xls (rc=$MACS3_RC) — refusing to write stats.tsv (will retry)"
-  exit 1
-fi
+# A non-zero exit with no _peaks.xls means MACS3 produced nothing. Distinguish:
+#   - clean non-zero (can't model / too few reads) => deterministic bad data:
+#     exit DATA_FAILURE_RC so the wrapper marks it terminal (retry won't help).
+#   - signal/OOM kill (rc>128) => transient: exit 1 so the wrapper retries.
+MACS3_XLS=0; [ -f "$WORK/${SAMPLE_ID}_peaks.xls" ] && MACS3_XLS=1
+case "$(classify_macs3_failure "$MACS3_RC" "$MACS3_XLS")" in
+  data)
+    log "DATA-FAIL: MACS3 could not call peaks (rc=$MACS3_RC, no output) — sparse/low-signal sample, marking terminal"
+    exit "$DATA_FAILURE_RC"
+    ;;
+  infra)
+    log "ERROR: MACS3 killed (rc=$MACS3_RC, likely OOM/signal) — refusing stats.tsv (will retry)"
+    exit 1
+    ;;
+esac
 
 log "Step 5: Writing statistics TSV"
 

@@ -21,6 +21,10 @@ MEM="${6:-16g}"
 TIME_LIMIT="${7:-0-01:00:00}"
 MAX_CONCURRENT="${8:-32}"
 INTERVAL="${9:-30}"
+# Transient/infra failures (OOM, NODE_FAIL, truncated download) are retried up
+# to this many times before being marked terminal. Deterministic data failures
+# (pipeline exit 42) are never retried. Override via env.
+MAX_RETRIES="${MAX_RETRIES:-2}"
 
 if [ -z "$STAGING_DIR" ] || [ -z "$PIPELINE" ] || [ -z "$GENOME" ]; then
   echo "Usage: $0 <staging_dir> <pipeline> <genome> <outbase> [cpus] [mem] [time] [max_concurrent] [interval]"
@@ -31,6 +35,14 @@ export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG="$STAGING_DIR/process.log"
+
+# Shared failure-classification + outcome helpers. Deployed flat alongside this
+# script on the cluster; in the repo it lives one level up in scripts/.
+if [ -f "$SCRIPTS_DIR/failure-classify.sh" ]; then
+  source "$SCRIPTS_DIR/failure-classify.sh"
+else
+  source "$SCRIPTS_DIR/../failure-classify.sh"
+fi
 
 # MACS3 genome size lookup
 declare -A MACS3_GSIZE=(
@@ -54,6 +66,18 @@ log "Staging: $STAGING_DIR"
 log "Pipeline: $PIPELINE, Genome: $GENOME"
 log "Output: $OUTBASE"
 log "Config: ${CPUS}c, ${MEM}, ${TIME_LIMIT}, max ${MAX_CONCURRENT} concurrent"
+
+# Recover orphan .running markers from a previously-crashed instance.
+# The proc is the sole owner of .running — at startup, no other process
+# can legitimately hold one. Without this, NODE_FAIL/preemption orphans
+# the in-flight markers (the new instance only scans for .ready) and the
+# exit condition (running==0) deadlocks forever after .downloads-complete.
+RECOVERED=0
+for f in $(find "$STAGING_DIR" -maxdepth 2 -name ".running" 2>/dev/null); do
+  mv "$f" "$(dirname "$f")/.ready"
+  RECOVERED=$((RECOVERED + 1))
+done
+[ "$RECOVERED" -gt 0 ] && log "Reset $RECOVERED orphan .running marker(s) to .ready (prior-instance recovery)"
 
 TOTAL_SUBMITTED=0
 TOTAL_DONE=0
@@ -116,16 +140,22 @@ process_sample() {
 
   rm -rf "$work"
 
-  if [ $rc -eq 0 ] && [ -f "$outdir/${exp_acc}.stats.tsv" ]; then
-    touch "$staging/.done"
-    rm -f "$staging/.running"
-    # Clean FASTQs from staging (processed successfully)
-    rm -f "$staging"/*.fastq.gz "$staging"/*.fastq
-    log "[DONE] $exp_acc"
-  else
-    mv "$staging/.running" "$staging/.fail"
-    log "[FAIL] $exp_acc (exit=$rc)"
-  fi
+  # Decide the sample's fate from the pipeline exit code:
+  #   exit 0 + stats.tsv  -> done
+  #   exit 42             -> deterministic data failure (terminal, not retried)
+  #   any other non-zero  -> transient/infra; retry up to MAX_RETRIES, then fail
+  local stats_exists=0
+  [ -f "$outdir/${exp_acc}.stats.tsv" ] && stats_exists=1
+  local attempts; attempts="$(read_attempts "$staging")"
+  local outcome; outcome="$(classify_outcome "$rc" "$stats_exists" "$attempts" "$MAX_RETRIES")"
+  apply_outcome "$staging" "$outcome"
+
+  case "$outcome" in
+    done)      log "[DONE] $exp_acc" ;;
+    datafail)  log "[DATA-FAIL] $exp_acc (rc=$rc) — deterministic bad data, terminal" ;;
+    retry)     log "[RETRY] $exp_acc (rc=$rc) — transient, requeued (attempt $((attempts + 1))/$MAX_RETRIES)" ;;
+    infrafail) log "[FAIL] $exp_acc (rc=$rc) — retries exhausted ($MAX_RETRIES)" ;;
+  esac
 }
 
 # Main loop: poll staging for .ready samples, process them

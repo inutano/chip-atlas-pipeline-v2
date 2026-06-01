@@ -27,6 +27,10 @@
 #
 set -eo pipefail
 
+# Shared failure-classification helpers (deterministic data vs transient/infra
+# failures). Lives alongside this script in the flat cluster layout.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/failure-classify.sh"
+
 # ============================================================
 # Parse arguments
 # ============================================================
@@ -337,12 +341,23 @@ cp "$FASTP_JSON" "$OUTDIR/${SAMPLE_ID}_fastp.json" 2>/dev/null || true
 # stats.tsv is the completion marker. Only write it if BigWig (the
 # essential output) succeeded; otherwise the upstream wrapper retries.
 # ============================================================
-if [ "$BIGWIG_RC" -ne 0 ] \
-    || [ ! -s "$OUTDIR/${SAMPLE_ID}.methyl.bw" ] \
-    || [ ! -s "$OUTDIR/${SAMPLE_ID}.cover.bw" ]; then
-  log "ERROR: BigWig outputs missing or invalid — refusing to write stats.tsv (will retry)"
-  exit 1
-fi
+# BigWig is the essential BS-seq output. If it's missing, distinguish:
+#   - sample had zero covered CpGs => deterministic bad data (no methylation
+#     signal): exit DATA_FAILURE_RC so the wrapper marks it terminal.
+#   - data present but the BigWig step failed => transient: exit 1 to retry.
+METHYL_OK=0; [ -s "$OUTDIR/${SAMPLE_ID}.methyl.bw" ] && METHYL_OK=1
+COVER_OK=0;  [ -s "$OUTDIR/${SAMPLE_ID}.cover.bw" ]  && COVER_OK=1
+COVERED_CPGS=$(wc -l < "$WORK/counts.tsv" 2>/dev/null || echo 0)
+case "$(classify_bsseq_failure "$BIGWIG_RC" "$METHYL_OK" "$COVER_OK" "$COVERED_CPGS")" in
+  data)
+    log "DATA-FAIL: zero covered CpGs / no methylation signal — sparse sample, marking terminal"
+    exit "$DATA_FAILURE_RC"
+    ;;
+  infra)
+    log "ERROR: BigWig outputs missing or invalid (rc=$BIGWIG_RC) though CpG data exists — refusing stats.tsv (will retry)"
+    exit 1
+    ;;
+esac
 
 TOTAL_MIN=$(( ($(date +%s) - STEP1_START) / 60 ))
 
