@@ -145,7 +145,12 @@ download_run_from_ena() {
   IFS=';' read -ra MD5S <<< "$md5"
 
   local i url checksum fname
-  local aria2_base=(-x 8 -s 8 -d "$TMPDIR_DL" --console-log-level=warn --retry-wait=10 --max-tries=3)
+  # Be gentle on ENA: 4 connections/file (× DL_CONCURRENT concurrent files = the
+  # IP's total to ftp.sra.ebi.ac.uk). 8×6=48 got the IP rate-limited to a ~98%
+  # failure rate (2026-06-02). Patient retries + a connect timeout so a refused
+  # connection backs off and retries rather than failing the run.
+  local aria2_base=(-x 4 -s 4 -d "$TMPDIR_DL" --console-log-level=warn \
+                    --retry-wait=15 --max-tries=5 --connect-timeout=60)
   for i in "${!URLS[@]}"; do
     url="https://${URLS[$i]}"
     checksum="${MD5S[$i]:-}"

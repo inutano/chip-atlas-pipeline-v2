@@ -21,7 +21,10 @@ STAGING=/home/okishinya/chipatlas-v2/staging/${GENOME}-${PIPELINE}
 LOG_DIR=~/chip-atlas-v2/production-${GENOME}/logs
 
 # Config
-DL_CONCURRENT=6
+# DL_CONCURRENT × aria2c connections-per-file (4, see fast-download.sh) = total
+# simultaneous connections to ENA. Kept at 4×4=16; 6×8=48 got ENA to rate-limit
+# the IP to a ~98% failure rate (2026-06-02).
+DL_CONCURRENT=4
 DL_BUFFER=100
 PROC_CPUS=4
 PROC_MEM="24g"
