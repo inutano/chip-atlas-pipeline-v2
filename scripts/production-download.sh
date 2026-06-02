@@ -37,6 +37,12 @@ export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
 
 mkdir -p "$STAGING_DIR"
 
+# Clear any stale completion marker from a prior run on this staging dir. The
+# processor exits when it sees .downloads-complete with no .ready/.running; if a
+# re-submitted run left the old marker, a freshly-started processor sees it and
+# exits within a second, before this download pass produces any .ready samples.
+rm -f "$STAGING_DIR/.downloads-complete"
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 
 log "=== Production Downloader ==="
