@@ -68,16 +68,36 @@ with pipe overhead). Small genomes are tiny indexes; their floor is
 
 ### BS-seq  (`pipeline-v2-bs.sh`)
 
-| Genome | `--cpus-per-task` | `--mem` | `-t` | conc/node | per-sample wall | source |
-|---|---|---|---|---|---|---|
-| sacCer3, ce11, dm6 | 4 | 24g | 0-02:00:00 | 21 | — | small-genome default |
-| rn6, mm10, hg38 | 4 | 16g | **0-04:00:00** | 32 | ~180 min | `memory-benchmark-bs.md` (10.4/hr) |
+BS-seq peak RSS is the **larger of** (a) `samtools sort -m 2G × threads` (~8 GB
+at 4c, binds on deep samples) and (b) the **Step-3 `hmr`/`hypermr` symmetric-CpG
+table load, which scales with the genome's CpG count** (hg38 62 M CpGs → ~17.5 GB;
+sacCer3 0.7 M → negligible). So `--mem` must **rise with genome size** — the
+opposite of the old table.
 
-Memory driver: **`samtools sort -m 2G × threads` + Step-3 `hypermr`** (~17 GB
-floor on hg38), *not* the abismal index. BS-seq is ~18× slower than ChIP
-(abismal alignment dominates) → needs the **4-hour** limit. Alt for mammals if
-4 h is unacceptable: `8c / 24g / 0-02:30:00`. Watch for very deep WGBS (>30 GB
-FASTQ) outliers that may need 6 h.
+| Genome | `--cpus-per-task` | `--mem` | `-t` | conc/node | source |
+|---|---|---|---|---|---|
+| sacCer3, ce11, dm6 | 4 | **16g** | 0-02:00:00 | 32 | sort-bound; **benchmark-confirmed: peak 6.3 GB on sacCer3** (2026-06-04) |
+| rn6, mm10 | 4 | **20g** | 0-04:00:00 | 25 | Step-3 scales w/ CpG count (rn6 54 M, mm10 44 M < hg38) → ≤ hg38 peak |
+| hg38 | 4 | **20g** | 0-04:00:00 | 25 | `memory-benchmark-bs.md`: Step-3 floor ~17.5 GB → 18g OOM-min + margin |
+
+**Corrections from the old table** (2026-06-03): small genomes were 24g (wildly
+over — sort-bound at ~9 GB) and hg38 was 16g (under — its own data shows an 18g
+OOM floor from the 17.5 GB `hypermr` load; 16g OOMs Step-3-bound samples). The
+"16g" in `memory-benchmark-bs.md`'s recommendation only counted the deep-sample
+sort peak (9.4 GB) and missed the `hypermr` floor.
+
+BS-seq is ~18× slower than ChIP (abismal dominates) → mammals need the **4-hour**
+limit; small genomes finish fast (2 h). Alt for mammals if 4 h is unacceptable:
+`8c / 24g / 0-02:30:00`. Very deep WGBS (>30 GB FASTQ) outliers may need 6 h.
+hg38 BS at 20g/25-conc ≈ 8/hr (vs the doc's unsafe 16g/32 ≈ 10.4/hr).
+
+> ⚠ **Step-3 `dnmtools pmd` can hang.** The 2026-06-04 sacCer3 benchmark caught
+> `pmd` spinning at 99.9% CPU for 38+ min on a 0.7 M-CpG sample (`hmr`/`hypermr`
+> finished in seconds; only `pmd` stuck). Left unguarded this runs every BS job
+> to the SLURM time limit → fail. **Fix: wrap each Step-3 caller in `timeout`**
+> in `pipeline-v2-bs.sh` (they're already non-blocking — a killed `pmd` just
+> yields no `.pmd.bed` → 0 PMD regions → sample still completes). PMDs aren't
+> biologically meaningful on small genomes anyway. (Added to §5.)
 
 > These are the cgroup `--mem` values that make concurrency self-limiting and
 > keep the node responsive. Do **not** raise concurrency by lowering `--mem`
@@ -183,6 +203,12 @@ The settings above are NOT yet what the deployed scripts do. To execute this pla
    `.downloads-complete` at download start (done); node-exclude/health gate.
 5. Keep the already-deployed download fixes: ENA-first routing, SRA fallback
    (apptainer PATH), 16-connection budget.
+6. **`pipeline-v2-bs.sh`: wrap Step-3 callers (`hmr`/`hypermr`/`pmd`) in
+   `timeout`** (e.g. 15 min each) so a hung tool can't run the whole job to the
+   time limit. `pmd` spun 38+ min on a sacCer3 sample (2026-06-04). They're
+   already non-blocking, so a timeout-killed caller just omits its `.bed`.
+7. Minor: fix the `STEP0_START`-unset bug in `pipeline-v2-bs.sh` (the
+   "fastp+abismal <epoch>s" garbage log line); cosmetic, no behaviour impact.
 
 Implement test-first; smoke-test on one small batch before scaling.
 
@@ -198,7 +224,7 @@ Implement test-first; smoke-test on one small batch before scaling.
 - **Downloader runs on the login partition `a001-a003`** (shared with other
   users; the light downloader is fine there).
 - **rn6 uses the human (hg38) settings** for both pipelines (ChIP 5c/20g; BS
-  4c/16g/4h) — its index is smaller than hg38's.
+  4c/20g/4h) — its index is smaller than hg38's (so safe).
 - **mm10**: the hg38 setting (5c/20g) is *safe* (index ~13 GB < hg38). Because
   mm10 has ~219k experiments, **run a quick memory benchmark right before mm10's
   batch** to see if a lower `--mem` (→ higher concurrency) is justified — tuning,
