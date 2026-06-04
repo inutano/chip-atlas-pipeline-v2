@@ -117,6 +117,7 @@ FASTP_JSON="$WORK/fastp.json"
 # SE: abismal reads directly from process substitution (no disk write).
 log "Step 0: fastp QC/trimming"
 T0=$(date +%s)
+STEP0_START=$T0   # used by the "Step 0+1a done" timing log below
 
 if [ "$IS_PAIRED" = true ]; then
   fastp --in1 "$FASTQ_FWD" --in2 "$FASTQ_REV" \
@@ -237,14 +238,20 @@ STEP3_START=$(date +%s)
 # HMR needs symmetric CpGs — build sym first, then parallel calls
 dnmtools sym -t 2 -o "$WORK/counts.sym.tsv" "$WORK/counts.tsv"
 
-# Fan out 4 parallel jobs
-(dnmtools hmr -o "$OUTDIR/${SAMPLE_ID}.hmr.bed" "$WORK/counts.sym.tsv" 2>"$WORK/hmr.stderr") &
+# Fan out region callers in parallel, each under a wall-clock `timeout`.
+# dnmtools pmd has an un-capped beta-binomial MLE loop (TwoStateBetaBin::fit,
+# v1.5.1 src/common/TwoStateHMM.cpp:104 — no iteration cap) that spins forever at
+# 99.9% CPU on methylation-free genomes (sacCer3/ce11/dm6 — ~all CpGs at 0
+# methylation, so the HMM has no two-state structure and Baum-Welch diverges).
+# hmr/hypermr handle that data fine, but we wrap all three for safety. They are
+# non-blocking (only BigWig gates stats.tsv), so a timeout just omits the .bed.
+(timeout 900 dnmtools hmr -o "$OUTDIR/${SAMPLE_ID}.hmr.bed" "$WORK/counts.sym.tsv" 2>"$WORK/hmr.stderr") &
 PID_HMR=$!
 
-(dnmtools hypermr -o "$OUTDIR/${SAMPLE_ID}.hypermr.bed" "$WORK/counts.tsv" 2>"$WORK/hypermr.stderr") &
+(timeout 900 dnmtools hypermr -o "$OUTDIR/${SAMPLE_ID}.hypermr.bed" "$WORK/counts.tsv" 2>"$WORK/hypermr.stderr") &
 PID_HYPERMR=$!
 
-(dnmtools pmd -o "$OUTDIR/${SAMPLE_ID}.pmd.bed" "$WORK/counts.tsv" 2>"$WORK/pmd.stderr") &
+(timeout 900 dnmtools pmd -i 10 -o "$OUTDIR/${SAMPLE_ID}.pmd.bed" "$WORK/counts.tsv" 2>"$WORK/pmd.stderr") &
 PID_PMD=$!
 
 # BigWig: sort counts.tsv (lexical chrom order — bedGraphToBigWig is strict),
