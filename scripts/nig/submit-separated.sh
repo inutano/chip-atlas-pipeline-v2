@@ -26,11 +26,12 @@ LOG_DIR=~/chip-atlas-v2/production-${GENOME}/logs
 # the IP to a ~98% failure rate (2026-06-02).
 DL_CONCURRENT=4
 DL_BUFFER=100
-PROC_CPUS=4
-PROC_MEM="24g"
-PROC_TIME="0-02:00:00"
-PROC_CONCURRENT=32
+# The processor is now a lightweight coordinator that sbatches ONE cgroup-capped
+# job per experiment; per-job cores/mem/time come from scripts/job-settings.sh
+# (keyed by pipeline+genome), NOT from here.
+PROC_MAX_INFLIGHT=300   # max submitted-but-not-terminal per-experiment jobs
 PROC_INTERVAL=30
+EXCLUDE_NODES="${EXCLUDE_NODES:-}"   # comma-list of unhealthy nodes to avoid
 
 N=$(wc -l < "$SAMPLE_LIST")
 
@@ -41,7 +42,7 @@ echo "  Samples: $N"
 echo "  Staging: $STAGING"
 echo "  Output:  $OUTBASE/$GENOME/{prefix}/{experiment}/"
 echo "  Download: $DL_CONCURRENT concurrent, buffer $DL_BUFFER"
-echo "  Process:  ${PROC_CPUS}c, ${PROC_MEM}, ${PROC_CONCURRENT} concurrent"
+echo "  Process:  per-experiment sbatch (cores/mem from job-settings.sh), max in-flight ${PROC_MAX_INFLIGHT}"
 echo ""
 
 # Submit downloader (1 core, long-running)
@@ -55,15 +56,18 @@ DL_JOB=$(sbatch --parsable \
 
 echo "  Download job: $DL_JOB"
 
-# Submit processor (exclusive node, starts after downloader has had 60s head start)
+# Submit the coordinator (tiny: 1 core / 2 GB — it only sbatches + polls; the
+# real work runs as cgroup-capped per-experiment jobs). Starts 1 min after the
+# downloader. EXCLUDE_NODES is passed through to the per-experiment jobs.
 PROC_JOB=$(sbatch --parsable \
   -p kumamoto-c768 --account=kumamoto-group \
-  --exclusive --mem=0 -t 2-00:00:00 \
+  -n 1 --mem=2g -t 2-00:00:00 \
   -J "proc-${GENOME}-${PIPELINE}" \
   -o "$LOG_DIR/proc-${PIPELINE}-%j.out" \
   -e "$LOG_DIR/proc-${PIPELINE}-%j.err" \
   --dependency=after:${DL_JOB}+1 \
-  --wrap="bash $SCRIPTS/production-process.sh $STAGING $PIPELINE $GENOME $OUTBASE $PROC_CPUS $PROC_MEM $PROC_TIME $PROC_CONCURRENT $PROC_INTERVAL")
+  --export="ALL,EXCLUDE_NODES=${EXCLUDE_NODES}" \
+  --wrap="bash $SCRIPTS/production-process.sh $STAGING $PIPELINE $GENOME $OUTBASE $PROC_MAX_INFLIGHT $PROC_INTERVAL")
 
 echo "  Process job:  $PROC_JOB (starts 1 min after download begins)"
 echo ""

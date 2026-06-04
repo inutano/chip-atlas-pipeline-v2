@@ -1,14 +1,19 @@
 #!/bin/bash
 #
-# Production processor: scans staging dir for .ready samples and submits
-# SLURM jobs to process them. Runs as a loop, polling every INTERVAL seconds.
+# Production processor: a lightweight coordinator that scans the staging dir for
+# `.ready` experiments and submits ONE SLURM job per experiment to process it.
+#
+# Each per-experiment job (process-experiment.sh) is cgroup-isolated with the
+# `--mem`/`--cpus` from job-settings.sh (NEVER --mem=0), so SLURM packs
+# min(128/cpus, 512/mem) per node and the kernel OOM-killer can never reach
+# system daemons. This coordinator itself is tiny (1 core / ~2 GB).
 #
 # Usage:
-#   sbatch -p kumamoto-c768 --account=kumamoto-group \
-#     -n 1 --mem=2g -t 2-00:00:00 \
-#     -J process-ce11 \
-#     production-process.sh <staging_dir> <pipeline> <genome> <outbase> \
-#       [cpus] [mem] [time_limit] [max_concurrent] [interval]
+#   sbatch -p kumamoto-c768 --account=kumamoto-group -n 1 --mem=2g -t 2-00:00:00 \
+#     -J proc-<genome>-<pipeline> -o ... -e ... \
+#     production-process.sh <staging_dir> <pipeline> <genome> <outbase> [max_inflight] [interval]
+#
+# Env: MAX_RETRIES (default 2), EXCLUDE_NODES (comma list passed to sbatch --exclude).
 #
 set -eo pipefail
 
@@ -16,204 +21,101 @@ STAGING_DIR="$1"
 PIPELINE="$2"        # "chipseq" or "bsseq"
 GENOME="$3"
 OUTBASE="$4"
-CPUS="${5:-4}"
-MEM="${6:-16g}"
-TIME_LIMIT="${7:-0-01:00:00}"
-MAX_CONCURRENT="${8:-32}"
-INTERVAL="${9:-30}"
-# Transient/infra failures (OOM, NODE_FAIL, truncated download) are retried up
-# to this many times before being marked terminal. Deterministic data failures
-# (pipeline exit 42) are never retried. Override via env.
+MAX_INFLIGHT="${5:-300}"   # max submitted-but-not-terminal jobs (queue + running)
+INTERVAL="${6:-30}"
 MAX_RETRIES="${MAX_RETRIES:-2}"
+EXCLUDE_NODES="${EXCLUDE_NODES:-}"
 
-if [ -z "$STAGING_DIR" ] || [ -z "$PIPELINE" ] || [ -z "$GENOME" ]; then
-  echo "Usage: $0 <staging_dir> <pipeline> <genome> <outbase> [cpus] [mem] [time] [max_concurrent] [interval]"
+if [ -z "$STAGING_DIR" ] || [ -z "$PIPELINE" ] || [ -z "$GENOME" ] || [ -z "$OUTBASE" ]; then
+  echo "Usage: $0 <staging_dir> <pipeline> <genome> <outbase> [max_inflight] [interval]"
   exit 1
 fi
 
 export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
-
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
+mkdir -p "$STAGING_DIR"
 LOG="$STAGING_DIR/process.log"
+LOG_DIR="$(dirname "$STAGING_DIR")/proc-logs"
+mkdir -p "$LOG_DIR"
 
-# Shared failure-classification + outcome helpers. Deployed flat alongside this
-# script on the cluster; in the repo it lives one level up in scripts/.
-if [ -f "$SCRIPTS_DIR/failure-classify.sh" ]; then
-  source "$SCRIPTS_DIR/failure-classify.sh"
-else
-  source "$SCRIPTS_DIR/../failure-classify.sh"
-fi
-
-# MACS3 genome size lookup
-declare -A MACS3_GSIZE=(
-  [sacCer3]=12157105
-  [ce11]=100286401
-  [dm6]=142573017
-  [rn6]=2870184193
-  [mm10]=2652783500
-  [hg38]=2913022398
-  [TAIR10]=119146348
-)
-
-SHARED=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2
-REF=$SHARED/references
-CHIP_SIF=$SHARED/containers/pipeline-v2.sif
-BS_SIF=$SHARED/containers/pipeline-v2-bs.sif
+# Shared libs (flat on cluster; ../ in repo).
+for lib in failure-classify.sh job-settings.sh; do
+  if [ -f "$SCRIPTS_DIR/$lib" ]; then source "$SCRIPTS_DIR/$lib"; else source "$SCRIPTS_DIR/../$lib"; fi
+done
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 
-log "=== Production Processor ==="
-log "Staging: $STAGING_DIR"
-log "Pipeline: $PIPELINE, Genome: $GENOME"
-log "Output: $OUTBASE"
-log "Config: ${CPUS}c, ${MEM}, ${TIME_LIMIT}, max ${MAX_CONCURRENT} concurrent"
+# Resolve the per-(pipeline,genome) resource settings. Never guess.
+read -r CPUS MEM TIME_LIMIT <<< "$(job_settings "$PIPELINE" "$GENOME")"
+if [ -z "$CPUS" ]; then
+  log "ERROR: no job settings for pipeline=$PIPELINE genome=$GENOME (see scripts/job-settings.sh)"
+  exit 1
+fi
 
-# Recover orphan .running markers from a previously-crashed instance.
-# The proc is the sole owner of .running — at startup, no other process
-# can legitimately hold one. Without this, NODE_FAIL/preemption orphans
-# the in-flight markers (the new instance only scans for .ready) and the
-# exit condition (running==0) deadlocks forever after .downloads-complete.
-RECOVERED=0
-for f in $(find "$STAGING_DIR" -maxdepth 2 -name ".running" 2>/dev/null); do
-  mv "$f" "$(dirname "$f")/.ready"
-  RECOVERED=$((RECOVERED + 1))
-done
-[ "$RECOVERED" -gt 0 ] && log "Reset $RECOVERED orphan .running marker(s) to .ready (prior-instance recovery)"
+log "=== Production Processor (sbatch-per-experiment) ==="
+log "Staging: $STAGING_DIR | Pipeline: $PIPELINE | Genome: $GENOME | Output: $OUTBASE"
+log "Per-experiment job: ${CPUS}c, ${MEM}, ${TIME_LIMIT}; max in-flight ${MAX_INFLIGHT}; exclude='${EXCLUDE_NODES}'"
 
-TOTAL_SUBMITTED=0
-TOTAL_DONE=0
+# A SLURM job id is "in the queue" if squeue prints it (pending or running).
+job_alive() { [ -n "$(squeue -j "$1" -h -o '%i' 2>/dev/null)" ]; }
 
-process_sample() {
-  local exp_acc="$1"
-  local staging="$STAGING_DIR/$exp_acc"
-
-  # Mark as running
-  mv "$staging/.ready" "$staging/.running"
-
-  # 3-level output
-  local prefix=${exp_acc:0:6}
-  local outdir=$OUTBASE/$GENOME/$prefix/$exp_acc
-  mkdir -p "$outdir"
-
-  # Find FASTQs
-  local fwd=$(ls "$staging/${exp_acc}_1.fastq.gz" 2>/dev/null || ls "$staging/${exp_acc}.fastq.gz" 2>/dev/null || true)
-  local rev=$(ls "$staging/${exp_acc}_2.fastq.gz" 2>/dev/null || true)
-
-  if [ -z "$fwd" ]; then
-    log "[FAIL] $exp_acc: no FASTQ in staging"
-    mv "$staging/.running" "$staging/.fail"
-    return 1
-  fi
-
-  local rev_arg=""
-  [ -n "$rev" ] && rev_arg="--fastq-rev $rev"
-
-  local work=/data1/tmp/${exp_acc}_$$
-  mkdir -p "$work"
-
-  local bind_args="--bind /data1/tmp:/data1/tmp --bind $OUTBASE:$OUTBASE --bind $REF:$REF --bind $STAGING_DIR:$STAGING_DIR"
-  local rc=0
-
-  if [ "$PIPELINE" = "chipseq" ]; then
-    local gsize="${MACS3_GSIZE[$GENOME]:-2913022398}"
-    TMPDIR=$work apptainer exec $bind_args "$CHIP_SIF" \
-      bash $SCRIPTS_DIR/pipeline-v2.sh \
-        --sample-id "$exp_acc" \
-        --fastq-fwd "$fwd" $rev_arg \
-        --genome-fasta "$REF/${GENOME}.fa" \
-        --chrom-sizes "$REF/${GENOME}.chrom.sizes" \
-        --genome-size "$gsize" \
-        --outdir "$outdir" \
-        --threads "$CPUS" || rc=$?
-
-  elif [ "$PIPELINE" = "bsseq" ]; then
-    TMPDIR=$work apptainer exec $bind_args "$BS_SIF" \
-      bash $SCRIPTS_DIR/pipeline-v2-bs.sh \
-        --sample-id "$exp_acc" \
-        --fastq-fwd "$fwd" $rev_arg \
-        --genome-fasta "$REF/${GENOME}.fa" \
-        --abismal-index "$REF/${GENOME}.abismal.idx" \
-        --chrom-sizes "$REF/${GENOME}.chrom.sizes" \
-        --genome "$GENOME" \
-        --outdir "$outdir" \
-        --threads "$CPUS" || rc=$?
-  fi
-
-  rm -rf "$work"
-
-  # Decide the sample's fate from the pipeline exit code:
-  #   exit 0 + stats.tsv  -> done
-  #   exit 42             -> deterministic data failure (terminal, not retried)
-  #   any other non-zero  -> transient/infra; retry up to MAX_RETRIES, then fail
-  local stats_exists=0
-  [ -f "$outdir/${exp_acc}.stats.tsv" ] && stats_exists=1
-  local attempts; attempts="$(read_attempts "$staging")"
-  local outcome; outcome="$(classify_outcome "$rc" "$stats_exists" "$attempts" "$MAX_RETRIES")"
-  apply_outcome "$staging" "$outcome"
-
-  case "$outcome" in
-    done)      log "[DONE] $exp_acc" ;;
-    datafail)  log "[DATA-FAIL] $exp_acc (rc=$rc) — deterministic bad data, terminal" ;;
-    retry)     log "[RETRY] $exp_acc (rc=$rc) — transient, requeued (attempt $((attempts + 1))/$MAX_RETRIES)" ;;
-    infrafail) log "[FAIL] $exp_acc (rc=$rc) — retries exhausted ($MAX_RETRIES)" ;;
-  esac
-}
-
-# Main loop: poll staging for .ready samples, process them
-log "Starting processor loop (interval=${INTERVAL}s)"
-
-while true; do
-  # Find ready samples
-  ready_samples=()
-  for ready_file in $(find "$STAGING_DIR" -maxdepth 2 -name ".ready" 2>/dev/null); do
-    exp_dir=$(dirname "$ready_file")
-    exp_acc=$(basename "$exp_dir")
-    ready_samples+=("$exp_acc")
-  done
-
-  if [ ${#ready_samples[@]} -eq 0 ]; then
-    # Check if download is still running
-    downloading=$(find "$STAGING_DIR" -maxdepth 2 -name "download.log" -newer "$STAGING_DIR/process.log" 2>/dev/null | wc -l)
-    done_count=$(find "$STAGING_DIR" -maxdepth 2 -name ".done" 2>/dev/null | wc -l)
-    fail_count=$(find "$STAGING_DIR" -maxdepth 2 -name ".fail" 2>/dev/null | wc -l)
-
-    # Check if download is complete (marker file written by downloader)
-    if [ -f "$STAGING_DIR/.downloads-complete" ]; then
-      running=$(find "$STAGING_DIR" -maxdepth 2 -name ".running" 2>/dev/null | wc -l)
-      if [ $running -eq 0 ]; then
-        done_count=$(find "$STAGING_DIR" -maxdepth 2 -name ".done" 2>/dev/null | wc -l)
-        fail_count=$(find "$STAGING_DIR" -maxdepth 2 -name ".fail" 2>/dev/null | wc -l)
-        log "Downloads complete, no running jobs. Done=$done_count, Failed=$fail_count"
-        break
+# Reset any orphaned in-flight markers: a `.submitted` whose job is gone from the
+# queue but left no terminal marker (NODE_FAIL/preemption) goes back to `.ready`.
+# Also rescue any legacy `.running` marker from the old inline model.
+recover_orphans() {
+  local f d jid
+  for f in $(find "$STAGING_DIR" -maxdepth 2 -name .submitted 2>/dev/null); do
+    d=$(dirname "$f"); jid=$(cat "$f" 2>/dev/null)
+    if [ -n "$jid" ] && ! job_alive "$jid"; then
+      if [ ! -f "$d/.done" ] && [ ! -f "$d/.fail" ]; then
+        rm -f "$f"; touch "$d/.ready"
+        log "[RECOVER] $(basename "$d") (job $jid gone, no terminal marker) -> .ready"
+      else
+        rm -f "$f"   # job finished and wrote terminal but didn't clear .submitted
       fi
     fi
+  done
+  for f in $(find "$STAGING_DIR" -maxdepth 2 -name .running 2>/dev/null); do
+    mv "$f" "$(dirname "$f")/.ready" 2>/dev/null || true
+  done
+}
 
-    sleep "$INTERVAL"
-    continue
-  fi
+count_inflight() { find "$STAGING_DIR" -maxdepth 2 -name .submitted 2>/dev/null | wc -l; }
+count_ready()    { find "$STAGING_DIR" -maxdepth 2 -name .ready     2>/dev/null | wc -l; }
 
-  # Process ready samples (up to max concurrent)
-  for exp_acc in "${ready_samples[@]}"; do
-    # Concurrency control
-    while [ "$(jobs -rp | wc -l)" -ge "$MAX_CONCURRENT" ]; do
-      sleep 5
-    done
+submit_one() {
+  local exp="$1" staging="$STAGING_DIR/$1" jid
+  local args=(--parsable -p kumamoto-c768 --account=kumamoto-group
+              --cpus-per-task="$CPUS" --mem="$MEM" -t "$TIME_LIMIT"
+              -J "px-${GENOME}-${PIPELINE}-${exp}"
+              -o "$LOG_DIR/px-${exp}-%j.out" -e "$LOG_DIR/px-${exp}-%j.err")
+  [ -n "$EXCLUDE_NODES" ] && args+=(--exclude="$EXCLUDE_NODES")
+  jid=$(sbatch "${args[@]}" --wrap="bash $SCRIPTS_DIR/process-experiment.sh $STAGING_DIR $exp $PIPELINE $GENOME $OUTBASE $CPUS" 2>>"$LOG") || return 1
+  echo "$jid" > "$staging/.submitted"
+  rm -f "$staging/.ready"
+}
 
-    process_sample "$exp_acc" &
-    TOTAL_SUBMITTED=$((TOTAL_SUBMITTED + 1))
+recover_orphans
+TOTAL_SUBMITTED=0
 
-    if [ $((TOTAL_SUBMITTED % 20)) -eq 0 ]; then
-      done_count=$(find "$STAGING_DIR" -maxdepth 2 -name ".done" 2>/dev/null | wc -l)
-      ready_count=$(find "$STAGING_DIR" -maxdepth 2 -name ".ready" 2>/dev/null | wc -l)
-      running_count=$(jobs -rp | wc -l)
-      log "[STATUS] submitted=$TOTAL_SUBMITTED done=$done_count ready=$ready_count running=$running_count"
+while true; do
+  inflight=$(count_inflight)
+  # Submit ready experiments up to the in-flight cap.
+  for ready_file in $(find "$STAGING_DIR" -maxdepth 2 -name .ready 2>/dev/null); do
+    [ "$inflight" -ge "$MAX_INFLIGHT" ] && break
+    exp=$(basename "$(dirname "$ready_file")")
+    if submit_one "$exp"; then
+      inflight=$((inflight + 1)); TOTAL_SUBMITTED=$((TOTAL_SUBMITTED + 1))
+      [ $((TOTAL_SUBMITTED % 50)) -eq 0 ] && log "[STATUS] submitted=$TOTAL_SUBMITTED inflight=$inflight done=$(find "$OUTBASE/$GENOME" -name '*.stats.tsv' 2>/dev/null | wc -l)"
     fi
   done
 
+  recover_orphans
+
+  # Terminate when downloads are done and nothing is ready or in flight.
+  if [ -f "$STAGING_DIR/.downloads-complete" ] && [ "$(count_ready)" -eq 0 ] && [ "$(count_inflight)" -eq 0 ]; then
+    log "=== Complete: downloads done, no ready/in-flight. submitted=$TOTAL_SUBMITTED done=$(find "$OUTBASE/$GENOME" -name '*.stats.tsv' 2>/dev/null | wc -l) ==="
+    break
+  fi
   sleep "$INTERVAL"
 done
-
-wait
-TOTAL_DONE=$(find "$STAGING_DIR" -maxdepth 2 -name ".done" 2>/dev/null | wc -l)
-TOTAL_FAIL=$(find "$STAGING_DIR" -maxdepth 2 -name ".fail" 2>/dev/null | wc -l)
-log "=== Processor complete: done=$TOTAL_DONE failed=$TOTAL_FAIL ==="

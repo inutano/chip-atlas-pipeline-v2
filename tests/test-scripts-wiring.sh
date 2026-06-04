@@ -21,12 +21,17 @@ fail() { FAILED=$((FAILED + 1)); echo "FAIL: $1"; }
 SCRIPTS=(
   scripts/failure-classify.sh
   scripts/download-route.sh
+  scripts/job-settings.sh
   scripts/make-batches.sh
   scripts/batch-status.sh
   scripts/pipeline-v2.sh
   scripts/pipeline-v2-bs.sh
   scripts/fast-download.sh
+  scripts/production-download.sh
   scripts/nig/production-process.sh
+  scripts/nig/process-experiment.sh
+  scripts/nig/submit-separated.sh
+  scripts/nig/run-sample.sh
 )
 for s in "${SCRIPTS[@]}"; do
   if bash -n "$ROOT/$s" 2>/dev/null; then pass; else fail "syntax: $s"; fi
