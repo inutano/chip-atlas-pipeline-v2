@@ -52,6 +52,7 @@ declare -A MACS3_GSIZE=(
   [rn6]=2870184193
   [mm10]=2652783500
   [hg38]=2913022398
+  [TAIR10]=119146348
 )
 
 SHARED=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2
