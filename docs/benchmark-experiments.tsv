@@ -1,0 +1,44 @@
+# Memory benchmark dataset — 39 experiments, 3 per (genome,pipeline) spanning FASTQ size.
+# Used to measure peak RSS and set per-group SLURM --mem/--cpus (see docs/production-plan.md).
+# Selected 2026-06-04 via ENA fastq_bytes; BS "large" capped to <=15 GB (sort memory caps at
+# 2G*threads, so giant 45-178 GB samples add runtime not memory).
+# Columns: accession  genome  pipeline  approx_fastq_bytes  tier
+SRX8924699	hg38	chipseq	73275390	small
+SRX11457851	hg38	chipseq	1193587851	median
+SRX27877781	hg38	chipseq	6380986416	large
+SRX10735428	mm10	chipseq	7395872	small
+SRX27323960	mm10	chipseq	1776008180	median
+SRX17159091	mm10	chipseq	15293221169	large
+SRX19839787	rn6	chipseq	230467125	small
+SRX913491	rn6	chipseq	1763304642	median
+SRX32335760	rn6	chipseq	8587264289	large
+SRX23744780	dm6	chipseq	341453097	small
+SRX21664153	dm6	chipseq	980921314	median
+SRX19743262	dm6	chipseq	5501860768	large
+SRX23748815	ce11	chipseq	20546920	small
+SRX466486	ce11	chipseq	646949176	median
+SRX27562901	ce11	chipseq	2805383690	large
+SRX332093	sacCer3	chipseq	27549715	small
+SRX21233649	sacCer3	chipseq	310956953	median
+SRX31994381	sacCer3	chipseq	2434274254	large
+SRX2444095	TAIR10	chipseq	79224907	small
+SRX19004435	TAIR10	chipseq	1172440875	median
+SRX24756633	TAIR10	chipseq	7194032888	large
+SRX347971	hg38	bsseq	29443820	small
+SRX16341324	hg38	bsseq	1412259572	median
+SRX21821900	hg38	bsseq	4742144443	large
+SRX2346745	mm10	bsseq	39281515	small
+SRX24022623	mm10	bsseq	312043153	median
+SRX22537709	mm10	bsseq	13162716712	large
+SRX25981345	rn6	bsseq	31279479	small
+SRX10920631	rn6	bsseq	5002449303	median
+SRX10125001	rn6	bsseq	10300475427	large
+SRX1552686	dm6	bsseq	41072920	small
+SRX1552711	dm6	bsseq	416326031	median
+SRX174810	dm6	bsseq	10217810907	large
+SRX957102	sacCer3	bsseq	260695759	small
+SRX3236111	sacCer3	bsseq	1001111744	median
+ERX4244106	sacCer3	bsseq	3606394768	large
+SRX22161916	TAIR10	bsseq	5148618	small
+SRX2521060	TAIR10	bsseq	3090990961	median
+SRX398646	TAIR10	bsseq	4854910201	large
