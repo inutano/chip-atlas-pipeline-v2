@@ -28,13 +28,16 @@ while IFS=$'\t' read -r exp genome pipeline _bytes col5; do
   case "$exp" in \#*) continue ;; esac
   read -r cpus _mem _time <<< "$(job_settings "$pipeline" "$genome")"
   [ -z "$cpus" ] && { echo "skip $exp: no settings for $pipeline/$genome"; continue; }
-  # CONFIRM round: col5 like "20g" overrides --mem; else MEASURE at default ceiling.
-  mem="$DEFAULT_MEM"
-  case "$col5" in [0-9]*g) mem="$col5" ;; esac
+  # CONFIRM/SWEEP round: col5 like "20g" overrides --mem; tag makes the result file
+  # unique so the SAME sample can be run at several caps without clobbering. MEASURE
+  # round: col5 is tier text -> default ceiling, no tag.
+  mem="$DEFAULT_MEM"; tag=""
+  case "$col5" in [0-9]*g) mem="$col5"; tag="$mem" ;; esac
   args=(-p kumamoto-c768 --account=kumamoto-group --cpus-per-task="$cpus" --mem="$mem" -t 0-06:00:00
-        -J "bench-${genome}-${pipeline}-${exp}" -o "$RESULTDIR/$exp.out" -e "$RESULTDIR/$exp.err")
+        -J "bench-${genome}-${pipeline}-${exp}${tag:+-$tag}" \
+        -o "$RESULTDIR/$exp${tag:+.$tag}.out" -e "$RESULTDIR/$exp${tag:+.$tag}.err")
   [ -n "$EXCLUDE" ] && args+=(--exclude="$EXCLUDE")
-  jid=$(sbatch --parsable "${args[@]}" --wrap="bash $SCRIPTS_DIR/bench-experiment.sh $STAGING $exp $pipeline $genome $OUTBASE $cpus $RESULTDIR")
+  jid=$(sbatch --parsable "${args[@]}" --wrap="bash $SCRIPTS_DIR/bench-experiment.sh $STAGING $exp $pipeline $genome $OUTBASE $cpus $RESULTDIR $tag")
   echo "submitted $exp ($genome/$pipeline, ${cpus}c, --mem=$mem) job $jid"
   n=$((n+1))
 done < <(grep -v '^#' "$TSV")

@@ -20,6 +20,9 @@
 #
 set -uo pipefail
 STAGING="$1"; EXP="$2"; PIPELINE="$3"; GENOME="$4"; OUTBASE="$5"; CPUS="$6"; RESULTDIR="$7"
+TAG="${8:-}"                       # optional: disambiguate same EXP run at multiple caps
+RESFILE="$RESULTDIR/${EXP}${TAG:+.$TAG}.result"
+TAILFILE="$RESULTDIR/${EXP}${TAG:+.$TAG}.tail"
 export PATH=/opt/pkg/apptainer/1.4.5/bin:$PATH
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 SHARED=/lustre10/home/inutano-chiba/shared/chip-atlas-pipeline-v2
@@ -31,7 +34,7 @@ outdir="$OUTBASE/$GENOME/$EXP"; mkdir -p "$outdir"
 fwd=$(ls "$staging/${EXP}_1.fastq.gz" 2>/dev/null || ls "$staging/${EXP}.fastq.gz" 2>/dev/null || true)
 rev=$(ls "$staging/${EXP}_2.fastq.gz" 2>/dev/null || true); rev_arg=""; [ -n "$rev" ] && rev_arg="--fastq-rev $rev"
 mkdir -p "$RESULTDIR"
-if [ -z "$fwd" ]; then printf '%s\t%s\t%s\t%s\t0\t0\t0\t0\t0\tNOFASTQ\n' "$EXP" "$GENOME" "$PIPELINE" "$CPUS" > "$RESULTDIR/$EXP.result"; exit 1; fi
+if [ -z "$fwd" ]; then printf '%s\t%s\t%s\t%s\t0\t0\t0\t0\t0\tNOFASTQ\n' "$EXP" "$GENOME" "$PIPELINE" "$CPUS" > "$RESFILE"; exit 1; fi
 
 work=/data1/tmp/bench-${EXP}_$$; mkdir -p "$work"
 bind="--bind /data1/tmp:/data1/tmp --bind $OUTBASE:$OUTBASE --bind $REF:$REF --bind $STAGING:$STAGING"
@@ -74,8 +77,8 @@ peak_anon=$(cat "$PA" 2>/dev/null || echo 0)
 peak_cur=$(cat "$PC" 2>/dev/null || echo 0)
 peak_swap=$(cat "$PS" 2>/dev/null || echo 0)
 oom=$(awk '/^oom_kill /{print $2; exit}' "$CGDIR/memory.events" 2>/dev/null); oom=${oom:-0}
-tail -3 "$work/log" > "$RESULTDIR/$EXP.tail" 2>/dev/null || true
+tail -3 "$work/log" > "$TAILFILE" 2>/dev/null || true
 rm -rf "$work"
 printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
   "$EXP" "$GENOME" "$PIPELINE" "$CPUS" "$peak_anon" "$peak_cur" "$peak_swap" "$oom" "$((t1-t0))" "$rc" \
-  > "$RESULTDIR/$EXP.result"
+  > "$RESFILE"
