@@ -14,19 +14,37 @@
 #   any other non-zero -> transient/unknown. Retried up to a cap.
 DATA_FAILURE_RC=42
 
-# classify_outcome <rc> <stats_exists 0|1> <attempts> <max_retries>
-#   -> done | datafail | retry | infrafail
+# classify_outcome <rc> <stats_exists 0|1> <attempts> <max_retries> [oom 0|1] [bumped 0|1]
+#   -> done | datafail | oomretry | retry | infrafail
+# oom (default 0) is the caller's is_oom verdict; bumped (default 0) is whether the
+# job already ran at the doubled cap (.mem2x present). An OOM that hasn't been bumped
+# yet becomes `oomretry` (resubmit once at 2x mem); a second OOM at 2x gives up.
 classify_outcome() {
-  local rc="$1" stats="$2" attempts="$3" max="$4"
+  local rc="$1" stats="$2" attempts="$3" max="$4" oom="${5:-0}" bumped="${6:-0}"
   if [ "$rc" -eq 0 ] && [ "$stats" -eq 1 ]; then
     echo done
   elif [ "$rc" -eq "$DATA_FAILURE_RC" ]; then
     echo datafail
+  elif [ "$oom" -eq 1 ]; then
+    if [ "$bumped" -eq 0 ]; then echo oomretry; else echo infrafail; fi
   elif [ "$attempts" -lt "$max" ]; then
     echo retry
   else
     echo infrafail
   fi
+}
+
+# is_oom <rc> <cgroup_oom_kill_count> -> 1|0
+# An OOM kill shows as rc 137 (128+SIGKILL) and/or a nonzero memory.events oom_kill.
+is_oom() {
+  local rc="$1" oom_kill="${2:-0}"
+  if [ "$rc" -eq 137 ] || [ "${oom_kill:-0}" -gt 0 ]; then echo 1; else echo 0; fi
+}
+
+# double_mem <Ng> -> <2N g>   (the 2x cap for an oomretry resubmit)
+double_mem() {
+  local n="${1%[gG]}"
+  echo "$((n * 2))g"
 }
 
 # classify_macs3_failure <macs3_rc> <peaks_xls_exists 0|1>
@@ -75,24 +93,30 @@ read_attempts() {
   fi
 }
 
-# apply_outcome <staging_dir> <done|datafail|retry|infrafail>
+# apply_outcome <staging_dir> <done|datafail|oomretry|retry|infrafail>
 # Transitions the staging-dir markers and manages FASTQs + the attempt counter.
 # Assumes the sample currently holds a .running marker.
-#   done      -> .done; drop FASTQs + counter (processed successfully)
-#   datafail  -> .fail; drop FASTQs + counter (deterministic; retry is futile)
+#   done      -> .done; drop FASTQs + counter + mem-bump (processed successfully)
+#   datafail  -> .fail; drop FASTQs + counter + mem-bump (deterministic; futile)
+#   oomretry  -> .ready; set .mem2x bump; KEEP FASTQs; do NOT bump .attempts
+#               (coordinator resubmits this experiment once at 2x mem)
 #   retry     -> .ready; bump counter; KEEP FASTQs (will be reprocessed)
-#   infrafail -> .fail; KEEP FASTQs (retries exhausted; allow manual rerun)
+#   infrafail -> .fail; drop counter + mem-bump; KEEP FASTQs (manual rerun)
 apply_outcome() {
   local d="$1" outcome="$2"
   rm -f "$d/.running"
   case "$outcome" in
     done)
-      rm -f "$d"/*.fastq.gz "$d"/*.fastq "$d/.attempts"
+      rm -f "$d"/*.fastq.gz "$d"/*.fastq "$d/.attempts" "$d/.mem2x"
       touch "$d/.done"
       ;;
     datafail)
-      rm -f "$d"/*.fastq.gz "$d"/*.fastq "$d/.attempts"
+      rm -f "$d"/*.fastq.gz "$d"/*.fastq "$d/.attempts" "$d/.mem2x"
       touch "$d/.fail"
+      ;;
+    oomretry)
+      touch "$d/.mem2x"
+      touch "$d/.ready"
       ;;
     retry)
       local n
@@ -101,7 +125,7 @@ apply_outcome() {
       touch "$d/.ready"
       ;;
     infrafail)
-      rm -f "$d/.attempts"
+      rm -f "$d/.attempts" "$d/.mem2x"
       touch "$d/.fail"
       ;;
   esac

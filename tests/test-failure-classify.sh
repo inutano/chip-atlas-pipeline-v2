@@ -50,6 +50,31 @@ assert_eq "rc0 but no stats, under cap => retry" "retry"     "$(classify_outcome
 assert_eq "rc0 but no stats, at cap => infrafail" "infrafail" "$(classify_outcome 0 0 2 2)"
 
 # ----------------------------------------------------------------------
+# OOM-retry-at-2x: classify_outcome takes optional <oom 0|1> <bumped 0|1> as
+# args 5,6 (default 0 -> legacy behaviour). The caller computes oom via is_oom.
+#   oom & !bumped -> oomretry  (resubmit once at 2x mem)
+#   oom &  bumped -> infrafail (already at 2x and still OOM; give up)
+# ----------------------------------------------------------------------
+assert_eq "rc137 legacy 4-arg (no oom flag) => retry" "retry"  "$(classify_outcome 137 0 0 2)"
+assert_eq "oom, not yet bumped => oomretry"        "oomretry"  "$(classify_outcome 137 0 0 2 1 0)"
+assert_eq "oom via counter (rc1+oom) => oomretry"  "oomretry"  "$(classify_outcome 1 0 0 2 1 0)"
+assert_eq "oom, already at 2x => infrafail"        "infrafail" "$(classify_outcome 137 0 0 2 1 1)"
+assert_eq "rc42 beats oom flag => datafail"        "datafail"  "$(classify_outcome 42 0 0 2 1 0)"
+assert_eq "done beats oom flag => done"            "done"      "$(classify_outcome 0 1 0 2 1 0)"
+
+# is_oom <rc> <cgroup_oom_kill> -> 1|0  (rc 137 SIGKILL or a nonzero oom_kill count)
+assert_eq "is_oom rc137 => 1"            "1" "$(is_oom 137 0)"
+assert_eq "is_oom rc0 => 0"              "0" "$(is_oom 0 0)"
+assert_eq "is_oom rc1 no kill => 0"      "0" "$(is_oom 1 0)"
+assert_eq "is_oom counter>0 => 1"        "1" "$(is_oom 1 2)"
+assert_eq "is_oom rc0 but counter>0 => 1" "1" "$(is_oom 0 5)"
+
+# double_mem <Ng> -> <2N g>  (the 2x resubmit cap)
+assert_eq "double 16g => 32g"  "32g" "$(double_mem 16g)"
+assert_eq "double 20g => 40g"  "40g" "$(double_mem 20g)"
+assert_eq "double 8g => 16g"   "16g" "$(double_mem 8g)"
+
+# ----------------------------------------------------------------------
 # classify_macs3_failure <macs3_rc> <peaks_xls_exists 0|1>
 #   -> ok | data | infra
 # (0 peaks is fine; only a true crash with no output is a failure)

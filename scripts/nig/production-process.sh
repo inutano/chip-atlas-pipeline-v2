@@ -84,15 +84,19 @@ count_inflight() { find "$STAGING_DIR" -maxdepth 2 -name .submitted 2>/dev/null 
 count_ready()    { find "$STAGING_DIR" -maxdepth 2 -name .ready     2>/dev/null | wc -l; }
 
 submit_one() {
-  local exp="$1" staging="$STAGING_DIR/$1" jid
+  local exp="$1" staging="$STAGING_DIR/$1" jid mem="$MEM"
+  # An experiment that OOM'd once carries a .mem2x bump: resubmit at double the cap.
+  [ -f "$staging/.mem2x" ] && mem="$(double_mem "$MEM")"
   local args=(--parsable -p kumamoto-c768 --account=kumamoto-group
-              --cpus-per-task="$CPUS" --mem="$MEM" -t "$TIME_LIMIT"
+              --cpus-per-task="$CPUS" --mem="$mem" -t "$TIME_LIMIT"
               -J "px-${GENOME}-${PIPELINE}-${exp}"
               -o "$LOG_DIR/px-${exp}-%j.out" -e "$LOG_DIR/px-${exp}-%j.err")
   [ -n "$EXCLUDE_NODES" ] && args+=(--exclude="$EXCLUDE_NODES")
   jid=$(sbatch "${args[@]}" --wrap="bash $SCRIPTS_DIR/process-experiment.sh $STAGING_DIR $exp $PIPELINE $GENOME $OUTBASE $CPUS" 2>>"$LOG") || return 1
   echo "$jid" > "$staging/.submitted"
   rm -f "$staging/.ready"
+  [ "$mem" != "$MEM" ] && log "[OOM-RETRY] $exp resubmitted at --mem=$mem (2x)"
+  return 0
 }
 
 recover_orphans
