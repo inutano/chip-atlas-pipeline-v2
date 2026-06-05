@@ -57,8 +57,12 @@ echo "=== target selection (max-anon sample per class) ==="
 for class in mammal-chipseq small-chipseq mammal-bsseq small-bsseq; do
   pipe=${class#*-}; size=${class%-*}
   if [ "$size" = mammal ]; then gpat='rn6|mm10|hg38'; else gpat='sacCer3|ce11|dm6|TAIR10'; fi
+  # Anchor on the max-anon CLEAN (rc=0) sample only: a rc=42 data-fail or NOFASTQ
+  # never reached the memory-heavy late steps (e.g. methylation tables), so it
+  # would under-measure the floor. Among clean samples max-anon naturally picks
+  # the hardest genome (e.g. hg38 for BS, most CpGs).
   row=$(cat "$RES"/*.result 2>/dev/null | awk -F'\t' -v p="$pipe" -v g="$gpat" '
-    $3==p && $2 ~ ("^("g")$") { if ($5+0>m){m=$5+0; r=$0} } END{ print r }')
+    $3==p && $2 ~ ("^("g")$") && $10==0 { if ($5+0>m){m=$5+0; r=$0} } END{ print r }')
   if [ -z "$row" ]; then echo "WARN: no measure sample for $class"; continue; fi
   exp=$(echo "$row" | cut -f1); gen=$(echo "$row" | cut -f2); anon=$(echo "$row" | cut -f5)
   printf '  %-16s target=%s (%s) anon=%dG  ladder=[%s]\n' "$class" "$exp" "$gen" "$((anon/GIB))" "${LADDER[$class]}"
