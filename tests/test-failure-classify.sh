@@ -75,6 +75,24 @@ assert_eq "double 20g => 40g"  "40g" "$(double_mem 20g)"
 assert_eq "double 8g => 16g"   "16g" "$(double_mem 8g)"
 
 # ----------------------------------------------------------------------
+# classify_orphan <sacct_state> <attempts> <max_retries> [bumped 0|1]
+#   -> fail | oomretry | retry
+# For a job that vanished from the queue without writing a terminal marker
+# (SLURM killed it). TIMEOUT is futile to re-run at the same walltime -> fail
+# into the retry bucket. OUT_OF_MEMORY -> 2x bump (once). NODE_FAIL/PREEMPTED/
+# unknown -> bounded retry. CANCELLED (operator/system) -> fail, don't fight it.
+# ----------------------------------------------------------------------
+assert_eq "orphan TIMEOUT => fail"               "fail"     "$(classify_orphan TIMEOUT 0 2)"
+assert_eq "orphan TIMEOUT ignores attempts"      "fail"     "$(classify_orphan TIMEOUT 0 2)"
+assert_eq "orphan OOM, not bumped => oomretry"   "oomretry" "$(classify_orphan OUT_OF_MEMORY 0 2 0)"
+assert_eq "orphan OOM, bumped => fail"           "fail"     "$(classify_orphan OUT_OF_MEMORY 0 2 1)"
+assert_eq "orphan NODE_FAIL under cap => retry"  "retry"    "$(classify_orphan NODE_FAIL 0 2)"
+assert_eq "orphan NODE_FAIL at cap => fail"      "fail"     "$(classify_orphan NODE_FAIL 2 2)"
+assert_eq "orphan PREEMPTED => retry"            "retry"    "$(classify_orphan PREEMPTED 1 2)"
+assert_eq "orphan CANCELLED => fail"             "fail"     "$(classify_orphan CANCELLED 0 2)"
+assert_eq "orphan empty/unknown => retry"        "retry"    "$(classify_orphan '' 0 2)"
+
+# ----------------------------------------------------------------------
 # classify_macs3_failure <macs3_rc> <peaks_xls_exists 0|1>
 #   -> ok | data | infra
 # (0 peaks is fine; only a true crash with no output is a failure)

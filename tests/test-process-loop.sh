@@ -30,7 +30,9 @@ done
 set -- $w   # bash <path> <STAGING> <EXP> <pipeline> <genome> <outbase> <cpus>
 staging="$3"; exp="$4"
 [ -n "${MEM_CAP_DIR:-}" ] && echo "$mem" > "$MEM_CAP_DIR/mem.$exp"
-mkdir -p "$staging/$exp"; touch "$staging/$exp/.done"
+mkdir -p "$staging/$exp"
+# SRX0000009 simulates a walltime kill: it never writes a terminal marker (orphan).
+case "$exp" in SRX0000009) : ;; *) touch "$staging/$exp/.done" ;; esac
 echo "$n"
 SBATCH
 
@@ -39,7 +41,12 @@ cat > "$STUB/squeue" <<'SQUEUE'
 #!/bin/bash
 exit 0
 SQUEUE
-chmod +x "$STUB/sbatch" "$STUB/squeue"
+# Fake sacct: report TIMEOUT for any queried job — drives the orphan timeout->fail path.
+cat > "$STUB/sacct" <<'SACCT'
+#!/bin/bash
+echo TIMEOUT
+SACCT
+chmod +x "$STUB/sbatch" "$STUB/squeue" "$STUB/sacct"
 export FAKEJID_FILE="$WORK/jid"
 export MEM_CAP_DIR="$WORK"
 
@@ -50,6 +57,10 @@ done
 # A third experiment carrying the OOM .mem2x bump: must be submitted at 2x --mem.
 mkdir -p "$ST/SRX0000003"
 touch "$ST/SRX0000003/SRX0000003.fastq.gz" "$ST/SRX0000003/.ready" "$ST/SRX0000003/.mem2x"
+# A fourth experiment whose job is killed by walltime (orphan, sacct=TIMEOUT): must
+# end .fail for the later retry pass, NOT loop forever back to .ready.
+mkdir -p "$ST/SRX0000009"
+touch "$ST/SRX0000009/SRX0000009.fastq.gz" "$ST/SRX0000009/.ready"
 touch "$ST/.downloads-complete"
 
 # Run the coordinator with the stubs on PATH, fast interval, short overall guard.
@@ -69,6 +80,9 @@ check "no .ready left"            test -z "$(find "$ST" -name .ready)"
 # sacCer3 chipseq base --mem is 16g; the .mem2x-bumped experiment doubles to 32g.
 check "normal exp submitted at base 16g"   test "$(cat "$WORK/mem.SRX0000001" 2>/dev/null)" = "16g"
 check "oom-bumped exp submitted at 2x 32g" test "$(cat "$WORK/mem.SRX0000003" 2>/dev/null)" = "32g"
+# Walltime-orphan must terminate into .fail (not loop) for the retry pass.
+check "timeout orphan ended .fail"         test -f "$ST/SRX0000009/.fail"
+check "timeout orphan not stuck .ready"    test ! -e "$ST/SRX0000009/.ready"
 grep -q "Complete:" "$WORK/proc.log" && PASSED=$((PASSED+1)) || { FAILED=$((FAILED+1)); echo "FAIL: no Complete log line"; echo "--- proc.log ---"; tail -8 "$WORK/proc.log"; }
 
 echo "----------------------------------------"

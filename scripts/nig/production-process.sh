@@ -60,20 +60,33 @@ log "Per-experiment job: ${CPUS}c, ${MEM}, ${TIME_LIMIT}; max in-flight ${MAX_IN
 job_alive() { [ -n "$(squeue -j "$1" -h -o '%i' 2>/dev/null)" ]; }
 
 # Reset any orphaned in-flight markers: a `.submitted` whose job is gone from the
-# queue but left no terminal marker (NODE_FAIL/preemption) goes back to `.ready`.
+# queue but left no terminal marker (SLURM killed it). The sacct state decides:
+# TIMEOUT/CANCELLED -> .fail (re-running at the same walltime is futile; the retry
+# pass handles it); OUT_OF_MEMORY -> one-shot 2x bump; NODE_FAIL/PREEMPTED/unknown
+# -> bounded retry. This bounds the loop so a >walltime sample can't churn forever.
 # Also rescue any legacy `.running` marker from the old inline model.
 recover_orphans() {
-  local f d jid
+  local f d jid st n bumped outcome
   for f in $(find "$STAGING_DIR" -maxdepth 2 -name .submitted 2>/dev/null); do
     d=$(dirname "$f"); jid=$(cat "$f" 2>/dev/null)
-    if [ -n "$jid" ] && ! job_alive "$jid"; then
-      if [ ! -f "$d/.done" ] && [ ! -f "$d/.fail" ]; then
-        rm -f "$f"; touch "$d/.ready"
-        log "[RECOVER] $(basename "$d") (job $jid gone, no terminal marker) -> .ready"
-      else
-        rm -f "$f"   # job finished and wrote terminal but didn't clear .submitted
-      fi
-    fi
+    if [ -z "$jid" ]; then rm -f "$f"; continue; fi
+    if job_alive "$jid"; then continue; fi
+    if [ -f "$d/.done" ] || [ -f "$d/.fail" ]; then rm -f "$f"; continue; fi
+    st=$(sacct -n -X -j "$jid" -o State 2>/dev/null | head -1 | awk '{print $1}')
+    n=$(read_attempts "$d"); bumped=0; [ -f "$d/.mem2x" ] && bumped=1
+    outcome=$(classify_orphan "$st" "$n" "$MAX_RETRIES" "$bumped")
+    rm -f "$f"
+    case "$outcome" in
+      retry)
+        echo $((n + 1)) > "$d/.attempts"; touch "$d/.ready"
+        log "[RECOVER:${st:-?}] $(basename "$d") job $jid -> .ready (attempt $((n+1))/$MAX_RETRIES)" ;;
+      oomretry)
+        touch "$d/.mem2x"; touch "$d/.ready"
+        log "[RECOVER:OOM] $(basename "$d") job $jid -> .ready @2x mem" ;;
+      fail)
+        rm -f "$d/.attempts" "$d/.mem2x"; touch "$d/.fail"
+        log "[RECOVER:${st:-?}->FAIL] $(basename "$d") job $jid -> .fail (queued for retry pass)" ;;
+    esac
   done
   for f in $(find "$STAGING_DIR" -maxdepth 2 -name .running 2>/dev/null); do
     mv "$f" "$(dirname "$f")/.ready" 2>/dev/null || true

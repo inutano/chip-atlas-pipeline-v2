@@ -47,6 +47,25 @@ double_mem() {
   echo "$((n * 2))g"
 }
 
+# classify_orphan <sacct_state> <attempts> <max_retries> [bumped 0|1]
+#   -> fail | oomretry | retry
+# Decides what to do with a job that vanished from the queue without writing a
+# terminal marker (SLURM killed it mid-run). The first-pass strategy runs every
+# sample at a short walltime, so a TIMEOUT is expected and re-running at the same
+# limit is futile -> send it to the .fail retry bucket. An OOM that also killed the
+# wrapper gets the same one-shot 2x bump as a normal oomretry. Genuinely transient
+# losses (NODE_FAIL/PREEMPTED/unknown) retry up to the cap; CANCELLED stays failed.
+classify_orphan() {
+  local state="$1" attempts="$2" max="$3" bumped="${4:-0}"
+  case "$state" in
+    TIMEOUT)        echo fail ;;
+    OUT_OF_MEMORY|OOM)
+      if [ "$bumped" -eq 0 ]; then echo oomretry; else echo fail; fi ;;
+    CANCELLED*)     echo fail ;;
+    *)  if [ "$attempts" -lt "$max" ]; then echo retry; else echo fail; fi ;;
+  esac
+}
+
 # classify_macs3_failure <macs3_rc> <peaks_xls_exists 0|1>
 #   -> ok | data | infra
 # 0 peaks is a valid result (low-signal sample) as long as MACS3 produced its
