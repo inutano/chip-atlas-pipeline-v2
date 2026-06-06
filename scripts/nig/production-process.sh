@@ -61,31 +61,33 @@ job_alive() { [ -n "$(squeue -j "$1" -h -o '%i' 2>/dev/null)" ]; }
 
 # Reset any orphaned in-flight markers: a `.submitted` whose job is gone from the
 # queue but left no terminal marker (SLURM killed it). The sacct state decides:
-# TIMEOUT/CANCELLED -> .fail (re-running at the same walltime is futile; the retry
-# pass handles it); OUT_OF_MEMORY -> one-shot 2x bump; NODE_FAIL/PREEMPTED/unknown
-# -> bounded retry. This bounds the loop so a >walltime sample can't churn forever.
+# TIMEOUT/OUT_OF_MEMORY/CANCELLED -> .fail tagged with the reason (deterministic at
+# this setting; counted and reconsidered globally); NODE_FAIL/PREEMPTED/unknown ->
+# bounded retry. This bounds the loop so a >walltime sample can't churn forever.
 # Also rescue any legacy `.running` marker from the old inline model.
 recover_orphans() {
-  local f d jid st n bumped outcome
+  local f d jid st n outcome
   for f in $(find "$STAGING_DIR" -maxdepth 2 -name .submitted 2>/dev/null); do
     d=$(dirname "$f"); jid=$(cat "$f" 2>/dev/null)
     if [ -z "$jid" ]; then rm -f "$f"; continue; fi
     if job_alive "$jid"; then continue; fi
     if [ -f "$d/.done" ] || [ -f "$d/.fail" ]; then rm -f "$f"; continue; fi
     st=$(sacct -n -X -j "$jid" -o State 2>/dev/null | head -1 | awk '{print $1}')
-    n=$(read_attempts "$d"); bumped=0; [ -f "$d/.mem2x" ] && bumped=1
-    outcome=$(classify_orphan "$st" "$n" "$MAX_RETRIES" "$bumped")
+    n=$(read_attempts "$d")
+    outcome=$(classify_orphan "$st" "$n" "$MAX_RETRIES")
     rm -f "$f"
     case "$outcome" in
       retry)
         echo $((n + 1)) > "$d/.attempts"; touch "$d/.ready"
         log "[RECOVER:${st:-?}] $(basename "$d") job $jid -> .ready (attempt $((n+1))/$MAX_RETRIES)" ;;
-      oomretry)
-        touch "$d/.mem2x"; touch "$d/.ready"
-        log "[RECOVER:OOM] $(basename "$d") job $jid -> .ready @2x mem" ;;
       fail)
-        rm -f "$d/.attempts" "$d/.mem2x"; touch "$d/.fail"
-        log "[RECOVER:${st:-?}->FAIL] $(basename "$d") job $jid -> .fail (queued for retry pass)" ;;
+        rm -f "$d/.attempts"
+        case "$st" in
+          OUT_OF_MEMORY|OOM) echo oom     > "$d/.fail" ;;
+          TIMEOUT)           echo timeout > "$d/.fail" ;;
+          *)                 echo "${st:-orphan}" | tr 'A-Z' 'a-z' > "$d/.fail" ;;
+        esac
+        log "[RECOVER:${st:-?}->FAIL] $(basename "$d") job $jid -> .fail (counted; retry pass)" ;;
     esac
   done
   for f in $(find "$STAGING_DIR" -maxdepth 2 -name .running 2>/dev/null); do
@@ -97,19 +99,17 @@ count_inflight() { find "$STAGING_DIR" -maxdepth 2 -name .submitted 2>/dev/null 
 count_ready()    { find "$STAGING_DIR" -maxdepth 2 -name .ready     2>/dev/null | wc -l; }
 
 submit_one() {
-  local exp="$1" staging="$STAGING_DIR/$1" jid mem="$MEM"
-  # An experiment that OOM'd once carries a .mem2x bump: resubmit at double the cap.
-  [ -f "$staging/.mem2x" ] && mem="$(double_mem "$MEM")"
+  local exp="$1" staging="$STAGING_DIR/$1" jid
+  # Uniform first pass: every experiment at the class --mem/--cpus (no per-sample
+  # escalation). An OOM lands in the .fail "oom" bucket to be tallied afterward.
   local args=(--parsable -p kumamoto-c768 --account=kumamoto-group
-              --cpus-per-task="$CPUS" --mem="$mem" -t "$TIME_LIMIT"
+              --cpus-per-task="$CPUS" --mem="$MEM" -t "$TIME_LIMIT"
               -J "px-${GENOME}-${PIPELINE}-${exp}"
               -o "$LOG_DIR/px-${exp}-%j.out" -e "$LOG_DIR/px-${exp}-%j.err")
   [ -n "$EXCLUDE_NODES" ] && args+=(--exclude="$EXCLUDE_NODES")
   jid=$(sbatch "${args[@]}" --wrap="bash $SCRIPTS_DIR/process-experiment.sh $STAGING_DIR $exp $PIPELINE $GENOME $OUTBASE $CPUS" 2>>"$LOG") || return 1
   echo "$jid" > "$staging/.submitted"
   rm -f "$staging/.ready"
-  [ "$mem" != "$MEM" ] && log "[OOM-RETRY] $exp resubmitted at --mem=$mem (2x)"
-  return 0
 }
 
 recover_orphans

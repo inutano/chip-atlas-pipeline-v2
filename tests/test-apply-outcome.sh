@@ -66,6 +66,7 @@ rm -rf "$d"
 d="$(new_staging)"
 apply_outcome "$d" datafail
 check "datafail: .fail created"    test -f "$d/.fail"
+assert_eq "datafail: .fail tagged data" "data" "$(cat "$d/.fail")"
 check "datafail: .running removed" test ! -e "$d/.running"
 check "datafail: FASTQ cleaned"    test ! -e "$d/SRX0000001.fastq.gz"
 rm -rf "$d"
@@ -89,30 +90,20 @@ rm -rf "$d"
 d="$(new_staging 2)"
 apply_outcome "$d" infrafail
 check "infrafail: .fail created"   test -f "$d/.fail"
+assert_eq "infrafail: .fail tagged infra" "infra" "$(cat "$d/.fail")"
 check "infrafail: .running removed" test ! -e "$d/.running"
 check "infrafail: FASTQ kept"      test -e "$d/SRX0000001.fastq.gz"
 rm -rf "$d"
 
-# ---- apply_outcome: oomretry (set .mem2x bump for 2x resubmit; keep FASTQ;
-#      do NOT bump .attempts — the mem bump is a separate one-shot mechanism) ----
+# ---- apply_outcome: oomfail (OOM is a countable terminal failure; uniform first
+#      pass, no per-sample mem escalation). .fail tagged "oom"; KEEP FASTQ so the
+#      bucket can be reprocessed later at a higher mem if the rate is too high. ----
 d="$(new_staging)"
-apply_outcome "$d" oomretry
-check "oomretry: .mem2x created"   test -f "$d/.mem2x"
-check "oomretry: .ready created"   test -f "$d/.ready"
-check "oomretry: .running removed" test ! -e "$d/.running"
-check "oomretry: FASTQ kept"       test -e "$d/SRX0000001.fastq.gz"
-assert_eq "oomretry: attempts untouched (0)" "0" "$(read_attempts "$d")"
-rm -rf "$d"
-
-# ---- the .mem2x bump is cleared on terminal outcomes (done / infrafail) ----
-d="$(new_staging)"; touch "$d/.mem2x"
-apply_outcome "$d" done
-check "done: .mem2x cleared"       test ! -e "$d/.mem2x"
-rm -rf "$d"
-d="$(new_staging 2)"; touch "$d/.mem2x"
-apply_outcome "$d" infrafail
-check "infrafail: .mem2x cleared"  test ! -e "$d/.mem2x"
-check "infrafail: FASTQ kept"      test -e "$d/SRX0000001.fastq.gz"
+apply_outcome "$d" oomfail
+check "oomfail: .fail created"     test -f "$d/.fail"
+assert_eq "oomfail: .fail tagged oom" "oom" "$(cat "$d/.fail")"
+check "oomfail: .running removed"  test ! -e "$d/.running"
+check "oomfail: FASTQ kept"        test -e "$d/SRX0000001.fastq.gz"
 rm -rf "$d"
 
 echo "----------------------------------------"

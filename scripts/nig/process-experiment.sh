@@ -94,17 +94,16 @@ rm -rf "$work"
 
 # Read this job's cgroup OOM counter (cgroup v2 stats are hierarchical, so it
 # includes the apptainer child) — catches an OOM kill even if the pipeline masked
-# rc 137. .mem2x marks a job already resubmitted at the doubled cap.
+# rc 137, so an OOM is recorded as a countable `oomfail` rather than a generic retry.
 cg=$(sed -n 's/^0:://p' /proc/self/cgroup | head -1)
 oom_kill=$(awk '/^oom_kill /{print $2; exit}' "/sys/fs/cgroup${cg}/memory.events" 2>/dev/null || echo 0)
 oom=$(is_oom "$rc" "${oom_kill:-0}")
-bumped=0; [ -f "$staging/.mem2x" ] && bumped=1
 
-# Decide outcome (done / datafail / oomretry / retry / infrafail) and transition.
+# Decide outcome (done / datafail / oomfail / retry / infrafail) and transition.
 stats_exists=0; [ -f "$outdir/${EXP_ACC}.stats.tsv" ] && stats_exists=1
 attempts=$(read_attempts "$staging")
-outcome=$(classify_outcome "$rc" "$stats_exists" "$attempts" "$MAX_RETRIES" "$oom" "$bumped")
+outcome=$(classify_outcome "$rc" "$stats_exists" "$attempts" "$MAX_RETRIES" "$oom")
 rm -f "$staging/.submitted"
 apply_outcome "$staging" "$outcome"
-echo "[${outcome^^}] $EXP_ACC (rc=$rc, oom=$oom, bumped=$bumped, attempt $attempts/$MAX_RETRIES)"
+echo "[${outcome^^}] $EXP_ACC (rc=$rc, oom=$oom, attempt $attempts/$MAX_RETRIES)"
 [ "$outcome" = "done" ]

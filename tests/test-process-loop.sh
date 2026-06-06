@@ -54,10 +54,7 @@ export MEM_CAP_DIR="$WORK"
 for e in SRX0000001 SRX0000002; do
   mkdir -p "$ST/$e"; touch "$ST/$e/${e}.fastq.gz" "$ST/$e/.ready"
 done
-# A third experiment carrying the OOM .mem2x bump: must be submitted at 2x --mem.
-mkdir -p "$ST/SRX0000003"
-touch "$ST/SRX0000003/SRX0000003.fastq.gz" "$ST/SRX0000003/.ready" "$ST/SRX0000003/.mem2x"
-# A fourth experiment whose job is killed by walltime (orphan, sacct=TIMEOUT): must
+# A third experiment whose job is killed by walltime (orphan, sacct=TIMEOUT): must
 # end .fail for the later retry pass, NOT loop forever back to .ready.
 mkdir -p "$ST/SRX0000009"
 touch "$ST/SRX0000009/SRX0000009.fastq.gz" "$ST/SRX0000009/.ready"
@@ -74,12 +71,10 @@ check(){ local d="$1"; shift; if "$@"; then PASSED=$((PASSED+1)); else FAILED=$(
 check "loop exited cleanly (not timeout)" test "$rc" -eq 0
 check "SRX1 ended .done"          test -f "$ST/SRX0000001/.done"
 check "SRX2 ended .done"          test -f "$ST/SRX0000002/.done"
-check "SRX3 (oom-bumped) ended .done" test -f "$ST/SRX0000003/.done"
 check "no .submitted left"        test -z "$(find "$ST" -name .submitted)"
 check "no .ready left"            test -z "$(find "$ST" -name .ready)"
-# sacCer3 chipseq base --mem is 16g; the .mem2x-bumped experiment doubles to 32g.
-check "normal exp submitted at base 16g"   test "$(cat "$WORK/mem.SRX0000001" 2>/dev/null)" = "16g"
-check "oom-bumped exp submitted at 2x 32g" test "$(cat "$WORK/mem.SRX0000003" 2>/dev/null)" = "32g"
+# sacCer3 chipseq base --mem is 16g (uniform first pass; no per-sample escalation).
+check "submitted at base 16g"     test "$(cat "$WORK/mem.SRX0000001" 2>/dev/null)" = "16g"
 # Walltime-orphan must terminate into .fail (not loop) for the retry pass.
 check "timeout orphan ended .fail"         test -f "$ST/SRX0000009/.fail"
 check "timeout orphan not stuck .ready"    test ! -e "$ST/SRX0000009/.ready"
