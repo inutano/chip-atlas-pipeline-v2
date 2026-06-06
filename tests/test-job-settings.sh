@@ -28,13 +28,14 @@ assert_eq "chip TAIR10"  "4 16g 0-02:00:00" "$(job_settings chipseq TAIR10)"
 assert_eq "chip rn6"     "5 20g 0-02:00:00" "$(job_settings chipseq rn6)"
 assert_eq "chip mm10"    "5 20g 0-02:00:00" "$(job_settings chipseq mm10)"
 assert_eq "chip hg38"    "5 20g 0-02:00:00" "$(job_settings chipseq hg38)"
-# BS: small genomes 4c/16g/2h; mammals 4c/20g/4h
+# BS: all genomes 4c/16g/2h (first-pass default; deep BS that exceeds 2h fails into
+# the retry bucket rather than holding a long walltime for every sample).
 assert_eq "bs sacCer3"   "4 16g 0-02:00:00" "$(job_settings bsseq sacCer3)"
 assert_eq "bs dm6"       "4 16g 0-02:00:00" "$(job_settings bsseq dm6)"
 assert_eq "bs TAIR10"    "4 16g 0-02:00:00" "$(job_settings bsseq TAIR10)"
-assert_eq "bs rn6"       "4 20g 0-04:00:00" "$(job_settings bsseq rn6)"
-assert_eq "bs mm10"      "4 20g 0-04:00:00" "$(job_settings bsseq mm10)"
-assert_eq "bs hg38"      "4 20g 0-04:00:00" "$(job_settings bsseq hg38)"
+assert_eq "bs rn6"       "4 16g 0-02:00:00" "$(job_settings bsseq rn6)"
+assert_eq "bs mm10"      "4 16g 0-02:00:00" "$(job_settings bsseq mm10)"
+assert_eq "bs hg38"      "4 16g 0-02:00:00" "$(job_settings bsseq hg38)"
 # unknown genome -> empty (caller must error, not guess)
 assert_eq "unknown genome" "" "$(job_settings chipseq nosuchgenome)"
 assert_eq "unknown pipeline" "" "$(job_settings rnaseq hg38)"
