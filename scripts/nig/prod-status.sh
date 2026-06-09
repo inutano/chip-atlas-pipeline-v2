@@ -41,8 +41,9 @@ done
 
 echo "--- .fail by reason (integer = download give-up count; word = processing) ---"
 find "$STAGEROOT" -name .fail -exec cat {} + 2>/dev/null | sort | uniq -c | sed 's/^/  /' || true
-echo "--- latest downloader log line per job ---"
-for L in "$LOGROOT"/production-*/logs/dl-*.out; do
+echo "--- latest downloader log line (active jobs, last 3h) ---"
+while IFS= read -r L; do
   [ -e "$L" ] || continue
-  printf '  %s: ' "$(basename "$L")"; tail -n 1 "$L" 2>/dev/null
-done
+  line=$(tail -n 1 "$L" 2>/dev/null)
+  [ -n "$line" ] && printf '  %s: %s\n' "$(basename "$L")" "$line"
+done < <(find "$LOGROOT"/production-*/logs -name 'dl-*.out' -newermt '3 hours ago' 2>/dev/null)
