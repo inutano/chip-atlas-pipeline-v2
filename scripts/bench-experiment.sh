@@ -30,7 +30,9 @@ REF=$SHARED/references
 declare -A GS=([sacCer3]=12157105 [ce11]=100286401 [dm6]=142573017 [rn6]=2870184193 [mm10]=2652783500 [hg38]=2913022398 [TAIR10]=119146348)
 
 staging="$STAGING/$EXP"
-outdir="$OUTBASE/$GENOME/$EXP"; mkdir -p "$outdir"
+# Tag-unique outdir so the SAME experiment run at several caps (sweep/floor tests)
+# doesn't clobber its own outputs across concurrent jobs.
+outdir="$OUTBASE/$GENOME/${EXP}${TAG:+_$TAG}"; mkdir -p "$outdir"
 fwd=$(ls "$staging/${EXP}_1.fastq.gz" 2>/dev/null || ls "$staging/${EXP}.fastq.gz" 2>/dev/null || true)
 rev=$(ls "$staging/${EXP}_2.fastq.gz" 2>/dev/null || true); rev_arg=""; [ -n "$rev" ] && rev_arg="--fastq-rev $rev"
 mkdir -p "$RESULTDIR"
