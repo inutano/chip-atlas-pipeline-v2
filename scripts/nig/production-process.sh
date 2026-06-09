@@ -15,7 +15,13 @@
 #
 # Env: MAX_RETRIES (default 2), EXCLUDE_NODES (comma list passed to sbatch --exclude).
 #
-set -eo pipefail
+# NOT `set -e`: this is a long-running coordinator daemon that calls flaky cluster
+# commands (squeue/sacct/sbatch) in a loop. Under `set -e` a single transient
+# failure (e.g. sacct hiccuping under load) kills the whole coordinator mid-run —
+# which is exactly what crashed it on 2026-06-10. Critical ops are guarded explicitly
+# (sbatch `|| return 1`, the `[ -z "$CPUS" ]` check). Keep -u (catch unset vars) and
+# pipefail (so a guarded pipe's status is meaningful), but never auto-exit.
+set -uo pipefail
 
 STAGING_DIR="$1"
 PIPELINE="$2"        # "chipseq" or "bsseq"
@@ -72,7 +78,7 @@ recover_orphans() {
     if [ -z "$jid" ]; then rm -f "$f"; continue; fi
     if job_alive "$jid"; then continue; fi
     if [ -f "$d/.done" ] || [ -f "$d/.fail" ]; then rm -f "$f"; continue; fi
-    st=$(sacct -n -X -j "$jid" -o State 2>/dev/null | head -1 | awk '{print $1}')
+    st=$(sacct -n -X -j "$jid" -o State 2>/dev/null | head -1 | awk '{print $1}') || st=""
     n=$(read_attempts "$d")
     outcome=$(classify_orphan "$st" "$n" "$MAX_RETRIES")
     rm -f "$f"
