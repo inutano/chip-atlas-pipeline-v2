@@ -45,29 +45,35 @@ echo "  Download: $DL_CONCURRENT concurrent, buffer $DL_BUFFER"
 echo "  Process:  per-experiment sbatch (cores/mem from job-settings.sh), max in-flight ${PROC_MAX_INFLIGHT}"
 echo ""
 
-# Downloader + coordinator run as nohup processes on THIS login node (a001-a003),
-# not on kumamoto: the `login` SLURM partition is INACTIVE so they can't be
-# sbatch'd, and neither is heavy (downloader = aria2c/curl I/O; coordinator only
-# sbatches + polls). The real work runs as cgroup-capped per-experiment jobs the
-# coordinator submits to kumamoto-c768. They survive this SSH session (nohup) and
-# self-exit when done. Monitor with scripts/prod-status.sh.
-DL_LOG="$LOG_DIR/dl-${PIPELINE}.log"
-PROC_LOG="$LOG_DIR/proc-${PIPELINE}.log"
+# Downloader + coordinator run as SLURM jobs on kumamoto-c768, NOT on the a001-a003
+# login partition. They're cgroup-capped, so the SRA fasterq-dump fallback (real
+# compute + scratch) runs safely on a compute node. We tried the login partition
+# (2026-06-09) and the fallback ran heavy fasterq-dump writing to /tmp ON a001 —
+# unsafe on a shared login node — so we reverted. A 2-core downloader slot is
+# negligible; protecting the shared nodes wins. The per-experiment pipeline jobs are
+# separate sbatch'd jobs the coordinator submits.
 
-# Clear any stale completion marker so the coordinator can't terminate on it before
-# the downloader has produced work (we no longer have a SLURM dependency to gate it).
-rm -f "$STAGING/.downloads-complete"
+# Downloader: 2 cores, long-running.
+DL_JOB=$(sbatch --parsable \
+  -p kumamoto-c768 --account=kumamoto-group \
+  -n 2 --mem=4g -t 2-00:00:00 \
+  -J "dl-${GENOME}-${PIPELINE}" \
+  -o "$LOG_DIR/dl-${PIPELINE}-%j.out" \
+  -e "$LOG_DIR/dl-${PIPELINE}-%j.err" \
+  --wrap="bash $SCRIPTS/production-download.sh $SAMPLE_LIST $STAGING $DL_CONCURRENT $DL_BUFFER")
+echo "  Download job: $DL_JOB"
 
-nohup bash "$SCRIPTS/production-download.sh" "$SAMPLE_LIST" "$STAGING" \
-      "$DL_CONCURRENT" "$DL_BUFFER" > "$DL_LOG" 2>&1 &
-DL_PID=$!
-echo "  Downloader:  a001 login (nohup) PID $DL_PID  -> $DL_LOG"
-
-sleep 60   # head start: let the downloader stage the first .ready before polling begins
-
-nohup env EXCLUDE_NODES="$EXCLUDE_NODES" \
-      bash "$SCRIPTS/production-process.sh" "$STAGING" "$PIPELINE" "$GENOME" \
-      "$OUTBASE" "$PROC_MAX_INFLIGHT" "$PROC_INTERVAL" > "$PROC_LOG" 2>&1 &
-PROC_PID=$!
-echo "  Coordinator: a001 login (nohup) PID $PROC_PID  -> $PROC_LOG"
-echo "  (per-experiment jobs run on kumamoto-c768; monitor: bash $SCRIPTS/prod-status.sh)"
+# Coordinator: tiny (1 core / 2 GB — only sbatches + polls). Starts 1 min after the
+# downloader. EXCLUDE_NODES is passed through to the per-experiment jobs.
+PROC_JOB=$(sbatch --parsable \
+  -p kumamoto-c768 --account=kumamoto-group \
+  -n 1 --mem=2g -t 2-00:00:00 \
+  -J "proc-${GENOME}-${PIPELINE}" \
+  -o "$LOG_DIR/proc-${PIPELINE}-%j.out" \
+  -e "$LOG_DIR/proc-${PIPELINE}-%j.err" \
+  --dependency=after:${DL_JOB}+1 \
+  --export="ALL,EXCLUDE_NODES=${EXCLUDE_NODES}" \
+  --wrap="bash $SCRIPTS/production-process.sh $STAGING $PIPELINE $GENOME $OUTBASE $PROC_MAX_INFLIGHT $PROC_INTERVAL")
+echo "  Process job:  $PROC_JOB (starts 1 min after download begins)"
+echo ""
+echo "  Monitor: bash $SCRIPTS/prod-status.sh   (or: squeue --me; tail $LOG_DIR/{dl,proc}-${PIPELINE}-*.out)"

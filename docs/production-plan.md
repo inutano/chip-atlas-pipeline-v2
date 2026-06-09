@@ -184,12 +184,14 @@ job** with the batch's `(cores, mem, time)`.
 ```
 submit-batch <genome> <pipeline> sample-lists/batches/<genome>-<pipeline>/batch-NNNN.tsv
    │
-   ├─ Downloader  (1 job on the LOGIN partition a001-a003, 1–2 cores, 3-day limit)
+   ├─ Downloader  (SLURM job on kumamoto-c768, 2 cores / 4 GB, cgroup-capped)
    │    per experiment: resolve runs, download+concatenate all runs → one FASTQ;
    │    ENA-first routing; aria2c -x4 -s4; ≤4 concurrent downloads (=16 conns);
-   │    buffer 100; writes staging/<exp>/.ready
+   │    buffer 100; writes staging/<exp>/.ready. On a compute node (NOT the a001
+   │    login partition) because the SRA fasterq-dump fallback is real compute +
+   │    scratch and must be cgroup-isolated — see §5.
    │
-   └─ Processor   (1 long-running coordinator job)
+   └─ Processor   (1 long-running coordinator job, also on kumamoto-c768)
         polls staging for .ready, and for each submits ONE per-EXPERIMENT SLURM job:
           sbatch -p kumamoto-c768 --account=kumamoto-group \
                  --cpus-per-task=<C> --mem=<M> -t <T>  \   # ← §1 settings
@@ -246,10 +248,16 @@ production-ready. Status of the original change list:
 - ✅ **`pipeline-v2-bs.sh` Step-3 `timeout`** (pmd-hang fix) — validated in the smoke
   test (yeast `pmd.bed` empty, sample completes). `STEP0_START` log bug fixed.
 - ✅ **Failure buckets with reason tags** + uniform first pass (§1.5).
-- ⏳ **Downloader still runs on kumamoto-c768**, not the a001-a003 login partition —
-  the one remaining item. Worth moving before the full corpus: downloads are the long
-  pole (a single checksum-retry download held a compute slot ~80 min in the smoke
-  test) and shouldn't occupy compute capacity.
+- ✅ **Downloader stays on kumamoto-c768** (2 cores, cgroup-capped). We tried the
+  a001-a003 login partition (2026-06-09) to free the slot, but the SRA `fasterq-dump`
+  fallback ran heavy compute writing to `/tmp` on the shared login node — unsafe
+  (could break SSH for all users) — so we reverted. The `login` SLURM partition is
+  also INACTIVE (can't sbatch to it). A 2-core downloader slot is negligible;
+  protecting the shared nodes wins.
+- ✅ **`.fail` marker disambiguation fix** — the downloader stores an integer
+  download-attempt count in `.fail`; the processor writes a reason word. `sample_terminal`
+  now disambiguates by content (non-integer = already-terminal downstream → skip),
+  fixing the `[: : integer expression expected` crash on a processor/legacy `.fail`.
 
 **Smoke test (2026-06-09, sacCer3, 15 chip + 15 bs):** 30/30 `.done`, 0 fail; both
 pipelines produced complete, valid outputs (bigwig, 3 peak sets, methyl/cover bigwig,
@@ -271,7 +279,10 @@ scale the bottleneck is **download robustness** (checksum-retry), not compute.
   (§1.5) reconsidered globally, not escalated per sample.
 - **mm10 memory benchmark: done** (OOM-threshold sweep, 2026-06-09) — folded into the
   settings above; no separate pre-mm10 benchmark needed.
-- **Downloader belongs on the login partition `a001-a003`** (light, I/O-bound) — the
-  one not-yet-deployed item (§5).
-- **Order: smallest genome first** (rn6 → ce11 → dm6 → sacCer3 → TAIR10 → mm10 →
-  hg38); sacCer3 first batch validated by the 2026-06-09 smoke test.
+- **Downloader runs on kumamoto-c768** (cgroup-capped SLURM job), NOT the a001-a003
+  login partition — the SRA `fasterq-dump` fallback is real compute and must be
+  isolated on a compute node, not run on a shared login node (tried + reverted
+  2026-06-09; §5). Protecting the shared nodes outweighs the 2-core slot.
+- **Order: colleague-requested rn6 first**, then smallest-genome-first for the rest
+  (ce11 → dm6 → sacCer3 → TAIR10 → mm10 → hg38); sacCer3 path validated by the
+  2026-06-09 smoke test.

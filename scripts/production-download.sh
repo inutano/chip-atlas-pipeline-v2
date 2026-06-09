@@ -57,6 +57,13 @@ FAIL=0
 
 # Return 0 if the sample is in a terminal state (ready/running/done or
 # permanently failed after MAX_ATTEMPTS). 1 if it's a candidate for download.
+#
+# NOTE: .fail is written by BOTH this downloader (an integer download-attempt
+# count) and the processor (a reason word: oom/data/infra/timeout). We disambiguate
+# by content: a NON-integer .fail (reason word, or a legacy empty marker) means the
+# sample already reached a terminal state downstream — skip it. Only a plain integer
+# is our own retry counter. This avoids `[: : integer expression expected` on a
+# processor- or legacy-written .fail (the 2026-06-09 rn6 bug).
 sample_terminal() {
   local outdir="$1"
   [ -f "$outdir/.ready" ] && return 0
@@ -64,7 +71,8 @@ sample_terminal() {
   [ -f "$outdir/.done" ] && return 0
   if [ -f "$outdir/.fail" ]; then
     local attempts
-    attempts=$(cat "$outdir/.fail" 2>/dev/null || echo 0)
+    attempts=$(cat "$outdir/.fail" 2>/dev/null)
+    if ! [[ "$attempts" =~ ^[0-9]+$ ]]; then return 0; fi   # reason word / legacy -> terminal
     [ "$attempts" -ge "$MAX_ATTEMPTS" ] && return 0
   fi
   return 1
