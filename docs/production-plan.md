@@ -5,6 +5,11 @@ resource settings (from benchmarking), how the batch lists are generated, and
 how jobs are submitted. This is the operational contract; it supersedes any
 ad-hoc settings used during the 2026-06 debugging.
 
+**Current as of 2026-06-09** — the §1 settings reflect the OOM-threshold benchmark
+and the sacCer3 smoke test, and supersede the per-genome numbers in the older
+`memory-benchmark*.md` docs (those captured generous-cap footprints, which over-state
+the true OOM floor; see §1). Deployed + validated; first pass is ready (§5).
+
 Companion docs: [`memory-benchmark.md`](memory-benchmark.md) (ChIP cores/mem),
 [`memory-benchmark-bs.md`](memory-benchmark-bs.md) (BS cores/mem),
 [`v2-final-architecture.md`](v2-final-architecture.md),
@@ -54,42 +59,49 @@ these settings. Pick the row by `(pipeline, genome)`.
 
 ### ChIP-seq / ATAC-seq / DNase-seq  (`pipeline-v2.sh`)
 
-| Genome | `--cpus-per-task` | `--mem` | `-t` | conc/node | per-sample wall | source |
-|---|---|---|---|---|---|---|
-| sacCer3, ce11, dm6 | 4 | 16g | 0-02:00:00 | 32 (cpu-bound) | short | small-genome default |
-| rn6 | 5 | 20g | 0-02:00:00 | 25 (mem-bound) | ~10–20 min | **use hg38 setting** (index ~14 GB < hg38) |
-| mm10 | 5 | 20g | 0-02:00:00 | 25 (mem-bound) | tbd | hg38 setting is **safe** (index ~13 GB < hg38, ~4 GB margin); **benchmark to optimise** before the 219k run |
-| hg38 | 5 | 20g | 0-02:00:00 | 25 (mem-bound) | ~9 min | `memory-benchmark.md` (168/hr) |
+| Genome | `--cpus-per-task` | `--mem` | `-t` | conc/node | source |
+|---|---|---|---|---|---|
+| sacCer3, ce11, dm6, TAIR10 | 4 | 16g | 0-02:00:00 | 32 (cpu-bound) | OOM-threshold sweep: small-ChIP floor **12g** (OOM at 8–10g) |
+| rn6, mm10, hg38 | 5 | 20g | 0-02:00:00 | 25 | established floor + throughput sweet spot; see note |
 
-Memory driver: the **bwa-mem2 index** (hg38 ~16 GB resident → 18 GB min, 20 GB
-with pipe overhead). Small genomes are tiny indexes; their floor is
-`samtools sort -m 4G × threads`, so **16 GB is the safe minimum** (we saw OOM at
-8 GB on sacCer3). rn6/mm10 indexes (~9 GB resident) → 20 GB is safe.
+Memory driver: the **bwa-mem2 index** + **MACS3** (read-count-driven). Small
+genomes have tiny indexes; their floor is `samtools sort` (16 GB safe; sweep floor
+12g). Mammals: 20 GB is the established floor and the throughput sweet spot
+(5c/20g = 25/node, cpu-and-mem balanced).
+
+⚠ **Mammal-ChIP OOM rate at 20 GB is non-trivial.** Mammal-ChIP memory tracks the
+MACS3 tag count (≈ read depth), so deep samples span ~15–34 GB; an OOM-rate test
+(2026-06-09) saw several deep samples OOM at 20 GB (and even at 24 GB). We do **not**
+escalate per sample — an OOM is recorded as `.fail` tagged `oom` (§1.5) and counted.
+After the first pass, if the `oom` tally for mammal-ChIP is too high, raise its
+setting and reprocess just that bucket. (The benchmark set skews deep, so the
+population OOM rate is lower than the test's.)
 
 ### BS-seq  (`pipeline-v2-bs.sh`)
 
-BS-seq peak RSS is the **larger of** (a) `samtools sort -m 2G × threads` (~8 GB
-at 4c, binds on deep samples) and (b) the **Step-3 `hmr`/`hypermr` symmetric-CpG
-table load, which scales with the genome's CpG count** (hg38 62 M CpGs → ~17.5 GB;
-sacCer3 0.7 M → negligible). So `--mem` must **rise with genome size** — the
-opposite of the old table.
-
 | Genome | `--cpus-per-task` | `--mem` | `-t` | conc/node | source |
 |---|---|---|---|---|---|
-| sacCer3, ce11, dm6 | 4 | **16g** | 0-02:00:00 | 32 | sort-bound; **benchmark-confirmed: peak 6.3 GB on sacCer3** (2026-06-04) |
-| rn6, mm10 | 4 | **20g** | 0-04:00:00 | 25 | Step-3 scales w/ CpG count (rn6 54 M, mm10 44 M < hg38) → ≤ hg38 peak |
-| hg38 | 4 | **20g** | 0-04:00:00 | 25 | `memory-benchmark-bs.md`: Step-3 floor ~17.5 GB → 18g OOM-min + margin |
+| sacCer3, ce11, dm6, TAIR10 | 4 | **16g** | 0-02:00:00 | 32 (cpu-bound) | OOM-threshold sweep: small-BS floor **10g** |
+| rn6, mm10, hg38 | 4 | **16g** | 0-02:00:00 | 32 (cpu-bound) | sweep: hg38 (most CpGs) passes the full pipeline at **8g** |
 
-**Corrections from the old table** (2026-06-03): small genomes were 24g (wildly
-over — sort-bound at ~9 GB) and hg38 was 16g (under — its own data shows an 18g
-OOM floor from the 17.5 GB `hypermr` load; 16g OOMs Step-3-bound samples). The
-"16g" in `memory-benchmark-bs.md`'s recommendation only counted the deep-sample
-sort peak (9.4 GB) and missed the `hypermr` floor.
+**Memory (OOM-threshold sweep, 2026-06-09 — supersedes the earlier "rises with
+genome size" model).** The BS peak is driven by `samtools sort -m 2G × 4 = 8 GB`
+(genome-independent, depth-fills) and *not* the sum of that plus the abismal index
+or `hypermr` CpG table: those load at **separate pipeline stages** (abismal exits
+before sort runs), so they don't stack. The 2.7 GB hg38 abismal index and the
+62 M-CpG `hypermr` table each stay under the 8 GB sort peak. The sweep confirmed
+**16 GB is safe for every genome** (a deep small-BS sample OOM'd only below 10 GB;
+hg38 ran the whole pipeline at 8 GB). At 4 cpu, anything ≤16 GB is **cpu-bound at
+32/node**, so 16 GB is both the simple default and concurrency-optimal — no reason
+to go lower.
 
-BS-seq is ~18× slower than ChIP (abismal dominates) → mammals need the **4-hour**
-limit; small genomes finish fast (2 h). Alt for mammals if 4 h is unacceptable:
-`8c / 24g / 0-02:30:00`. Very deep WGBS (>30 GB FASTQ) outliers may need 6 h.
-hg38 BS at 20g/25-conc ≈ 8/hr (vs the doc's unsafe 16g/32 ≈ 10.4/hr).
+**Time, not memory, is the BS risk.** BS-seq is ~18× slower than ChIP (abismal
+dominates) and some deep WGBS samples exceed **2 h**. We deliberately keep the
+**2-hour** limit on every BS job rather than pay 4 h on all of them for the rare
+monster: a sample that exceeds 2 h is killed by SLURM → recorded as `.fail`
+tagged `timeout` → reprocessed in the **retry pass** with a longer limit (see
+§1.5). The smoke test (2026-06-09) confirmed a 2.8 GB sacCer3 BS sample completes
+in ~6 min once downloaded.
 
 > ⚠ **Step-3 `dnmtools pmd` can hang.** The 2026-06-04 sacCer3 benchmark caught
 > `pmd` spinning at 99.9% CPU for 38+ min on a 0.7 M-CpG sample (`hmr`/`hypermr`
@@ -103,6 +115,36 @@ hg38 BS at 20g/25-conc ≈ 8/hr (vs the doc's unsafe 16g/32 ≈ 10.4/hr).
 > keep the node responsive. Do **not** raise concurrency by lowering `--mem`
 > below these — slots above the cpu-bound count are blocked by cpu anyway, and
 > you'd only discard the safety margin (and risk OOM).
+
+---
+
+## 1.5 Failure handling — uniform first pass, then a retry pass
+
+The corpus is processed in **one uniform first pass** at the §1 settings, with NO
+per-sample memory escalation. Every per-experiment job ends in a marker, and a
+`.fail` carries a **reason word** so failures are tallied by type:
+
+| outcome | marker | FASTQ | meaning |
+|---|---|---|---|
+| success | `.done` | dropped | `stats.tsv` written |
+| OOM | `.fail` = `oom` | **kept** | exceeded `--mem` at this setting |
+| walltime | `.fail` = `timeout` | kept | exceeded `-t` (mostly deep BS) |
+| bad data | `.fail` = `data` | dropped | deterministic — MACS3 no peaks / 0 covered CpGs (rc 42) |
+| transient exhausted | `.fail` = `infra` | kept | node/network; `MAX_RETRIES` used up |
+
+- **OOM is a counted failure, not an auto-retry** (decided 2026-06-09). Re-running
+  a sample at the same `--mem` just OOMs again, so it goes straight to the `oom`
+  bucket. Genuinely transient losses (NODE_FAIL/preemption) retry up to
+  `MAX_RETRIES`; TIMEOUT / OUT_OF_MEMORY / CANCELLED do not (deterministic at this
+  setting). The coordinator routes a SLURM-killed orphan by its `sacct` State
+  (`classify_orphan`), so a >walltime sample can't churn forever.
+- **Tally after the pass:**
+  `find <staging> -name .fail -exec cat {} \; | sort | uniq -c` → counts by reason.
+  Then decide *globally*: if a class's `oom`/`timeout` count is too high, raise that
+  class's `--mem`/`-t` and **reprocess just that bucket** — its FASTQ is still
+  staged, so no re-download.
+- Decision logic is pure and unit-tested: `classify_outcome`, `classify_orphan`,
+  `apply_outcome` in `scripts/failure-classify.sh`.
 
 ---
 
@@ -185,47 +227,51 @@ submit-batch <genome> <pipeline> sample-lists/batches/<genome>-<pipeline>/batch-
 
 ---
 
-## 5. Changes required vs the scripts as they stand (2026-06-03)
+## 5. Implementation status (2026-06-09)
 
-The settings above are NOT yet what the deployed scripts do. To execute this plan:
+The plan is implemented, deployed, and smoke-tested; the first pass is
+production-ready. Status of the original change list:
 
-1. **`production-process.sh`: stop running pipelines inline; submit one SLURM job
-   per experiment** with `--cpus-per-task`/`--mem`/`-t` from §1. (Today it runs 32
-   inline on one `--exclusive --mem=0` node — the cause of the node crashes.)
-2. **`submit-separated.sh`: drop `--exclusive --mem=0`** from the processor; pass
-   the per-genome `(cores, mem, time)` through to the per-experiment jobs. Add a
-   per-genome settings lookup table keyed by `(pipeline, genome)`.
-3. **Downloader → login partition `a001-a003`** (3-day limit, 1–2 cores) so it
-   doesn't consume kumamoto compute. Shared with other users, but the downloader
-   is light (confirmed OK to run there). (Today it runs on kumamoto.)
-4. **Self-exit / robustness**: processor should exit when its downloader job is
-   gone (not loop forever waiting for `.downloads-complete`); clear stale
-   `.downloads-complete` at download start (done); node-exclude/health gate.
-5. Keep the already-deployed download fixes: ENA-first routing, SRA fallback
-   (apptainer PATH), 16-connection budget.
-6. **`pipeline-v2-bs.sh`: wrap Step-3 callers (`hmr`/`hypermr`/`pmd`) in
-   `timeout`** (e.g. 15 min each) so a hung tool can't run the whole job to the
-   time limit. `pmd` spun 38+ min on a sacCer3 sample (2026-06-04). They're
-   already non-blocking, so a timeout-killed caller just omits its `.bed`.
-7. Minor: fix the `STEP0_START`-unset bug in `pipeline-v2-bs.sh` (the
-   "fastp+abismal <epoch>s" garbage log line); cosmetic, no behaviour impact.
+- ✅ **Per-experiment `sbatch`** with cgroup `--mem`/`--cpus` from §1 — no inline
+  loop, no `--mem=0`. `production-process.sh` is a thin coordinator;
+  `process-experiment.sh` is the job body. Validated under load (40+ benchmark jobs,
+  zero node crashes).
+- ✅ **`submit-separated.sh`** pulls per-genome settings from `job-settings.sh`
+  (`job_settings <pipeline> <genome>` → `cores mem time`); no `--mem=0`.
+- ✅ **Self-exit / robustness** — coordinator exits on downloads-complete + nothing
+  ready/in-flight; clears stale `.downloads-complete`; orphan recovery is bounded by
+  `sacct` state (§1.5) so a timeout can't loop forever.
+- ✅ **Download fixes** — ENA-first routing, SRA fallback (apptainer PATH),
+  16-connection budget.
+- ✅ **`pipeline-v2-bs.sh` Step-3 `timeout`** (pmd-hang fix) — validated in the smoke
+  test (yeast `pmd.bed` empty, sample completes). `STEP0_START` log bug fixed.
+- ✅ **Failure buckets with reason tags** + uniform first pass (§1.5).
+- ⏳ **Downloader still runs on kumamoto-c768**, not the a001-a003 login partition —
+  the one remaining item. Worth moving before the full corpus: downloads are the long
+  pole (a single checksum-retry download held a compute slot ~80 min in the smoke
+  test) and shouldn't occupy compute capacity.
 
-Implement test-first; smoke-test on one small batch before scaling.
+**Smoke test (2026-06-09, sacCer3, 15 chip + 15 bs):** 30/30 `.done`, 0 fail; both
+pipelines produced complete, valid outputs (bigwig, 3 peak sets, methyl/cover bigwig,
+hmr/hypermr/pmd, `stats.tsv`); both coordinators terminated cleanly. Key lesson: at
+scale the bottleneck is **download robustness** (checksum-retry), not compute.
 
 ---
 
-## 6. Decisions (confirmed 2026-06-03)
+## 6. Decisions (confirmed; latest 2026-06-09)
 
 - **Processing unit = experiment** — one SLURM job per experiment, with all its
-  runs concatenated by the downloader (the pipeline is built for this).
-- **Submission model = per-experiment `sbatch`** with `--mem` (not the inline
-  `--exclusive --mem=0` loop). This is what the benchmark assumes and what keeps
-  the node safe.
-- **Downloader runs on the login partition `a001-a003`** (shared with other
-  users; the light downloader is fine there).
-- **rn6 uses the human (hg38) settings** for both pipelines (ChIP 5c/20g; BS
-  4c/20g/4h) — its index is smaller than hg38's (so safe).
-- **mm10**: the hg38 setting (5c/20g) is *safe* (index ~13 GB < hg38). Because
-  mm10 has ~219k experiments, **run a quick memory benchmark right before mm10's
-  batch** to see if a lower `--mem` (→ higher concurrency) is justified — tuning,
-  not a blocker.
+  runs concatenated by the downloader.
+- **Submission model = per-experiment `sbatch`** with cgroup `--mem` (never
+  `--exclusive --mem=0`).
+- **All classes 4c / 16g / 2h, except mammal-ChIP (rn6/mm10/hg38) = 5c / 20g / 2h.**
+  OOM-threshold-confirmed; mammal-ChIP is the one class that needs >16 GB. rn6 uses
+  the mammal ChIP setting (its index ≤ hg38's).
+- **Uniform first pass, then a retry pass** — OOM and timeout are *counted* failures
+  (§1.5) reconsidered globally, not escalated per sample.
+- **mm10 memory benchmark: done** (OOM-threshold sweep, 2026-06-09) — folded into the
+  settings above; no separate pre-mm10 benchmark needed.
+- **Downloader belongs on the login partition `a001-a003`** (light, I/O-bound) — the
+  one not-yet-deployed item (§5).
+- **Order: smallest genome first** (rn6 → ce11 → dm6 → sacCer3 → TAIR10 → mm10 →
+  hg38); sacCer3 first batch validated by the 2026-06-09 smoke test.
