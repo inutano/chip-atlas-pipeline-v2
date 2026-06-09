@@ -67,6 +67,7 @@ FAIL=0
 sample_terminal() {
   local outdir="$1"
   [ -f "$outdir/.ready" ] && return 0
+  [ -f "$outdir/.submitted" ] && return 0   # in-flight processing — never re-download (would wipe its FASTQ)
   [ -f "$outdir/.running" ] && return 0
   [ -f "$outdir/.done" ] && return 0
   if [ -f "$outdir/.fail" ]; then
